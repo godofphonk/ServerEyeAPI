@@ -103,7 +103,7 @@ jobs:
             cat > docker-compose.yml << 'EOF'
           services:
             servereye-api:
-              image: ghcr.io/godofphonk/servereyeapi:latest
+              image: ghcr.io/godofphonk/servereyeapi:production
               container_name: servereye-api
               restart: unless-stopped
               ports:
@@ -137,8 +137,8 @@ jobs:
           docker tag servereye-api:latest servereye-api:backup || true
           
           # Pull new image
-          docker pull ghcr.io/godofphonk/servereyeapi:latest
-          docker tag ghcr.io/godofphonk/servereyeapi:latest servereye-api:latest
+          docker pull ghcr.io/godofphonk/servereyeapi:production
+          docker tag ghcr.io/godofphonk/servereyeapi:production servereye-api:latest
           
           # Start new version
           docker-compose up -d
