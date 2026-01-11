@@ -10,10 +10,10 @@ import (
 
 // RegisterKeyRequest represents request to register a key
 type RegisterKeyRequest struct {
-	SecretKey    string `json:"secret_key"`
-	AgentVersion string `json:"agent_version"`
-	OSInfo       string `json:"os_info"`
-	Hostname     string `json:"hostname"`
+	SecretKey       string `json:"secret_key"`
+	AgentVersion    string `json:"agent_version"`
+	OperatingSystem string `json:"operating_system"`
+	Hostname        string `json:"hostname"`
 }
 
 // RegisterKeyResponse represents response after successful registration
@@ -42,7 +42,7 @@ func (s *Server) handleRegisterKey(w http.ResponseWriter, r *http.Request) {
 	serverKey := generateServerKey()
 
 	// Store in database
-	if err := s.storage.InsertGeneratedKey(r.Context(), req.SecretKey, req.AgentVersion, req.OSInfo, req.Hostname); err != nil {
+	if err := s.storage.InsertGeneratedKey(r.Context(), req.SecretKey, req.AgentVersion, req.OperatingSystem, req.Hostname); err != nil {
 		s.logger.WithError(err).WithField("secret_key", req.SecretKey).Error("Failed to insert generated key")
 		s.writeError(w, "Failed to register key", http.StatusInternalServerError)
 		return
@@ -59,10 +59,10 @@ func (s *Server) handleRegisterKey(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.logger.WithFields(logrus.Fields{
-		"server_id":     serverID,
-		"agent_version": req.AgentVersion,
-		"os_info":       req.OSInfo,
-		"hostname":      req.Hostname,
+		"server_id":        serverID,
+		"agent_version":    req.AgentVersion,
+		"operating_system": req.OperatingSystem,
+		"hostname":         req.Hostname,
 	}).Info("Agent registered")
 
 	s.writeJSON(w, http.StatusCreated, response)

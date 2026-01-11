@@ -18,7 +18,7 @@ type Storage interface {
 	GetServers(ctx context.Context) ([]string, error)
 	GetPendingCommands(ctx context.Context, serverID string) ([]string, error)
 	StoreDLQMessage(ctx context.Context, topic string, partition int, offset int64, message []byte, errorMsg string) error
-	InsertGeneratedKey(ctx context.Context, secretKey, agentVersion, osInfo, hostname string) error
+	InsertGeneratedKey(ctx context.Context, secretKey, agentVersion, operatingSystem, hostname string) error
 	Ping() error
 	Close() error
 }
@@ -111,23 +111,23 @@ func (s *PostgresStorage) initSchema() error {
 	return nil
 }
 
-func (s *PostgresStorage) InsertGeneratedKey(ctx context.Context, secretKey, agentVersion, osInfo, hostname string) error {
+func (s *PostgresStorage) InsertGeneratedKey(ctx context.Context, secretKey, agentVersion, operatingSystem, hostname string) error {
 	query := `
-		INSERT INTO generated_keys (secret_key, agent_version, os_info, hostname, status)
-		VALUES ($1, $2, $3, $4, 'active')
-		ON CONFLICT (secret_key) DO NOTHING
+		INSERT INTO registered_keys (key, operating_system, agent_version, status)
+		VALUES ($1, $2, $3, 'non-active')
+		ON CONFLICT (key) DO NOTHING
 	`
 
-	_, err := s.db.ExecContext(ctx, query, secretKey, agentVersion, osInfo, hostname)
+	_, err := s.db.ExecContext(ctx, query, secretKey, operatingSystem, agentVersion)
 	if err != nil {
 		return fmt.Errorf("failed to insert generated key: %w", err)
 	}
 
 	s.logger.WithFields(logrus.Fields{
-		"secret_key":    secretKey,
-		"agent_version": agentVersion,
-		"os_info":       osInfo,
-		"hostname":      hostname,
+		"secret_key":       secretKey,
+		"agent_version":    agentVersion,
+		"operating_system": operatingSystem,
+		"hostname":         hostname,
 	}).Info("Generated key inserted successfully")
 
 	return nil
