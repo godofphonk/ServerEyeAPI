@@ -113,12 +113,12 @@ func (s *PostgresStorage) initSchema() error {
 
 func (s *PostgresStorage) InsertGeneratedKey(ctx context.Context, secretKey, agentVersion, operatingSystem, hostname string) error {
 	query := `
-		INSERT INTO registered_keys (key, operating_system, agent_version, hostname, status)
-		VALUES ($1, $2, $3, $4, 'non-active')
-		ON CONFLICT (key) DO NOTHING
+		INSERT INTO generated_keys (secret_key, agent_version, os_info, hostname, status)
+		VALUES ($1, $2, $3, $4, 'generated')
+		ON CONFLICT (secret_key) DO NOTHING
 	`
 
-	_, err := s.db.ExecContext(ctx, query, secretKey, operatingSystem, agentVersion, hostname)
+	_, err := s.db.ExecContext(ctx, query, secretKey, agentVersion, operatingSystem, hostname)
 	if err != nil {
 		return fmt.Errorf("failed to insert generated key: %w", err)
 	}
