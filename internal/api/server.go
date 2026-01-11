@@ -5,97 +5,129 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/godofphonk/ServerEyeAPI/internal/api/middleware"
 	"github.com/godofphonk/ServerEyeAPI/internal/config"
+	"github.com/godofphonk/ServerEyeAPI/internal/handlers"
+	"github.com/godofphonk/ServerEyeAPI/internal/services"
 	"github.com/godofphonk/ServerEyeAPI/internal/storage"
-	"github.com/gorilla/mux"
+	"github.com/godofphonk/ServerEyeAPI/internal/storage/memory"
+	postgresStorage "github.com/godofphonk/ServerEyeAPI/internal/storage/postgres"
+	redisStorage "github.com/godofphonk/ServerEyeAPI/internal/storage/redis"
+	"github.com/godofphonk/ServerEyeAPI/internal/version"
+	"github.com/godofphonk/ServerEyeAPI/internal/websocket"
 	"github.com/sirupsen/logrus"
 )
 
+// Server represents the HTTP server
 type Server struct {
-	config       *config.Config
-	storage      storage.Storage
-	redisStorage *storage.RedisStorage
-	logger       *logrus.Logger
-	server       *http.Server
-	wsServer     *WebSocketServer
+	server   *http.Server
+	logger   *logrus.Logger
+	wsServer *websocket.Server
+	storage  storage.Storage
 }
 
-func New(cfg *config.Config, storage storage.Storage, redisStorage *storage.RedisStorage, logger *logrus.Logger) *Server {
-	s := &Server{
-		config:       cfg,
-		storage:      storage,
-		redisStorage: redisStorage,
-		logger:       logger,
+// New creates a new server instance
+func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
+	// Initialize storage
+	var storageImpl storage.Storage
+	var redisClient *redisStorage.Client
+
+	if cfg.DatabaseURL == "" {
+		logger.Info("Using in-memory storage (DATABASE_URL not set)")
+		storageImpl = memory.NewStorage(logger)
+	} else {
+		// Initialize PostgreSQL
+		pgClient, err := postgresStorage.NewClient(cfg.DatabaseURL, logger)
+		if err != nil {
+			return nil, err
+		}
+
+		// Initialize Redis if URL is provided
+		if cfg.RedisURL != "" {
+			redisClient, err = redisStorage.NewClient(cfg.RedisURL, "", 0, logger)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		// Use combined storage
+		storageImpl = storage.NewCombinedStorage(pgClient, redisClient)
 	}
 
 	// Initialize WebSocket server
-	s.wsServer = NewWebSocketServer(s, logger)
+	wsServer := websocket.NewServer(storageImpl, logger)
 
-	// Initialize rate limiter (100 requests per minute)
-	rateLimiter := NewRateLimiter(100, 20, logger)
+	// Initialize services
+	authService := services.NewAuthService(storageImpl, logger)
+	metricsService := services.NewMetricsService(storageImpl, logger)
+	commandsService := services.NewCommandsService(storageImpl, logger)
 
-	router := s.setupRoutes()
+	// Initialize handlers
+	authHandler := handlers.NewAuthHandler(authService, logger)
+	healthHandler := handlers.NewHealthHandler(storageImpl, logger)
+	metricsHandler := handlers.NewMetricsHandler(metricsService, logger)
+	serversHandler := handlers.NewServersHandler(storageImpl, logger)
+	commandsHandler := handlers.NewCommandsHandler(commandsService, logger)
 
-	// Apply global middleware (not auth)
-	router.Use(s.loggingMiddleware)
-	router.Use(rateLimiter.Middleware)
-	router.Use(s.corsMiddleware)
+	// Setup routes
+	router := SetupRoutes(
+		authHandler,
+		healthHandler,
+		metricsHandler,
+		serversHandler,
+		commandsHandler,
+		wsServer,
+		storageImpl,
+		logger,
+	)
 
-	s.server = &http.Server{
+	// Apply middleware
+	router.Use(middleware.Logging(logger))
+	router.Use(middleware.CORS)
+
+	// Apply rate limiting
+	rateLimiter := middleware.NewRateLimiter(100, time.Minute, logger)
+	router.Use(rateLimiter.RateLimit)
+
+	server := &http.Server{
 		Addr:         cfg.GetAddr(),
 		Handler:      router,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 
-	return s
+	return &Server{
+		server:   server,
+		logger:   logger,
+		wsServer: wsServer,
+		storage:  storageImpl,
+	}, nil
 }
 
-// GetWebSocketServer returns the WebSocket server instance
-func (s *Server) GetWebSocketServer() *WebSocketServer {
-	return s.wsServer
-}
-
-func (s *Server) setupRoutes() *mux.Router {
-	router := mux.NewRouter()
-
-	s.logger.Info("Setting up routes...")
-
-	// Public routes (no auth required)
-	router.HandleFunc("/RegisterKey", s.handleRegisterKey).Methods("POST")
-	router.HandleFunc("/health", s.handleHealth).Methods("GET")
-
-	// API endpoints for Telegram bot and web dashboard
-	router.HandleFunc("/api/servers", s.handleListServers).Methods("GET")
-	router.HandleFunc("/api/servers/{server_id}/metrics", s.handleGetServerMetrics).Methods("GET")
-	router.HandleFunc("/api/servers/{server_id}/status", s.handleGetServerStatus).Methods("GET")
-	router.HandleFunc("/api/servers/{server_id}/command", s.handleSendCommand).Methods("POST")
-
-	s.logger.Info("Registered routes:")
-	router.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
-		path, _ := route.GetPathTemplate()
-		methods, _ := route.GetMethods()
-		s.logger.Infof("Route: %s %s", methods, path)
-		return nil
-	})
-
-	// Apply global middleware (except for WebSocket)
-	router.Use(s.loggingMiddleware)
-	router.Use(s.corsMiddleware)
-
-	// Handle WebSocket separately without middleware
-	router.Path("/ws").HandlerFunc(s.wsServer.handleWebSocket)
-
-	return router
-}
-
+// Start starts the server
 func (s *Server) Start() error {
-	s.logger.WithField("addr", s.server.Addr).Info("Starting API server")
+	s.logger.WithFields(logrus.Fields{
+		"addr":    s.server.Addr,
+		"version": version.Version,
+	}).Info("Starting API server")
+
 	return s.server.ListenAndServe()
 }
 
+// Shutdown gracefully shuts down the server
 func (s *Server) Shutdown(ctx context.Context) error {
-	s.logger.Info("Shutting down API server")
+	s.logger.Info("Shutting down server")
+
+	// Close storage
+	if err := s.storage.Close(); err != nil {
+		s.logger.WithError(err).Error("Failed to close storage")
+	}
+
 	return s.server.Shutdown(ctx)
+}
+
+// GetWebSocketServer returns the WebSocket server instance
+func (s *Server) GetWebSocketServer() *websocket.Server {
+	return s.wsServer
 }

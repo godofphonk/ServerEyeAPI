@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -10,7 +9,6 @@ import (
 
 	"github.com/godofphonk/ServerEyeAPI/internal/api"
 	"github.com/godofphonk/ServerEyeAPI/internal/config"
-	"github.com/godofphonk/ServerEyeAPI/internal/storage"
 	"github.com/sirupsen/logrus"
 )
 
@@ -24,40 +22,15 @@ func main() {
 		logger.WithError(err).Fatal("Failed to load configuration")
 	}
 
-	// Initialize storage
-	var storageImpl storage.Storage
-	var redisStorage *storage.RedisStorage
-
-	if cfg.DatabaseURL == "" {
-		logger.Info("Using in-memory storage (DATABASE_URL not set)")
-		storageImpl = storage.NewMemoryStorage(logger)
-	} else {
-		postgresStorage, err := storage.NewPostgresStorage(cfg.DatabaseURL, logger)
-		if err != nil {
-			logger.WithError(err).Fatal("Failed to initialize PostgreSQL storage")
-		}
-		storageImpl = postgresStorage
+	// Initialize API server with new structure
+	server, err := api.New(cfg, logger)
+	if err != nil {
+		logger.WithError(err).Fatal("Failed to initialize server")
 	}
-
-	// Initialize Redis for metrics and real-time data
-	if cfg.RedisURL != "" {
-		redisStorage, err = storage.NewRedisStorage(cfg.RedisURL, logger)
-		if err != nil {
-			logger.WithError(err).Fatal("Failed to initialize Redis storage")
-		}
-		defer redisStorage.Close()
-	} else {
-		logger.Warn("REDIS_URL not set, real-time features will be limited")
-	}
-	defer storageImpl.Close()
-
-	// Initialize API server
-	server := api.New(cfg, storageImpl, redisStorage, logger)
 
 	// Start server in goroutine
 	go func() {
-		logger.WithField("addr", ":8080").Info("Starting API server")
-		if err := server.Start(); err != nil && err != http.ErrServerClosed {
+		if err := server.Start(); err != nil {
 			logger.WithError(err).Fatal("Failed to start server")
 		}
 	}()
