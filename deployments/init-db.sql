@@ -8,6 +8,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE IF NOT EXISTS registered_keys (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     key VARCHAR(255) UNIQUE NOT NULL,
+    hostname VARCHAR(255) NOT NULL,
     operating_system VARCHAR(100) NOT NULL,
     installation_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     agent_version VARCHAR(50) NOT NULL,
