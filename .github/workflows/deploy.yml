@@ -19,7 +19,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.25'
+        go-version: '1.21'
         
     - name: Cache Go modules
       uses: actions/cache@v3
@@ -110,7 +110,7 @@ jobs:
               environment:
                 - HOST=0.0.0.0
                 - PORT=8080
-                - DATABASE_URL=
+                - DATABASE_URL=postgres://postgres:prodpassword@postgres:5432/servereye
                 - JWT_SECRET=super-secret-jwt-key-for-production-min-32-chars
                 - WEBHOOK_SECRET=super-secret-webhook-key-for-production-min-32
                 - WEB_URL=https://api.servereye.dev
@@ -119,20 +119,46 @@ jobs:
                 - ./.env:/app/.env:ro
               networks:
                 - servereye-network
+              depends_on:
+                postgres:
+                  condition: service_healthy
               healthcheck:
                 test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
                 interval: 30s
                 timeout: 10s
                 retries: 3
-          
+                start_period: 40s
+
+            postgres:
+              image: postgres:15-alpine
+              container_name: servereye-postgres
+              restart: unless-stopped
+              environment:
+                POSTGRES_DB: servereye
+                POSTGRES_USER: postgres
+                POSTGRES_PASSWORD: prodpassword
+              volumes:
+                - postgres_data:/var/lib/postgresql/data
+                - ./deployments/init-db.sql:/docker-entrypoint-initdb.d/init-schema.sql:ro
+              networks:
+                - servereye-network
+              healthcheck:
+                test: ["CMD-SHELL", "pg_isready -U postgres"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+
+          volumes:
+            postgres_data:
+
           networks:
             servereye-network:
               driver: bridge
           EOF
-          
+
           # Backup current version
-          docker-compose down || true
-          docker tag servereye-api:latest servereye-api:backup || true
+          docker-compose down
+          docker tag servereye-api:latest servereye-api:backup
           
           # Pull new image
           docker pull ghcr.io/godofphonk/servereyeapi:production
@@ -146,7 +172,7 @@ jobs:
           if ! curl -f http://localhost:8080/health; then
             echo "Health check failed, rolling back..."
             docker-compose down
-            docker tag servereye-api:backup servereye-api:latest || true
+            docker tag servereye-api:backup servereye-api:latest
             docker-compose up -d
             exit 1
           fi

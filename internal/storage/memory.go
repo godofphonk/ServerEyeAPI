@@ -68,7 +68,7 @@ func (s *MemoryStorage) StoreDLQMessage(ctx context.Context, topic string, parti
 	return nil
 }
 
-func (s *MemoryStorage) InsertGeneratedKey(ctx context.Context, secretKey, agentVersion, osInfo, hostname string) error {
+func (s *MemoryStorage) InsertGeneratedKey(ctx context.Context, secretKey, agentVersion, operatingSystem, hostname string) error {
 	s.logger.Info("Generated key inserted in memory (not implemented)")
 	return nil
 }

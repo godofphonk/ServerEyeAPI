@@ -61,7 +61,7 @@ func (s *Server) setupRoutes() *mux.Router {
 	s.logger.Info("Setting up routes...")
 
 	// Public routes (no auth required)
-	router.HandleFunc("/register-key", s.handleRegisterKey).Methods("POST")
+	router.HandleFunc("/RegisterKey", s.handleRegisterKey).Methods("POST")
 	router.HandleFunc("/health", s.handleHealth).Methods("GET")
 
 	// WebSocket for real-time metrics
