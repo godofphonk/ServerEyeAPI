@@ -12,18 +12,20 @@ import (
 )
 
 type Server struct {
-	config   *config.Config
-	storage  storage.Storage
-	logger   *logrus.Logger
-	server   *http.Server
-	wsServer *WebSocketServer
+	config       *config.Config
+	storage      storage.Storage
+	redisStorage *storage.RedisStorage
+	logger       *logrus.Logger
+	server       *http.Server
+	wsServer     *WebSocketServer
 }
 
-func New(cfg *config.Config, storage storage.Storage, logger *logrus.Logger) *Server {
+func New(cfg *config.Config, storage storage.Storage, redisStorage *storage.RedisStorage, logger *logrus.Logger) *Server {
 	s := &Server{
-		config:  cfg,
-		storage: storage,
-		logger:  logger,
+		config:       cfg,
+		storage:      storage,
+		redisStorage: redisStorage,
+		logger:       logger,
 	}
 
 	// Initialize WebSocket server
@@ -64,8 +66,11 @@ func (s *Server) setupRoutes() *mux.Router {
 	router.HandleFunc("/RegisterKey", s.handleRegisterKey).Methods("POST")
 	router.HandleFunc("/health", s.handleHealth).Methods("GET")
 
-	// WebSocket for real-time metrics
-	router.HandleFunc("/ws", s.wsServer.handleWebSocket).Methods("GET")
+	// API endpoints for Telegram bot and web dashboard
+	router.HandleFunc("/api/servers", s.handleListServers).Methods("GET")
+	router.HandleFunc("/api/servers/{server_id}/metrics", s.handleGetServerMetrics).Methods("GET")
+	router.HandleFunc("/api/servers/{server_id}/status", s.handleGetServerStatus).Methods("GET")
+	router.HandleFunc("/api/servers/{server_id}/command", s.handleSendCommand).Methods("POST")
 
 	s.logger.Info("Registered routes:")
 	router.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
@@ -75,9 +80,12 @@ func (s *Server) setupRoutes() *mux.Router {
 		return nil
 	})
 
-	// Apply global middleware
+	// Apply global middleware (except for WebSocket)
 	router.Use(s.loggingMiddleware)
 	router.Use(s.corsMiddleware)
+
+	// Handle WebSocket separately without middleware
+	router.Path("/ws").HandlerFunc(s.wsServer.handleWebSocket)
 
 	return router
 }
