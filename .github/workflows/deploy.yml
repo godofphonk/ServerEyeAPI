@@ -19,7 +19,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.21'
+        go-version: '1.25'
         
     - name: Cache Go modules
       uses: actions/cache@v3
@@ -110,7 +110,7 @@ jobs:
               environment:
                 - HOST=0.0.0.0
                 - PORT=8080
-                - DATABASE_URL=postgres://postgres:prodpassword@postgres:5432/servereye
+                - DATABASE_URL=postgres://postgres:prodpassword@postgres:5432/servereye?sslmode=disable
                 - JWT_SECRET=super-secret-jwt-key-for-production-min-32-chars
                 - WEBHOOK_SECRET=super-secret-webhook-key-for-production-min-32
                 - WEB_URL=https://api.servereye.dev
@@ -168,7 +168,7 @@ jobs:
           docker-compose up -d
           
           # Health check
-          sleep 10
+          sleep 30
           if ! curl -f http://localhost:8080/health; then
             echo "Health check failed, rolling back..."
             docker-compose down
