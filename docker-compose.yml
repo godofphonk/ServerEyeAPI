@@ -11,19 +11,17 @@ services:
       - HOST=0.0.0.0
       - PORT=8080
       - DATABASE_URL=postgres://postgres:devpassword@postgres:5432/servereye?sslmode=disable
-      - JWT_SECRET=dev-secret-key-32-chars-minimum
-      - WEBHOOK_SECRET=dev-webhook-secret-32-chars-min
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=your-dev-jwt-secret
+      - WEBHOOK_SECRET=your-dev-webhook-secret
       - WEB_URL=http://localhost:3000
-      - KAFKA_BROKERS=localhost:9092
-      - KAFKA_GROUP_ID=servereye-api
-      - METRICS_TOPIC=metrics
-    volumes:
-      - ./logs:/app/logs
-    networks:
-      - servereye-network
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - servereye-network
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -41,7 +39,7 @@ services:
       POSTGRES_PASSWORD: devpassword
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
-      - ./deployments/init-db.sql:/docker-entrypoint-initdb.d/init-schema.sql:ro
+      - ./deployments/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
     networks:
       - servereye-network
     ports:
@@ -52,8 +50,26 @@ services:
       timeout: 10s
       retries: 3
 
+  redis:
+    image: redis:7-alpine
+    container_name: servereye-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_dev_data:/data
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
+    networks:
+      - servereye-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_dev_data:
+  redis_dev_data:
 
 networks:
   servereye-network:

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 )
 
@@ -114,4 +115,161 @@ func randomString(length int) string {
 		b[i] = charset[time.Now().UnixNano()%int64(len(charset))]
 	}
 	return string(b)
+}
+
+// handleGetServerMetrics returns latest metrics for a specific server
+func (s *Server) handleGetServerMetrics(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serverID := vars["server_id"]
+
+	if serverID == "" {
+		s.writeError(w, "server_id is required", http.StatusBadRequest)
+		return
+	}
+
+	// Try to get from Redis first
+	if s.redisStorage != nil {
+		metrics, err := s.redisStorage.GetMetric(r.Context(), serverID)
+		if err != nil {
+			s.logger.WithError(err).WithField("server_id", serverID).Error("Failed to get metrics from Redis")
+		} else {
+			s.writeJSON(w, http.StatusOK, map[string]interface{}{
+				"server_id": serverID,
+				"metrics":   metrics,
+				"timestamp": time.Now(),
+			})
+			return
+		}
+	}
+
+	// Fallback to PostgreSQL
+	metrics, err := s.storage.GetLatestMetrics(r.Context(), serverID)
+	if err != nil {
+		s.logger.WithError(err).WithField("server_id", serverID).Error("Failed to get metrics")
+		s.writeError(w, "Failed to get server metrics", http.StatusInternalServerError)
+		return
+	}
+
+	s.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"server_id": serverID,
+		"metrics":   metrics,
+		"timestamp": time.Now(),
+	})
+}
+
+// handleSendCommand sends a command to a specific server
+func (s *Server) handleSendCommand(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ServerID string                 `json:"server_id"`
+		Command  map[string]interface{} `json:"command"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		s.writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.ServerID == "" {
+		s.writeError(w, "server_id is required", http.StatusBadRequest)
+		return
+	}
+
+	if len(req.Command) == 0 {
+		s.writeError(w, "command is required", http.StatusBadRequest)
+		return
+	}
+
+	// Store command in Redis
+	if s.redisStorage != nil {
+		err := s.redisStorage.StoreCommand(r.Context(), req.ServerID, req.Command)
+		if err != nil {
+			s.logger.WithError(err).WithField("server_id", req.ServerID).Error("Failed to store command in Redis")
+		}
+	}
+
+	// Send command via WebSocket to agent
+	s.wsServer.BroadcastCommand(req.ServerID, req.Command)
+
+	s.logger.WithFields(logrus.Fields{
+		"server_id": req.ServerID,
+		"command":   req.Command,
+	}).Info("Command sent to server")
+
+	s.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"message":   "Command sent successfully",
+		"server_id": req.ServerID,
+		"command":   req.Command,
+		"timestamp": time.Now(),
+	})
+}
+
+// handleListServers returns all registered servers with their status
+func (s *Server) handleListServers(w http.ResponseWriter, r *http.Request) {
+	var servers []map[string]interface{}
+
+	// Try to get from Redis first
+	if s.redisStorage != nil {
+		redisServers, err := s.redisStorage.GetAllServers(r.Context())
+		if err != nil {
+			s.logger.WithError(err).Error("Failed to get servers from Redis")
+		} else {
+			servers = redisServers
+		}
+	}
+
+	// If no servers in Redis, try to get from database
+	if len(servers) == 0 {
+		dbServers, err := s.storage.GetServers(r.Context())
+		if err != nil {
+			s.logger.WithError(err).Error("Failed to get servers from database")
+			s.writeError(w, "Failed to get servers", http.StatusInternalServerError)
+			return
+		}
+
+		for _, serverID := range dbServers {
+			servers = append(servers, map[string]interface{}{
+				"server_id": serverID,
+				"status":    map[string]interface{}{"online": false},
+			})
+		}
+	}
+
+	s.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"servers":   servers,
+		"count":     len(servers),
+		"timestamp": time.Now(),
+	})
+}
+
+// handleGetServerStatus returns status of a specific server
+func (s *Server) handleGetServerStatus(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serverID := vars["server_id"]
+
+	if serverID == "" {
+		s.writeError(w, "server_id is required", http.StatusBadRequest)
+		return
+	}
+
+	// Try to get from Redis first
+	if s.redisStorage != nil {
+		status, err := s.redisStorage.GetServerStatus(r.Context(), serverID)
+		if err != nil {
+			s.logger.WithError(err).WithField("server_id", serverID).Error("Failed to get server status from Redis")
+		} else {
+			s.writeJSON(w, http.StatusOK, map[string]interface{}{
+				"server_id": serverID,
+				"status":    status,
+				"timestamp": time.Now(),
+			})
+			return
+		}
+	}
+
+	// Default status if not found
+	s.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"server_id": serverID,
+		"status":    map[string]interface{}{"online": false},
+		"timestamp": time.Now(),
+	})
 }

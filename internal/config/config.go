@@ -18,6 +18,7 @@ type Config struct {
 	// Database
 	DatabaseURL     string
 	KeysDatabaseURL string
+	RedisURL        string
 
 	// Metrics
 	MetricsTopic string
@@ -46,6 +47,7 @@ func Load() (*Config, error) {
 
 		DatabaseURL:     getEnv("DATABASE_URL", ""),
 		KeysDatabaseURL: getEnv("KEYS_DATABASE_URL", ""),
+		RedisURL:        getEnv("REDIS_URL", "redis://localhost:6379"),
 
 		MetricsTopic: getEnv("METRICS_TOPIC", "metrics"),
 

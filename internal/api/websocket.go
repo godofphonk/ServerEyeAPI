@@ -180,7 +180,15 @@ func (c *WSClient) readPump(wss *WebSocketServer) {
 		case "metrics":
 			// Store metrics and broadcast
 			if c.isAgent {
-				// Store in database
+				// Store in Redis with TTL
+				if wss.server.redisStorage != nil {
+					err := wss.server.redisStorage.StoreMetric(context.Background(), msg.ServerID, msg.Data)
+					if err != nil {
+						c.logger.WithError(err).Error("Failed to store metric in Redis")
+					}
+				}
+
+				// Store in database (legacy)
 				metric := &models.Metric{
 					ServerID:  msg.ServerID,
 					ServerKey: msg.ServerKey,
@@ -190,7 +198,6 @@ func (c *WSClient) readPump(wss *WebSocketServer) {
 					Tags:      make(map[string]string),
 				}
 
-				// Store metric
 				err := wss.server.storage.StoreMetric(context.Background(), metric)
 				if err != nil {
 					c.logger.WithError(err).Error("Failed to store metric")
@@ -203,6 +210,16 @@ func (c *WSClient) readPump(wss *WebSocketServer) {
 		case "heartbeat":
 			// Agent heartbeat
 			if c.isAgent {
+				// Update server status in Redis
+				if wss.server.redisStorage != nil {
+					err := wss.server.redisStorage.SetServerStatus(context.Background(), msg.ServerID, map[string]interface{}{
+						"online": true,
+					})
+					if err != nil {
+						c.logger.WithError(err).Error("Failed to update server status in Redis")
+					}
+				}
+
 				wss.broadcast <- WSMessage{
 					Type:      "server_online",
 					ServerID:  msg.ServerID,
@@ -262,25 +279,45 @@ func (wss *WebSocketServer) handleSubscription(client *WSClient, msg WSMessage) 
 		return
 	}
 
-	// Send current metrics for the subscription
+	// Send current metrics and status from Redis
 	if sub.ServerID != "" {
-		metrics, err := wss.server.storage.GetLatestMetrics(context.Background(), sub.ServerID)
-		if err != nil {
-			wss.logger.WithError(err).WithField("server", sub.ServerID).Error("Failed to get latest metrics")
-			return
+		response := WSMessage{
+			Type:      "initial_data",
+			ServerID:  sub.ServerID,
+			Data:      make(map[string]interface{}),
+			Timestamp: time.Now(),
 		}
 
-		response := WSMessage{
-			Type:      "metrics",
-			ServerID:  sub.ServerID,
-			Data:      map[string]interface{}{"metrics": metrics},
-			Timestamp: time.Now(),
+		// Get latest metrics from Redis
+		if wss.server.redisStorage != nil {
+			metrics, err := wss.server.redisStorage.GetMetric(context.Background(), sub.ServerID)
+			if err != nil {
+				wss.logger.WithError(err).WithField("server", sub.ServerID).Error("Failed to get latest metrics from Redis")
+			} else {
+				response.Data["metrics"] = metrics
+			}
+
+			// Get server status from Redis
+			status, err := wss.server.redisStorage.GetServerStatus(context.Background(), sub.ServerID)
+			if err != nil {
+				wss.logger.WithError(err).WithField("server", sub.ServerID).Error("Failed to get server status from Redis")
+			} else {
+				response.Data["status"] = status
+			}
+		} else {
+			// Fallback to PostgreSQL
+			metrics, err := wss.server.storage.GetLatestMetrics(context.Background(), sub.ServerID)
+			if err != nil {
+				wss.logger.WithError(err).WithField("server", sub.ServerID).Error("Failed to get latest metrics")
+				return
+			}
+			response.Data["metrics"] = map[string]interface{}{"metrics": metrics}
 		}
 
 		select {
 		case client.send <- response:
 		default:
-			wss.logger.Warn("Failed to send metrics to client - channel full")
+			wss.logger.Warn("Failed to send initial data to client - channel full")
 		}
 	}
 }
@@ -306,4 +343,28 @@ func (wss *WebSocketServer) GetClientCount() int {
 	wss.clientsM.RLock()
 	defer wss.clientsM.RUnlock()
 	return len(wss.clients)
+}
+
+// BroadcastCommand sends command to specific server agent
+func (wss *WebSocketServer) BroadcastCommand(serverID string, command map[string]interface{}) {
+	message := WSMessage{
+		Type:      "command",
+		ServerID:  serverID,
+		Data:      command,
+		Timestamp: time.Now(),
+	}
+
+	wss.clientsM.RLock()
+	for client := range wss.clients {
+		// Send only to the specific agent
+		if client.isAgent && client.serverID == serverID {
+			select {
+			case client.send <- message:
+			default:
+				wss.logger.Warn("Failed to send command to agent - channel full")
+			}
+			break // Only send to the matching agent
+		}
+	}
+	wss.clientsM.RUnlock()
 }
