@@ -19,7 +19,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.21'
+        go-version: '1.25'
         
     - name: Cache Go modules
       uses: actions/cache@v3
@@ -98,13 +98,47 @@ jobs:
         script: |
           cd /opt/servereye
           
+          # Create docker-compose.yml if not exists
+          if [ ! -f docker-compose.yml ]; then
+            cat > docker-compose.yml << 'EOF'
+          services:
+            servereye-api:
+              image: ghcr.io/godofphonk/servereyeapi:latest
+              container_name: servereye-api
+              restart: unless-stopped
+              ports:
+                - "8080:8080"
+              environment:
+                - HOST=0.0.0.0
+                - PORT=8080
+                - DATABASE_URL=
+                - JWT_SECRET=super-secret-jwt-key-for-production-min-32-chars
+                - WEBHOOK_SECRET=super-secret-webhook-key-for-production-min-32
+                - WEB_URL=https://api.servereye.dev
+              volumes:
+                - ./logs:/app/logs
+                - ./.env:/app/.env:ro
+              networks:
+                - servereye-network
+              healthcheck:
+                test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+          
+          networks:
+            servereye-network:
+              driver: bridge
+          EOF
+          fi
+          
           # Backup current version
-          docker-compose down
-          docker tag servereye-api:latest servereye-api:backup
+          docker-compose down || true
+          docker tag servereye-api:latest servereye-api:backup || true
           
           # Pull new image
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest servereye-api:latest
+          docker pull ghcr.io/godofphonk/servereyeapi:latest
+          docker tag ghcr.io/godofphonk/servereyeapi:latest servereye-api:latest
           
           # Start new version
           docker-compose up -d
@@ -114,7 +148,7 @@ jobs:
           if ! curl -f http://localhost:8080/health; then
             echo "Health check failed, rolling back..."
             docker-compose down
-            docker tag servereye-api:backup servereye-api:latest
+            docker tag servereye-api:backup servereye-api:latest || true
             docker-compose up -d
             exit 1
           fi
