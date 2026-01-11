@@ -42,6 +42,13 @@ func (s *Server) handleRegisterKey(w http.ResponseWriter, r *http.Request) {
 	serverID := generateServerID()
 	serverKey := generateServerKey()
 
+	s.logger.WithFields(logrus.Fields{
+		"secret_key":       req.SecretKey,
+		"hostname":         req.Hostname,
+		"operating_system": req.OperatingSystem,
+		"agent_version":    req.AgentVersion,
+	}).Info("Attempting to register key")
+
 	// Store in database
 	if err := s.storage.InsertGeneratedKey(r.Context(), req.SecretKey, req.AgentVersion, req.OperatingSystem, req.Hostname); err != nil {
 		s.logger.WithError(err).WithField("secret_key", req.SecretKey).Error("Failed to insert generated key")
