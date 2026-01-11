@@ -2,9 +2,9 @@ name: Build and Deploy
 
 on:
   push:
-    branches: [ master, production ]
+    branches: [ master ]
   pull_request:
-    branches: [ master, production ]
+    branches: [ master ]
 
 env:
   REGISTRY: ghcr.io
@@ -41,6 +41,7 @@ jobs:
   build-and-push:
     needs: test
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
     
     permissions:
       contents: read
@@ -78,44 +79,10 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
-  deploy-staging:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master'
-    
-    steps:
-    - name: Deploy to staging
-      uses: appleboy/ssh-action@v1.0.0
-      with:
-        host: ${{ secrets.STAGING_HOST }}
-        username: ${{ secrets.STAGING_USER }}
-        key: ${{ secrets.STAGING_SSH_KEY }}
-        script: |
-          cd /opt/servereye-staging
-          
-          # Pull new image
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:master
-          
-          # Update docker-compose
-          sed -i 's|image: servereye-api:.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:master|g' docker-compose.yml
-          
-          # Restart service
-          docker-compose up -d
-          
-          # Health check
-          sleep 10
-          if ! curl -f http://localhost:8080/health; then
-            echo "Health check failed"
-            docker-compose logs
-            exit 1
-          fi
-          
-          echo "Staging deployment successful!"
-
   deploy-production:
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/production'
+    if: github.ref == 'refs/heads/master'
     environment: production
     
     steps:
@@ -133,8 +100,8 @@ jobs:
           docker tag servereye-api:latest servereye-api:backup
           
           # Pull new image
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production
-          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production servereye-api:latest
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest servereye-api:latest
           
           # Start new version
           docker-compose up -d
