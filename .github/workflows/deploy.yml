@@ -210,4 +210,4 @@ jobs:
           fi
           # Cleanup
           docker image prune -f
-          echo "Production deployment successful!"
+          echo "Production deployment successful! Redis integration enabled."
