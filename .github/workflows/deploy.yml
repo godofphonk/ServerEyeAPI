@@ -2,9 +2,9 @@ name: Build and Deploy
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, production ]
   pull_request:
-    branches: [ master ]
+    branches: [ master, production ]
 
 env:
   REGISTRY: ghcr.io
@@ -41,7 +41,7 @@ jobs:
   build-and-push:
     needs: test
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/production'
     
     permissions:
       contents: read
@@ -85,7 +85,7 @@ jobs:
   deploy-production:
     needs: build-and-push
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/production'
     environment: production
     
     steps:
