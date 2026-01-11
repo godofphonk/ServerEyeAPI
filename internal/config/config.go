@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 )
 
@@ -25,37 +26,41 @@ type Config struct {
 	JWTSecret     string
 	WebhookSecret string
 
-	// Telegram
-	TelegramBotToken string
-
 	// Web
 	WebURL string
+
+	// Kafka
+	KafkaBrokers []string
+	KafkaGroupID string
 }
 
 func Load() (*Config, error) {
+	// Load .env file if exists
+	if err := godotenv.Load(); err != nil {
+		logrus.Info("No .env file found, using environment variables")
+	}
+
 	cfg := &Config{
 		Host: getEnv("HOST", "0.0.0.0"),
 		Port: getEnvInt("PORT", 8080),
 
-		DatabaseURL:     getEnv("DATABASE_URL", "postgres://postgres:password@localhost:5432/servereye?sslmode=disable"),
-		KeysDatabaseURL: getEnv("KEYS_DATABASE_URL", "postgres://servereye_keys:KMRb0xHxWCH%2FQa28YskBl62xI%2FBfkwi%2FZPiHMrZueEc%3D@localhost:5433/PgRegisteredKeys?sslmode=disable"),
+		DatabaseURL:     getEnv("DATABASE_URL", ""),
+		KeysDatabaseURL: getEnv("KEYS_DATABASE_URL", ""),
 
 		MetricsTopic: getEnv("METRICS_TOPIC", "metrics"),
 
-		JWTSecret:     getEnv("JWT_SECRET", "change-me-in-production"),
-		WebhookSecret: getEnv("WEBHOOK_SECRET", "change-me-in-production"),
+		JWTSecret:     getEnv("JWT_SECRET", ""),
+		WebhookSecret: getEnv("WEBHOOK_SECRET", ""),
 
-		TelegramBotToken: getEnv("TELEGRAM_BOT_TOKEN", ""),
-		WebURL:           getEnv("WEB_URL", "http://localhost:3000"),
+		WebURL: getEnv("WEB_URL", ""),
+
+		KafkaBrokers: []string{getEnv("KAFKA_BROKERS", "")},
+		KafkaGroupID: getEnv("KAFKA_GROUP_ID", ""),
 	}
 
 	// Validate required fields
-	if cfg.JWTSecret == "change-me-in-production" {
-		logrus.Warn("Using default JWT secret - please set JWT_SECRET in production")
-	}
-
-	if cfg.TelegramBotToken == "" {
-		logrus.Warn("TELEGRAM_BOT_TOKEN not set - bot features will be disabled")
+	if cfg.JWTSecret == "" {
+		logrus.Fatal("JWT_SECRET is required")
 	}
 
 	return cfg, nil
