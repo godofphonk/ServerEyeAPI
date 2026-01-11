@@ -3,8 +3,8 @@ package middleware
 import "net/http"
 
 // CORS middleware handles Cross-Origin Resource Sharing
-func CORS(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func CORS(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
@@ -15,6 +15,6 @@ func CORS(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		next(w, r)
-	}
+		next.ServeHTTP(w, r)
+	})
 }

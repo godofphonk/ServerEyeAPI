@@ -7,6 +7,7 @@ import (
 
 	"github.com/godofphonk/ServerEyeAPI/internal/models"
 	"github.com/godofphonk/ServerEyeAPI/internal/storage"
+	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 )
 
@@ -59,7 +60,9 @@ func (h *ServersHandler) ListServers(w http.ResponseWriter, r *http.Request) {
 
 // GetServerStatus handles GET /api/servers/{server_id}/status
 func (h *ServersHandler) GetServerStatus(w http.ResponseWriter, r *http.Request) {
-	serverID := r.URL.Query().Get("server_id")
+	vars := mux.Vars(r)
+	serverID := vars["server_id"]
+
 	if serverID == "" {
 		h.writeError(w, "server_id is required", http.StatusBadRequest)
 		return

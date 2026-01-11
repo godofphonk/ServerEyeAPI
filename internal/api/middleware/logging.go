@@ -8,7 +8,7 @@ import (
 )
 
 // Logging middleware logs HTTP requests
-func Logging(logger *logrus.Logger) func(http.Handler) http.Handler {
+func Logging(logger *logrus.Logger) func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Skip logging for WebSocket upgrade requests

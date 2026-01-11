@@ -41,6 +41,7 @@ func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
 		Status:    "healthy",
 		Timestamp: time.Now(),
 		Version:   version.Version,
+		Clients:   0, // TODO: Get actual WebSocket client count
 	}
 
 	h.writeJSON(w, http.StatusOK, response)

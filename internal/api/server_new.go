@@ -77,6 +77,8 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 		serversHandler,
 		commandsHandler,
 		wsServer,
+		storageImpl,
+		logger,
 	)
 
 	// Apply middleware
@@ -87,14 +89,11 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 	rateLimiter := middleware.NewRateLimiter(100, time.Minute, logger)
 	router.Use(rateLimiter.RateLimit)
 
-	// Apply auth middleware
-	router.Use(middleware.Auth(storageImpl, logger))
-
 	server := &http.Server{
 		Addr:         cfg.GetAddr(),
 		Handler:      router,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
+		ReadTimeout:  30 * time.Second,
+		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 

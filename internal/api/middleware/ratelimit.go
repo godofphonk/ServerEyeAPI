@@ -39,8 +39,8 @@ func NewRateLimiter(limit int, window time.Duration, logger *logrus.Logger) *Rat
 }
 
 // RateLimit middleware applies rate limiting
-func (rl *RateLimiter) RateLimit(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (rl *RateLimiter) RateLimit(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		clientIP := r.RemoteAddr
 
 		rl.mutex.Lock()
@@ -78,7 +78,7 @@ func (rl *RateLimiter) RateLimit(next http.HandlerFunc) http.HandlerFunc {
 		client.tokens--
 
 		next.ServeHTTP(w, r)
-	}
+	})
 }
 
 // min returns the minimum of two integers
