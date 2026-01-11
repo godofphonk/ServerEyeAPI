@@ -1,6 +1,6 @@
-# ServerEye Agent Makefile
+# ServerEye API Makefile
 
-.PHONY: build build-agent test clean docker-build docker-up docker-down install-agent
+.PHONY: build build-api test clean docker-build docker-run docker-stop
 
 # Go parameters
 GOCMD=go
@@ -11,7 +11,7 @@ GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 
 # Binary name
-AGENT_BINARY=servereye-agent
+API_BINARY=servereye-api
 
 # Build directories
 BUILD_DIR=build
@@ -19,24 +19,30 @@ BUILD_DIR=build
 # Default target
 all: build
 
-# Build agent only
-build: build-agent
+# Build API only
+build: build-api
 
-# Версия и build info (определяется выше для release, но дублируем для clarity)
+# Version and build info
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_DATE = $(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 GIT_COMMIT = $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 
-LDFLAGS = -X github.com/servereye/servereye/internal/version.Version=$(VERSION) \
-	-X github.com/servereye/servereye/internal/version.BuildDate=$(BUILD_DATE) \
-	-X github.com/servereye/servereye/internal/version.GitCommit=$(GIT_COMMIT)
+LDFLAGS = -X github.com/godofphonk/ServerEyeAPI/internal/version.Version=$(VERSION) \
+	-X github.com/godofphonk/ServerEyeAPI/internal/version.BuildTime=$(BUILD_DATE) \
+	-X github.com/godofphonk/ServerEyeAPI/internal/version.GitCommit=$(GIT_COMMIT)
 
-# Build agent
-build-agent:
-	@echo "Building agent $(VERSION)..."
+# Build API
+build-api:
+	@echo "Building API $(VERSION)..."
 	@mkdir -p $(BUILD_DIR)
-	$(GOBUILD) -ldflags="$(LDFLAGS)" -o $(BUILD_DIR)/$(AGENT_BINARY) ./cmd/agent
-	@echo "✅ Agent built: $(BUILD_DIR)/$(AGENT_BINARY)"
+	$(GOBUILD) -ldflags="$(LDFLAGS)" -o $(BUILD_DIR)/$(API_BINARY) ./cmd/api
+	@echo "✅ API built: $(BUILD_DIR)/$(API_BINARY)"
+
+# Run API locally
+run:
+	@echo "Running API..."
+	$(GOBUILD) -ldflags="$(LDFLAGS)" -o $(BUILD_DIR)/$(API_BINARY) ./cmd/api
+	./$(BUILD_DIR)/$(API_BINARY)
 
 # Run all tests
 test:
@@ -93,11 +99,12 @@ lint:
 	@echo "Linting code..."
 	golangci-lint run
 
-# Build Docker images
+# Build Docker image
 docker-build:
-	@echo "Building Docker images..."
-	docker build -f deployments/Dockerfile.bot -t servereye/bot:latest .
-	docker build -f deployments/Dockerfile.agent -t servereye/agent:latest .
+	@echo "Building Docker image..."
+	docker build -t servereye-api:$(VERSION) .
+	docker tag servereye-api:$(VERSION) servereye-api:latest
+	@echo "✅ Docker image built: servereye-api:$(VERSION)"
 
 # Start services with Docker Compose
 docker-up:

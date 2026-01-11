@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL for registered keys
   postgres-keys:
@@ -10,7 +8,7 @@ services:
     environment:
       POSTGRES_DB: PgRegisteredKeys
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${KEYS_DB_PASSWORD:-test123456}
+      POSTGRES_PASSWORD: ${KEYS_DB_PASSWORD}
       POSTGRES_INITDB_ARGS: "--auth-host=md5"
       POSTGRES_HOST_AUTH_METHOD: md5
     volumes:
@@ -33,9 +31,9 @@ services:
     container_name: ServerEyeAgent-Backend
     network_mode: host
     environment:
-      - DATABASE_URL=${KEYS_DATABASE_URL:-postgres://postgres:test123456@localhost:5432/PgRegisteredKeys?sslmode=disable}
-      - KEYS_DATABASE_URL=${KEYS_DATABASE_URL:-postgres://postgres:test123456@localhost:5432/PgRegisteredKeys?sslmode=disable}
-      - API_KEY=${API_KEY:-sPnMkMxyxIcjq1kJD7FOtEjUrHxvSmEU}
+      - DATABASE_URL=${KEYS_DATABASE_URL}
+      - KEYS_DATABASE_URL=${KEYS_DATABASE_URL}
+      - API_KEY=${API_KEY}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
