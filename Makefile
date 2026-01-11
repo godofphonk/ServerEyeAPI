@@ -99,12 +99,25 @@ lint:
 	@echo "Linting code..."
 	golangci-lint run
 
-# Build Docker image
+# Docker targets
 docker-build:
-	@echo "Building Docker image..."
-	docker build -t servereye-api:$(VERSION) .
-	docker tag servereye-api:$(VERSION) servereye-api:latest
-	@echo "✅ Docker image built: servereye-api:$(VERSION)"
+	docker build -t servereye-api:latest .
+
+docker-run:
+	docker run -p 8080:8080 --env-file .env servereye-api:latest
+
+docker-push:
+	docker tag servereye-api:latest ghcr.io/godofphonk/ServerEyeAPI:latest
+	docker push ghcr.io/godofphonk/ServerEyeAPI:latest
+
+docker-compose-up:
+	docker-compose -f docker-compose.prod.yml up -d
+
+docker-compose-down:
+	docker-compose -f docker-compose.prod.yml down
+
+docker-compose-logs:
+	docker-compose -f docker-compose.prod.yml logs -f
 
 # Start services with Docker Compose
 docker-up:

@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.24-alpine AS builder
+FROM golang:1.21-alpine AS builder
 
 # Install git and ca-certificates
 RUN apk add --no-cache git ca-certificates tzdata
@@ -17,7 +17,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /app/servereye-api ./cmd/api
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/servereye-api ./cmd/api
 
 # Final stage
 FROM alpine:latest
@@ -34,6 +34,9 @@ WORKDIR /app
 
 # Copy binary from builder
 COPY --from=builder /app/servereye-api .
+
+# Copy .env.example as template
+COPY .env.example .env.example
 
 # Create logs directory
 RUN mkdir -p /app/logs && chown -R servereye:servereye /app

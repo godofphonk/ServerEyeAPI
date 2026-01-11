@@ -1,0 +1,154 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [ master, production ]
+  pull_request:
+    branches: [ master, production ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+        
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+          
+    - name: Download dependencies
+      run: go mod download
+      
+    - name: Run tests
+      run: go test -v ./...
+      
+    - name: Build
+      run: make build
+
+  build-and-push:
+    needs: test
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: read
+      packages: write
+      
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Log in to Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+          
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  deploy-staging:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
+    
+    steps:
+    - name: Deploy to staging
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.STAGING_HOST }}
+        username: ${{ secrets.STAGING_USER }}
+        key: ${{ secrets.STAGING_SSH_KEY }}
+        script: |
+          cd /opt/servereye-staging
+          
+          # Pull new image
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:master
+          
+          # Update docker-compose
+          sed -i 's|image: servereye-api:.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:master|g' docker-compose.yml
+          
+          # Restart service
+          docker-compose up -d
+          
+          # Health check
+          sleep 10
+          if ! curl -f http://localhost:8080/health; then
+            echo "Health check failed"
+            docker-compose logs
+            exit 1
+          fi
+          
+          echo "Staging deployment successful!"
+
+  deploy-production:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/production'
+    environment: production
+    
+    steps:
+    - name: Deploy to production
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.PROD_HOST }}
+        username: ${{ secrets.PROD_USER }}
+        key: ${{ secrets.PROD_SSH_KEY }}
+        script: |
+          cd /opt/servereye
+          
+          # Backup current version
+          docker-compose down
+          docker tag servereye-api:latest servereye-api:backup
+          
+          # Pull new image
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production
+          docker tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production servereye-api:latest
+          
+          # Start new version
+          docker-compose up -d
+          
+          # Health check
+          sleep 10
+          if ! curl -f http://localhost:8080/health; then
+            echo "Health check failed, rolling back..."
+            docker-compose down
+            docker tag servereye-api:backup servereye-api:latest
+            docker-compose up -d
+            exit 1
+          fi
+          
+          # Cleanup
+          docker image prune -f
+          echo "Production deployment successful!"
