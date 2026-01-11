@@ -106,10 +106,11 @@ func (s *CombinedStorage) StoreDLQMessage(ctx context.Context, topic string, par
 
 // Ping checks both connections
 func (s *CombinedStorage) Ping() error {
+	ctx := context.Background()
 	if err := s.postgres.Ping(); err != nil {
 		return err
 	}
-	return s.redis.Ping()
+	return s.redis.Ping(ctx)
 }
 
 // Close closes both connections

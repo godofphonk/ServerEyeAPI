@@ -1,6 +1,7 @@
 package api
 
 import (
+	"github.com/godofphonk/ServerEyeAPI/internal/api/middleware"
 	"github.com/godofphonk/ServerEyeAPI/internal/handlers"
 	"github.com/godofphonk/ServerEyeAPI/internal/storage"
 	"github.com/godofphonk/ServerEyeAPI/internal/websocket"
