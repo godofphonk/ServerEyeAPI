@@ -111,6 +111,7 @@ jobs:
                 - HOST=0.0.0.0
                 - PORT=8080
                 - DATABASE_URL=postgres://postgres:prodpassword@postgres:5432/servereye?sslmode=disable
+                - REDIS_URL=redis://redis:6379
                 - JWT_SECRET=super-secret-jwt-key-for-production-min-32-chars
                 - WEBHOOK_SECRET=super-secret-webhook-key-for-production-min-32
                 - WEB_URL=https://api.servereye.dev
@@ -121,6 +122,8 @@ jobs:
                 - servereye-network
               depends_on:
                 postgres:
+                  condition: service_healthy
+                redis:
                   condition: service_healthy
               healthcheck:
                 test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -148,8 +151,24 @@ jobs:
                 timeout: 10s
                 retries: 3
 
+            redis:
+              image: redis:7-alpine
+              container_name: servereye-redis
+              restart: unless-stopped
+              volumes:
+                - redis_data:/data
+              command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
+              networks:
+                - servereye-network
+              healthcheck:
+                test: ["CMD", "redis-cli", "ping"]
+                interval: 10s
+                timeout: 5s
+                retries: 5
+
           volumes:
             postgres_data:
+            redis_data:
 
           networks:
             servereye-network:
@@ -168,7 +187,7 @@ jobs:
           docker-compose up -d
           
           # Health check
-          sleep 30
+          sleep 60
           if ! curl -f http://localhost:8080/health; then
             echo "Health check failed, rolling back..."
             docker-compose down
@@ -176,7 +195,6 @@ jobs:
             docker-compose up -d
             exit 1
           fi
-          
           # Cleanup
           docker image prune -f
           echo "Production deployment successful!"
