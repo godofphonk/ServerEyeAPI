@@ -98,9 +98,8 @@ jobs:
         script: |
           cd /opt/servereye
           
-          # Create docker-compose.yml if not exists
-          if [ ! -f docker-compose.yml ]; then
-            cat > docker-compose.yml << 'EOF'
+          # Create docker-compose.yml if not exists or update it
+          cat > docker-compose.yml << 'EOF'
           services:
             servereye-api:
               image: ghcr.io/godofphonk/servereyeapi:production
@@ -130,7 +129,6 @@ jobs:
             servereye-network:
               driver: bridge
           EOF
-          fi
           
           # Backup current version
           docker-compose down || true
