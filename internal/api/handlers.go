@@ -6,16 +6,16 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/godofphonk/ServerEye/pkg/publisher"
+	"github.com/godofphonk/ServerEyeAPI/pkg/models"
 	"github.com/gorilla/mux"
 )
 
 type MetricsResponse struct {
-	ServerID string              `json:"server_id"`
-	Metrics  []*publisher.Metric `json:"metrics"`
-	Count    int                 `json:"count"`
-	From     time.Time           `json:"from,omitempty"`
-	To       time.Time           `json:"to,omitempty"`
+	ServerID string           `json:"server_id"`
+	Metrics  []*models.Metric `json:"metrics"`
+	Count    int              `json:"count"`
+	From     time.Time        `json:"from,omitempty"`
+	To       time.Time        `json:"to,omitempty"`
 }
 
 type ErrorResponse struct {
@@ -134,7 +134,7 @@ func (s *Server) handleGetMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get metrics
-	var metrics []*publisher.Metric
+	var metrics []*models.Metric
 	if serverID != "" {
 		metrics, err = s.storage.GetMetricsHistory(r.Context(), serverID, metricType, fromTime, toTime)
 	} else {
@@ -430,14 +430,13 @@ func (s *Server) handlePostMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Store metric
-	metricToStore := &publisher.Metric{
+	metricToStore := &models.Metric{
 		ServerID:  metric.ServerID,
 		ServerKey: metric.ServerKey,
 		Type:      metric.Type,
-		Value:     metric.Value,
+		Value:     metric.Value.(float64),
 		Timestamp: metric.Timestamp,
 		Tags:      metric.Tags,
-		Data:      metric.Data,
 	}
 
 	if err := s.storage.StoreMetric(r.Context(), metricToStore); err != nil {

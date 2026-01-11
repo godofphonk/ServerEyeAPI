@@ -5,21 +5,21 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/godofphonk/ServerEye/backend/internal/config"
-	"github.com/godofphonk/ServerEye/backend/internal/storage"
+	"github.com/godofphonk/ServerEyeAPI/internal/config"
+	"github.com/godofphonk/ServerEyeAPI/internal/storage"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 )
 
 type Server struct {
 	config   *config.Config
-	storage  *storage.PostgresStorage
+	storage  storage.Storage
 	logger   *logrus.Logger
 	server   *http.Server
 	wsServer *WebSocketServer
 }
 
-func New(cfg *config.Config, storage *storage.PostgresStorage, logger *logrus.Logger) *Server {
+func New(cfg *config.Config, storage storage.Storage, logger *logrus.Logger) *Server {
 	s := &Server{
 		config:  cfg,
 		storage: storage,
@@ -61,7 +61,6 @@ func (s *Server) setupRoutes() *mux.Router {
 	s.logger.Info("Setting up routes...")
 
 	// Public routes (no auth required)
-	public := router.PathPrefix("/public").Subrouter()
 	router.HandleFunc("/api/v1/register-key", s.handleRegisterKey).Methods("POST")
 	router.HandleFunc("/v1/register-key", s.handleRegisterKey).Methods("POST")
 	router.HandleFunc("/health", s.handleHealth).Methods("GET")

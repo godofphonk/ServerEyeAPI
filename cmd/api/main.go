@@ -2,14 +2,15 @@ package main
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"github.com/godofphonk/ServerEye/backend/internal/api"
-	"github.com/godofphonk/ServerEye/backend/internal/config"
-	"github.com/godofphonk/ServerEye/backend/internal/storage"
+	"github.com/godofphonk/ServerEyeAPI/internal/api"
+	"github.com/godofphonk/ServerEyeAPI/internal/config"
+	"github.com/godofphonk/ServerEyeAPI/internal/storage"
 	"github.com/sirupsen/logrus"
 )
 
@@ -20,69 +21,48 @@ func main() {
 
 	cfg, err := config.Load()
 	if err != nil {
-		logger.WithError(err).Fatal("Failed to load config")
+		logger.WithError(err).Fatal("Failed to load configuration")
 	}
 
-	// Initialize keys storage
-	var keysStore *storage.KeysStorage
-	if cfg.KeysDatabaseURL != "" && cfg.KeysDatabaseURL != "skip" {
-		var err error
-		keysStore, err = storage.NewKeysStorage(cfg.KeysDatabaseURL, logger)
-		if err != nil {
-			logger.WithError(err).Fatal("Failed to initialize keys storage")
-		}
-		defer keysStore.Close()
+	// Initialize storage
+	var storageImpl storage.Storage
+	if cfg.DatabaseURL == "" {
+		logger.Info("Using in-memory storage (DATABASE_URL not set)")
+		storageImpl = storage.NewMemoryStorage(logger)
 	} else {
-		logger.Info("Keys storage disabled")
+		postgresStorage, err := storage.NewPostgresStorage(cfg.DatabaseURL, logger)
+		if err != nil {
+			logger.WithError(err).Fatal("Failed to initialize storage")
+		}
+		storageImpl = postgresStorage
+	}
+	defer storageImpl.Close()
+
+	// Initialize API server
+	server := api.New(cfg, storageImpl, logger)
+
+	// Start server in goroutine
+	go func() {
+		logger.WithField("addr", ":8080").Info("Starting API server")
+		if err := server.Start(); err != nil && err != http.ErrServerClosed {
+			logger.WithError(err).Fatal("Failed to start server")
+		}
+	}()
+
+	// Wait for interrupt signal
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	logger.Info("Shutting down server...")
+
+	// Graceful shutdown with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		logger.WithError(err).Error("Server forced to shutdown")
 	}
 
-	// Initialize API server (HTTP-only mode)
-	apiServer, err := api.New(&api.Config{
-		Server: struct {
-			Host string
-			Port string
-		}{
-			Host: cfg.Server.Host,
-			Port: cfg.Server.Port,
-		},
-		Auth: struct {
-			APIKey string
-		}{
-			APIKey: cfg.Auth.APIKey,
-		},
-		Kafka: struct {
-			Brokers     []string
-			TopicPrefix string
-			Enabled     bool
-		}{
-			Brokers:     cfg.Kafka.Brokers,
-			TopicPrefix: cfg.Kafka.TopicPrefix,
-			Enabled:     cfg.Kafka.Enabled,
-		},
-	}, logger, keysStore)
-	if err != nil {
-		logger.WithError(err).Fatal("Failed to initialize API server")
-	}
-
-	// Start API server (blocking)
-	if err := apiServer.Start(); err != nil {
-		logger.WithError(err).Fatal("Failed to start API server")
-	}
-
-	// Graceful shutdown
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
-	<-sigChan
-	logger.Info("Shutting down...")
-
-	// Shutdown with timeout
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer shutdownCancel()
-
-	if err := apiServer.Shutdown(shutdownCtx); err != nil {
-		logger.WithError(err).Error("Error shutting down API server")
-	}
-
-	logger.Info("Shutdown complete")
+	logger.Info("Server exited")
 }
