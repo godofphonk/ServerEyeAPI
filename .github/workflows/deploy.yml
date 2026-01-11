@@ -114,7 +114,7 @@ jobs:
                 - REDIS_URL=redis://redis:6379
                 - JWT_SECRET=${{ secrets.JWT_SECRET }}
                 - WEBHOOK_SECRET=${{ secrets.WEBHOOK_SECRET }}
-                - WEB_URL=${{ vars.WEB_URL }}
+                - WEB_URL=${{ vars.WEB_URL || 'https://api.servereye.dev' }}
               volumes:
                 - ./logs:/app/logs
                 - ./.env:/app/.env:ro
@@ -185,11 +185,24 @@ jobs:
           
           # Start new version
           docker-compose up -d
-          
-          # Health check
+
+          # Wait for services to be ready
+          echo "Waiting for services to start..."
+          sleep 30
+
+          # Check logs
+          echo "Checking API logs..."
+          docker logs servereye-api
+
+          # Health check with more time
+          echo "Performing health check..."
           sleep 60
           if ! curl -f http://localhost:8080/health; then
-            echo "Health check failed, rolling back..."
+            echo "Health check failed, checking logs..."
+            docker logs servereye-api
+            docker logs servereye-redis
+            docker logs servereye-postgres
+            echo "Rolling back..."
             docker-compose down
             docker tag servereye-api:backup servereye-api:latest
             docker-compose up -d
