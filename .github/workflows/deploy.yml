@@ -142,7 +142,7 @@ jobs:
                 POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
               volumes:
                 - postgres_data:/var/lib/postgresql/data
-                - ./deployments/init-db.sql:/docker-entrypoint-initdb.d/init-schema.sql:ro
+                - ./deployments/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
               networks:
                 - servereye-network
               healthcheck:
