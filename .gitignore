@@ -47,3 +47,6 @@ build/
 # Temporary files
 tmp/
 temp/
+
+# WorkDocs - internal documentation
+WorkDocs/
