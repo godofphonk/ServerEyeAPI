@@ -178,7 +178,10 @@ jobs:
           # Backup current version
           docker-compose down
           docker tag servereye-api:latest servereye-api:backup
-          
+
+          # Remove old PostgreSQL volume to reset password
+          docker volume rm servereye_postgres_data || true
+
           # Pull new image
           docker pull ghcr.io/godofphonk/servereyeapi:production
           docker tag ghcr.io/godofphonk/servereyeapi:production servereye-api:latest
