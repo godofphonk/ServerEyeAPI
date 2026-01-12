@@ -7,7 +7,8 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- Generated Keys table (for key registration)
 CREATE TABLE IF NOT EXISTS generated_keys (
     id BIGSERIAL PRIMARY KEY,
-    secret_key TEXT UNIQUE NOT NULL,
+    server_id TEXT UNIQUE,
+    server_key TEXT UNIQUE,
     agent_version TEXT,
     os_info TEXT,
     hostname TEXT,
@@ -19,7 +20,6 @@ CREATE TABLE IF NOT EXISTS generated_keys (
 CREATE TABLE IF NOT EXISTS servers (
     id BIGSERIAL PRIMARY KEY,
     server_id TEXT UNIQUE NOT NULL,
-    secret_key TEXT NOT NULL,
     hostname TEXT,
     os_info TEXT,
     agent_version TEXT,
@@ -41,13 +41,14 @@ CREATE TABLE IF NOT EXISTS dead_letter_queue (
 );
 
 -- Indexes for performance
-CREATE INDEX IF NOT EXISTS idx_generated_keys_secret ON generated_keys (secret_key);
+CREATE INDEX IF NOT EXISTS idx_generated_keys_server_id ON generated_keys (server_id);
+CREATE INDEX IF NOT EXISTS idx_generated_keys_server_key ON generated_keys (server_key);
 CREATE INDEX IF NOT EXISTS idx_servers_server_id ON servers (server_id);
 CREATE INDEX IF NOT EXISTS idx_servers_last_seen ON servers (last_seen);
 CREATE INDEX IF NOT EXISTS idx_dlq_created_at ON dead_letter_queue (created_at);
 CREATE INDEX IF NOT EXISTS idx_dlq_topic ON dead_letter_queue (topic);
 
 -- Insert sample data for testing (optional)
--- INSERT INTO generated_keys (secret_key, agent_version, os_info, hostname, status)
--- VALUES ('test-secret-key', '1.0.0', 'Ubuntu 22.04', 'test-server', 'generated')
--- ON CONFLICT (secret_key) DO NOTHING;
+-- INSERT INTO generated_keys (server_id, server_key, agent_version, os_info, hostname, status)
+-- VALUES ('srv_test123', 'key_test456', '1.0.0', 'Ubuntu 22.04', 'test-server', 'generated')
+-- ON CONFLICT (server_id) DO NOTHING;
