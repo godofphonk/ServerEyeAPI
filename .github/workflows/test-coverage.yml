@@ -64,12 +64,13 @@ jobs:
         # Run tests and ignore packages without tests
         go test -v -race -coverprofile=coverage.out ./... || true
     
-    - name: Install coverage tool
-      run: go install github.com/wadey/gocovmerge@v0.0.0
-    
     - name: Merge coverage files
       run: |
-        find . -name "*.out" -type f | xargs gocovmerge > coverage-merged.out
+        # Use built-in go tool to combine coverage files
+        echo "mode: atomic" > coverage-merged.out
+        find . -name "*.out" -type f ! -name "coverage-merged.out" | while read f; do
+          grep -v "^mode:" "$f" >> coverage-merged.out
+        done
     
     - name: Generate coverage report
       run: |
