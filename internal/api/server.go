@@ -44,7 +44,7 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 
 		// Initialize Redis if URL is provided
 		if cfg.RedisURL != "" {
-			redisClient, err = redisStorage.NewClient(cfg.RedisURL, "", 0, logger)
+			redisClient, err = redisStorage.NewClient(cfg.RedisURL, "", 0, logger, cfg)
 			if err != nil {
 				return nil, err
 			}
@@ -55,7 +55,7 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 	}
 
 	// Initialize WebSocket server
-	wsServer := websocket.NewServer(storageImpl, logger)
+	wsServer := websocket.NewServer(storageImpl, logger, cfg)
 
 	// Initialize services
 	authService := services.NewAuthService(storageImpl, logger)
@@ -86,7 +86,7 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 	router.Use(middleware.CORS)
 
 	// Apply rate limiting
-	rateLimiter := middleware.NewRateLimiter(100, time.Minute, logger)
+	rateLimiter := middleware.NewRateLimiter(cfg, logger)
 	router.Use(rateLimiter.RateLimit)
 
 	server := &http.Server{

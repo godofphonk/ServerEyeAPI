@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/godofphonk/ServerEyeAPI/internal/config"
 	"github.com/sirupsen/logrus"
 )
 
@@ -30,10 +31,10 @@ type rate struct {
 }
 
 // NewRateLimiter creates a new rate limiter
-func NewRateLimiter(limit int, window time.Duration, logger *logrus.Logger) *RateLimiter {
+func NewRateLimiter(cfg *config.Config, logger *logrus.Logger) *RateLimiter {
 	return &RateLimiter{
 		clients: make(map[string]*ClientLimiter),
-		rate:    rate{limit: limit, window: window},
+		rate:    rate{limit: cfg.RateLimit.Limit, window: cfg.RateLimit.Window},
 		logger:  logger,
 	}
 }

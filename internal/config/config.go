@@ -6,33 +6,66 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/caarlos0/env/v10"
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 )
 
 type Config struct {
 	// Server
-	Host string
-	Port int
+	Host string `env:"HOST" envDefault:"0.0.0.0"`
+	Port int    `env:"PORT" envDefault:"8080"`
 
 	// Database
-	DatabaseURL     string
-	KeysDatabaseURL string
-	RedisURL        string
+	DatabaseURL     string `env:"DATABASE_URL"`
+	KeysDatabaseURL string `env:"KEYS_DATABASE_URL"`
+	RedisURL        string `env:"REDIS_URL" envDefault:"redis://localhost:6379"`
 
 	// Metrics
-	MetricsTopic string
+	MetricsTopic string `env:"METRICS_TOPIC" envDefault:"metrics"`
 
 	// Security
-	JWTSecret     string
-	WebhookSecret string
+	JWTSecret     string `env:"JWT_SECRET"`
+	WebhookSecret string `env:"WEBHOOK_SECRET"`
 
 	// Web
-	WebURL string
+	WebURL string `env:"WEB_URL"`
 
 	// Kafka
-	KafkaBrokers []string
-	KafkaGroupID string
+	KafkaBrokers []string `env:"KAFKA_BROKERS" envSeparator:","`
+	KafkaGroupID string   `env:"KAFKA_GROUP_ID"`
+
+	// Redis Configuration
+	Redis struct {
+		TTL         time.Duration `env:"REDIS_TTL" envDefault:"60s"`
+		ConnTimeout time.Duration `env:"REDIS_CONN_TIMEOUT" envDefault:"5s"`
+		MaxRetries  int           `env:"REDIS_MAX_RETRIES" envDefault:"3"`
+	}
+
+	// WebSocket Configuration
+	WebSocket struct {
+		BufferSize   int           `env:"WS_BUFFER_SIZE" envDefault:"256"`
+		WriteTimeout time.Duration `env:"WS_WRITE_TIMEOUT" envDefault:"10s"`
+		PingInterval time.Duration `env:"WS_PING_INTERVAL" envDefault:"30s"`
+	}
+
+	// Rate Limiting Configuration
+	RateLimit struct {
+		Limit  int           `env:"RATE_LIMIT" envDefault:"100"`
+		Window time.Duration `env:"RATE_WINDOW" envDefault:"1m"`
+	}
+
+	// Consumer Configuration
+	Consumer struct {
+		BatchSize         int           `env:"CONSUMER_BATCH_SIZE" envDefault:"100"`
+		BatchTimeout      time.Duration `env:"CONSUMER_BATCH_TIMEOUT" envDefault:"1s"`
+		CommitInterval    time.Duration `env:"CONSUMER_COMMIT_INTERVAL" envDefault:"1s"`
+		RebalanceTimeout  time.Duration `env:"CONSUMER_REBALANCE_TIMEOUT" envDefault:"30s"`
+		MaxProcessingTime time.Duration `env:"CONSUMER_MAX_PROCESSING_TIME" envDefault:"30s"`
+		SessionTimeout    time.Duration `env:"CONSUMER_SESSION_TIMEOUT" envDefault:"30s"`
+		HeartbeatInterval time.Duration `env:"CONSUMER_HEARTBEAT_INTERVAL" envDefault:"3s"`
+		MaxPollRecords    int           `env:"CONSUMER_MAX_POLL_RECORDS" envDefault:"500"`
+	}
 }
 
 func Load() (*Config, error) {
@@ -41,23 +74,11 @@ func Load() (*Config, error) {
 		logrus.Info("No .env file found, using environment variables")
 	}
 
-	cfg := &Config{
-		Host: getEnv("HOST", "0.0.0.0"),
-		Port: getEnvInt("PORT", 8080),
+	cfg := &Config{}
 
-		DatabaseURL:     getEnv("DATABASE_URL", ""),
-		KeysDatabaseURL: getEnv("KEYS_DATABASE_URL", ""),
-		RedisURL:        getEnv("REDIS_URL", "redis://localhost:6379"),
-
-		MetricsTopic: getEnv("METRICS_TOPIC", "metrics"),
-
-		JWTSecret:     getEnv("JWT_SECRET", ""),
-		WebhookSecret: getEnv("WEBHOOK_SECRET", ""),
-
-		WebURL: getEnv("WEB_URL", ""),
-
-		KafkaBrokers: []string{getEnv("KAFKA_BROKERS", "")},
-		KafkaGroupID: getEnv("KAFKA_GROUP_ID", ""),
+	// Load environment variables with env tags
+	if err := env.Parse(cfg); err != nil {
+		return nil, fmt.Errorf("failed to parse environment variables: %w", err)
 	}
 
 	// Validate required fields
@@ -118,15 +139,15 @@ func NewConsumerConfig(cfg *Config) ConsumerConfig {
 		Brokers:           cfg.KafkaBrokers,
 		GroupID:           cfg.KafkaGroupID,
 		Topic:             cfg.MetricsTopic,
-		BatchSize:         100,
-		BatchTimeout:      1 * time.Second,
-		CommitInterval:    1 * time.Second,
-		RebalanceTimeout:  30 * time.Second,
+		BatchSize:         cfg.Consumer.BatchSize,
+		BatchTimeout:      cfg.Consumer.BatchTimeout,
+		CommitInterval:    cfg.Consumer.CommitInterval,
+		RebalanceTimeout:  cfg.Consumer.RebalanceTimeout,
 		StartOffset:       -2, // Start from earliest
-		MaxProcessingTime: 30 * time.Second,
+		MaxProcessingTime: cfg.Consumer.MaxProcessingTime,
 		EnableAutoCommit:  false,
-		SessionTimeout:    30 * time.Second,
-		HeartbeatInterval: 3 * time.Second,
-		MaxPollRecords:    500,
+		SessionTimeout:    cfg.Consumer.SessionTimeout,
+		HeartbeatInterval: cfg.Consumer.HeartbeatInterval,
+		MaxPollRecords:    cfg.Consumer.MaxPollRecords,
 	}
 }

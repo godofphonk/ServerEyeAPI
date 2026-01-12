@@ -3,8 +3,8 @@ package redis
 import (
 	"context"
 	"fmt"
-	"time"
 
+	"github.com/godofphonk/ServerEyeAPI/internal/config"
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 )
@@ -13,18 +13,19 @@ import (
 type Client struct {
 	client *redis.Client
 	logger *logrus.Logger
+	config *config.Config
 }
 
 // NewClient creates a new Redis client
-func NewClient(addr, password string, db int, logger *logrus.Logger) (*Client, error) {
+func NewClient(addr, password string, db int, logger *logrus.Logger, cfg *config.Config) (*Client, error) {
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     addr,
 		Password: password,
 		DB:       db,
 	})
 
-	// Test connection
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// Test connection with configured timeout
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.Redis.ConnTimeout)
 	defer cancel()
 
 	if err := rdb.Ping(ctx).Err(); err != nil {
@@ -36,6 +37,7 @@ func NewClient(addr, password string, db int, logger *logrus.Logger) (*Client, e
 	return &Client{
 		client: rdb,
 		logger: logger,
+		config: cfg,
 	}, nil
 }
 
