@@ -25,6 +25,29 @@ func NewServersHandler(storage storage.Storage, logger *logrus.Logger) *ServersH
 	}
 }
 
+// GetServerByKey handles GET /api/servers/by-key/{server_key}
+func (h *ServersHandler) GetServerByKey(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serverKey := vars["server_key"]
+
+	if serverKey == "" {
+		h.writeError(w, "server_key is required", http.StatusBadRequest)
+		return
+	}
+
+	serverInfo, err := h.storage.GetServerByKey(r.Context(), serverKey)
+	if err != nil {
+		h.logger.WithError(err).WithField("server_key", serverKey).Error("Failed to get server by key")
+		h.writeError(w, "Server not found", http.StatusNotFound)
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"server_id": serverInfo.ServerID,
+		"hostname":  serverInfo.Hostname,
+	})
+}
+
 // ListServers handles GET /api/servers
 func (h *ServersHandler) ListServers(w http.ResponseWriter, r *http.Request) {
 	servers, err := h.storage.GetServers(r.Context())
