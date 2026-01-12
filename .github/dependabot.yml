@@ -1,6 +1,4 @@
 # Dependabot Configuration
-# Automated dependency updates for solo developer
-
 version: 2
 updates:
 
