@@ -20,12 +20,14 @@ CREATE TABLE IF NOT EXISTS generated_keys (
 CREATE TABLE IF NOT EXISTS servers (
     id BIGSERIAL PRIMARY KEY,
     server_id TEXT UNIQUE NOT NULL,
+    server_key TEXT UNIQUE,
     hostname TEXT,
     os_info TEXT,
     agent_version TEXT,
     status TEXT DEFAULT 'offline',
     last_seen TIMESTAMPTZ DEFAULT NOW(),
-    created_at TIMESTAMPTZ DEFAULT NOW()
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Dead Letter Queue for failed messages
@@ -44,6 +46,7 @@ CREATE TABLE IF NOT EXISTS dead_letter_queue (
 CREATE INDEX IF NOT EXISTS idx_generated_keys_server_id ON generated_keys (server_id);
 CREATE INDEX IF NOT EXISTS idx_generated_keys_server_key ON generated_keys (server_key);
 CREATE INDEX IF NOT EXISTS idx_servers_server_id ON servers (server_id);
+CREATE INDEX IF NOT EXISTS idx_servers_server_key ON servers (server_key);
 CREATE INDEX IF NOT EXISTS idx_servers_last_seen ON servers (last_seen);
 CREATE INDEX IF NOT EXISTS idx_dlq_created_at ON dead_letter_queue (created_at);
 CREATE INDEX IF NOT EXISTS idx_dlq_topic ON dead_letter_queue (topic);

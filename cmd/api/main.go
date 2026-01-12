@@ -7,8 +7,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/godofphonk/ServerEyeAPI/internal/api"
 	"github.com/godofphonk/ServerEyeAPI/internal/config"
+	"github.com/godofphonk/ServerEyeAPI/internal/wire"
 	"github.com/sirupsen/logrus"
 )
 
@@ -22,8 +22,8 @@ func main() {
 		logger.WithError(err).Fatal("Failed to load configuration")
 	}
 
-	// Initialize API server with new structure
-	server, err := api.New(cfg, logger)
+	// Initialize API server using Wire DI container
+	server, err := wire.InitializeApp(cfg)
 	if err != nil {
 		logger.WithError(err).Fatal("Failed to initialize server")
 	}
