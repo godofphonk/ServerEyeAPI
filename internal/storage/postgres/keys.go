@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/godofphonk/ServerEyeAPI/internal/models"
 	"github.com/sirupsen/logrus"
@@ -111,7 +112,7 @@ func (c *Client) GetServers(ctx context.Context) ([]string, error) {
 }
 
 // GetServerMetrics retrieves metrics for a server from PostgreSQL
-func (c *Client) GetServerMetrics(ctx context.Context, serverID string) (map[string]interface{}, error) {
+func (c *Client) GetServerMetrics(ctx context.Context, serverID string) (*models.ServerStatus, error) {
 	query := `
 		SELECT hostname, os_info, agent_version, status, last_seen
 		FROM servers
@@ -119,7 +120,7 @@ func (c *Client) GetServerMetrics(ctx context.Context, serverID string) (map[str
 	`
 
 	var hostname, osInfo, agentVersion, status string
-	var lastSeen interface{}
+	var lastSeen time.Time
 
 	err := c.db.QueryRowContext(ctx, query, serverID).Scan(
 		&hostname, &osInfo, &agentVersion, &status, &lastSeen,
@@ -128,12 +129,13 @@ func (c *Client) GetServerMetrics(ctx context.Context, serverID string) (map[str
 		return nil, fmt.Errorf("failed to get server metrics: %w", err)
 	}
 
-	return map[string]interface{}{
-		"hostname":      hostname,
-		"os_info":       osInfo,
-		"agent_version": agentVersion,
-		"status":        status,
-		"last_seen":     lastSeen,
+	return &models.ServerStatus{
+		Online:       status == "online",
+		LastSeen:     lastSeen,
+		Version:      "", // Not stored in servers table
+		OSInfo:       osInfo,
+		AgentVersion: agentVersion,
+		Hostname:     hostname,
 	}, nil
 }
 

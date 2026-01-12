@@ -40,7 +40,7 @@ func (h *ServersHandler) ListServers(w http.ResponseWriter, r *http.Request) {
 		status, err := h.storage.GetServerStatus(r.Context(), serverID)
 		if err != nil {
 			h.logger.WithError(err).WithField("server_id", serverID).Warn("Failed to get server status")
-			status = map[string]interface{}{"online": false}
+			status = &models.ServerStatus{Online: false}
 		}
 
 		serverDetails = append(serverDetails, map[string]interface{}{

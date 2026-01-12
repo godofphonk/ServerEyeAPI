@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"sync"
 	"time"
@@ -167,8 +168,21 @@ func (s *Server) handleMetrics(ctx context.Context, client *Client, msg models.W
 		return
 	}
 
+	// Parse metrics message
+	var metricsMsg models.MetricsMessage
+	dataBytes, err := json.Marshal(msg.Data)
+	if err != nil {
+		s.logger.WithError(err).WithField("server_id", client.ServerID).Error("Failed to marshal metrics data")
+		return
+	}
+
+	if err := json.Unmarshal(dataBytes, &metricsMsg); err != nil {
+		s.logger.WithError(err).WithField("server_id", client.ServerID).Error("Invalid metrics message format")
+		return
+	}
+
 	// Store metrics in Redis
-	if err := s.storage.StoreMetric(ctx, client.ServerID, msg.Data); err != nil {
+	if err := s.storage.StoreMetric(ctx, client.ServerID, &metricsMsg.Metrics); err != nil {
 		s.logger.WithError(err).WithField("server_id", client.ServerID).Error("Failed to store metrics")
 	}
 
@@ -178,9 +192,9 @@ func (s *Server) handleMetrics(ctx context.Context, client *Client, msg models.W
 // handleHeartbeat handles heartbeat messages
 func (s *Server) handleHeartbeat(ctx context.Context, client *Client, msg models.WSMessage) {
 	// Update server status
-	status := map[string]interface{}{
-		"online":    true,
-		"last_seen": time.Now().Unix(),
+	status := &models.ServerStatus{
+		Online:   true,
+		LastSeen: time.Unix(msg.Timestamp, 0),
 	}
 
 	if err := s.storage.SetServerStatus(ctx, client.ServerID, status); err != nil {
