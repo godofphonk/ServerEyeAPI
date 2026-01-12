@@ -119,12 +119,23 @@ func (s *Server) Start() error {
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.logger.Info("Shutting down server")
 
-	// Close storage
+	// 1. Shutdown HTTP server first (stops accepting new connections)
+	if err := s.server.Shutdown(ctx); err != nil {
+		s.logger.WithError(err).Error("Failed to shutdown HTTP server")
+	}
+
+	// 2. Close WebSocket connections
+	if err := s.wsServer.Close(); err != nil {
+		s.logger.WithError(err).Error("Failed to close WebSocket server")
+	}
+
+	// 3. Close storage last
 	if err := s.storage.Close(); err != nil {
 		s.logger.WithError(err).Error("Failed to close storage")
 	}
 
-	return s.server.Shutdown(ctx)
+	s.logger.Info("Server shutdown complete")
+	return nil
 }
 
 // GetWebSocketServer returns the WebSocket server instance

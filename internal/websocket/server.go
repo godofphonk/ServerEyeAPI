@@ -198,6 +198,23 @@ func (s *Server) BroadcastMessage(msg models.WSMessage) {
 	}
 }
 
+// Close gracefully shuts down the WebSocket server
+func (s *Server) Close() error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	// Close all client connections
+	for _, client := range s.clients {
+		client.Close()
+	}
+
+	// Clear clients map
+	s.clients = make(map[string]*Client)
+
+	s.logger.Info("WebSocket server closed gracefully")
+	return nil
+}
+
 // SendToClient sends a message to a specific client
 func (s *Server) SendToClient(serverID string, msg models.WSMessage) bool {
 	s.mutex.RLock()
