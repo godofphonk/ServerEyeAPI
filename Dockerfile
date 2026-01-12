@@ -16,6 +16,10 @@ RUN go mod download
 # Copy source code
 COPY . .
 
+# Install Wire and generate dependencies
+RUN go install github.com/google/wire/cmd/wire@latest
+RUN go generate ./internal/wire
+
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s" -o /app/servereye-api ./cmd/api
 
