@@ -47,7 +47,7 @@ func (c *Client) initSchema() error {
 		id BIGSERIAL PRIMARY KEY,
 		topic TEXT NOT NULL,
 		partition INTEGER,
-		offset BIGINT,
+		message_offset BIGINT,
 		message JSONB NOT NULL,
 		error TEXT NOT NULL,
 		attempts INTEGER DEFAULT 0,

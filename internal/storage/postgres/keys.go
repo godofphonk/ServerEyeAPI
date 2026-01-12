@@ -89,7 +89,7 @@ func (c *Client) GetPendingCommands(ctx context.Context, serverID string) ([]str
 // StoreDLQMessage stores a message in the dead letter queue
 func (c *Client) StoreDLQMessage(ctx context.Context, topic string, partition int, offset int64, message []byte, errorMsg string) error {
 	query := `
-		INSERT INTO dead_letter_queue (topic, partition, offset, message, error, attempts)
+		INSERT INTO dead_letter_queue (topic, partition, message_offset, message, error, attempts)
 		VALUES ($1, $2, $3, $4, $5, 1)
 	`
 
