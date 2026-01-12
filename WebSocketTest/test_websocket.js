@@ -9,8 +9,8 @@ ws.on('open', function open() {
     // Authenticate as agent
     ws.send(JSON.stringify({
         type: "auth",
-        server_id: "srv_b428b6a8093b5ee4",
-        server_key: "key_3add063ec79621e6d640a2439239ef7f"
+        server_id: "srv_894b11536e431c50",
+        server_key: "key_c3ba319c3aa7c90a2d62a33f92c4ba0a"
     }));
 });
 
@@ -60,22 +60,25 @@ ws.on('close', function close() {
 function testAPIEndpoints() {
     console.log('\n=== Testing API endpoints ===');
     
-    const testServerId = 'srv_b428b6a8093b5ee4';
+    const testServerId = 'srv_894b11536e431c50';
+    const headers = {
+        'Authorization': 'Bearer srv_894b11536e431c50:key_c3ba319c3aa7c90a2d62a33f92c4ba0a'
+    };
     
     // Test metrics API
-    fetch(`http://localhost:8080/api/servers/${testServerId}/metrics`)
+    fetch(`http://localhost:8080/api/servers/${testServerId}/metrics`, { headers })
         .then(res => res.json())
         .then(data => console.log('Metrics API:', data))
         .catch(err => console.error('Metrics API error:', err));
     
     // Test servers API
-    fetch('http://localhost:8080/api/servers')
+    fetch('http://localhost:8080/api/servers', { headers })
         .then(res => res.json())
         .then(data => console.log('Servers API:', data))
         .catch(err => console.error('Servers API error:', err));
     
     // Test status API
-    fetch(`http://localhost:8080/api/servers/${testServerId}/status`)
+    fetch(`http://localhost:8080/api/servers/${testServerId}/status`, { headers })
         .then(res => res.json())
         .then(data => console.log('Status API:', data))
         .catch(err => console.error('Status API error:', err));
@@ -83,7 +86,10 @@ function testAPIEndpoints() {
     // Test command API
     fetch(`http://localhost:8080/api/servers/${testServerId}/command`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+            'Content-Type': 'application/json',
+            ...headers
+        },
         body: JSON.stringify({
             command: {
                 message: 'Test command from API',

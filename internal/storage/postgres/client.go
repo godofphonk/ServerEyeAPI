@@ -15,6 +15,11 @@ type Client struct {
 	logger *logrus.Logger
 }
 
+// DB returns the underlying database connection
+func (c *Client) DB() *sql.DB {
+	return c.db
+}
+
 // NewClient creates a new PostgreSQL client
 func NewClient(databaseURL string, logger *logrus.Logger) (*Client, error) {
 	db, err := sql.Open("postgres", databaseURL)

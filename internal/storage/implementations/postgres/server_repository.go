@@ -95,7 +95,7 @@ func (r *PostgresServerRepository) GetByKey(ctx context.Context, serverKey strin
 	`
 
 	server := &models.Server{}
-	err := r.client.db.QueryRowContext(ctx, query, serverKey).Scan(
+	err := r.client.DB().QueryRowContext(ctx, query, serverKey).Scan(
 		&server.ID, &server.ServerKey, &server.SecretKey, &server.Hostname,
 		&server.OSInfo, &server.AgentVersion, &server.Status,
 		&server.LastSeen, &server.CreatedAt, &server.UpdatedAt,
@@ -220,7 +220,7 @@ func (r *PostgresServerRepository) ListByStatus(ctx context.Context, status stri
 		ORDER BY created_at DESC
 	`
 
-	rows, err := r.client.db.QueryContext(ctx, query, status)
+	rows, err := r.client.DB().QueryContext(ctx, query, status)
 	if err != nil {
 		r.logger.WithError(err).WithField("status", status).Error("Failed to list servers by status")
 		return nil, fmt.Errorf("failed to list servers by status: %w", err)
@@ -264,7 +264,7 @@ func (r *PostgresServerRepository) ListByHostname(ctx context.Context, hostname 
 		ORDER BY created_at DESC
 	`
 
-	rows, err := r.client.db.QueryContext(ctx, query, hostname)
+	rows, err := r.client.DB().QueryContext(ctx, query, hostname)
 	if err != nil {
 		r.logger.WithError(err).WithField("hostname", hostname).Error("Failed to list servers by hostname")
 		return nil, fmt.Errorf("failed to list servers by hostname: %w", err)
