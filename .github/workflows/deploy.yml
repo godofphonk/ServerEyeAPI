@@ -144,7 +144,7 @@ jobs:
                 POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
               volumes:
                 - postgres_data:/var/lib/postgresql/data
-                - ./deployments/init-schema.sql:/docker-entrypoint-initdb.d/01-init-schema.sql:ro
+                - ./deployments:/migrations:ro
               networks:
                 - servereye-network
               healthcheck:
@@ -181,11 +181,14 @@ jobs:
           docker-compose down
           docker tag servereye-api:latest servereye-api:backup
 
-          # Apply database migration for new columns if needed
-          echo "Applying database migration for Wire DI support..."
-          docker run --rm --network servereye-network -v ./deployments:/migrations \
-            postgres:15-alpine psql "postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@postgres:5432/servereye" \
-            -f /migrations/migration-002-fix-server-table.sql || echo "Migration already applied or not needed"
+          # Apply database migrations using script
+          echo "Applying database migrations..."
+          docker-compose up -d postgres redis
+          sleep 15
+          
+          # Make migration script executable and run it
+          chmod +x ./deployments/migrate.sh
+          docker-compose exec -T postgres /bin/bash -c "cd /migrations && ./migrate.sh"
 
           # Pull new image
           docker pull ghcr.io/godofphonk/servereyeapi:production

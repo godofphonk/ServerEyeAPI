@@ -41,11 +41,20 @@ func NewServer(storage storage.Storage, logger *logrus.Logger, cfg *config.Confi
 
 // HandleConnection handles WebSocket connection requests
 func (s *Server) HandleConnection(w http.ResponseWriter, r *http.Request) {
+	s.logger.WithFields(logrus.Fields{
+		"remote_addr": r.RemoteAddr,
+		"user_agent":  r.UserAgent(),
+		"method":      r.Method,
+		"url":         r.URL.String(),
+	}).Info("WebSocket connection request received")
+
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		s.logger.WithError(err).Error("Failed to upgrade connection")
 		return
 	}
+
+	s.logger.WithField("remote_addr", r.RemoteAddr).Info("WebSocket connection established")
 
 	client := NewClient(conn, s.logger, s.config)
 	go s.handleClient(client)
@@ -55,6 +64,8 @@ func (s *Server) HandleConnection(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleClient(client *Client) {
 	defer client.Close()
 
+	s.logger.Info("Waiting for authentication message...")
+
 	// Wait for authentication
 	authMsg, err := client.ReadMessage()
 	if err != nil {
@@ -62,7 +73,14 @@ func (s *Server) handleClient(client *Client) {
 		return
 	}
 
+	s.logger.WithFields(logrus.Fields{
+		"message_type": authMsg.Type,
+		"server_id":    authMsg.ServerID,
+		"has_key":      authMsg.ServerKey != "",
+	}).Info("Received authentication message")
+
 	if authMsg.Type != models.WSMessageTypeAuth {
+		s.logger.WithField("received_type", authMsg.Type).Error("Invalid message type, expected auth")
 		client.SendMessage(models.WSMessage{
 			Type: models.WSMessageTypeError,
 			Data: map[string]interface{}{
@@ -73,7 +91,13 @@ func (s *Server) handleClient(client *Client) {
 	}
 
 	// Validate authentication
+	s.logger.WithFields(logrus.Fields{
+		"server_id":  authMsg.ServerID,
+		"server_key": authMsg.ServerKey[:10] + "...", // Log only first 10 chars for security
+	}).Info("Validating authentication")
+
 	if !s.authenticate(authMsg.ServerID, authMsg.ServerKey) {
+		s.logger.WithField("server_id", authMsg.ServerID).Error("Authentication failed")
 		client.SendMessage(models.WSMessage{
 			Type: models.WSMessageTypeError,
 			Data: map[string]interface{}{
