@@ -111,7 +111,7 @@ jobs:
                 - HOST=0.0.0.0
                 - PORT=8080
                 - DATABASE_URL=postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@postgres:5432/servereye?sslmode=disable
-                - REDIS_URL=redis://redis:6379
+                - REDIS_URL=redis:6379
                 - JWT_SECRET=${{ secrets.JWT_SECRET }}
                 - WEBHOOK_SECRET=${{ secrets.WEBHOOK_SECRET }}
                 - WEB_URL=${{ vars.WEB_URL || 'https://api.servereye.dev' }}
@@ -142,7 +142,7 @@ jobs:
                 POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
               volumes:
                 - postgres_data:/var/lib/postgresql/data
-                - ./deployments/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+                - ./deployments/init-schema.sql:/docker-entrypoint-initdb.d/01-init-schema.sql:ro
               networks:
                 - servereye-network
               healthcheck:
