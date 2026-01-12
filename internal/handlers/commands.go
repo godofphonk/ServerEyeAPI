@@ -3,9 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	"time"
 
-	"github.com/godofphonk/ServerEyeAPI/internal/models"
 	"github.com/godofphonk/ServerEyeAPI/internal/services"
 	"github.com/sirupsen/logrus"
 )
@@ -26,7 +24,7 @@ func NewCommandsHandler(commandsService *services.CommandsService, logger *logru
 
 // SendCommand handles POST /api/servers/{server_id}/command
 func (h *CommandsHandler) SendCommand(w http.ResponseWriter, r *http.Request) {
-	var req models.SendCommandRequest
+	var req services.SendCommandRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		h.writeError(w, "Invalid JSON", http.StatusBadRequest)
 		return
@@ -38,8 +36,8 @@ func (h *CommandsHandler) SendCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.Command) == 0 {
-		h.writeError(w, "command is required", http.StatusBadRequest)
+	if req.Type == "" {
+		h.writeError(w, "command type is required", http.StatusBadRequest)
 		return
 	}
 
@@ -50,7 +48,6 @@ func (h *CommandsHandler) SendCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.Timestamp = time.Now()
 	h.writeJSON(w, http.StatusOK, response)
 }
 
