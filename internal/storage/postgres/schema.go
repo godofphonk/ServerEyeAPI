@@ -13,7 +13,7 @@ func (c *Client) initSchema() error {
 
 	// Create essential tables only
 	schema := `
-	-- Create generated_keys table for key registration
+	-- Generated Keys table (for key registration)
 	CREATE TABLE IF NOT EXISTS generated_keys (
 		id BIGSERIAL PRIMARY KEY,
 		secret_key TEXT UNIQUE NOT NULL,
