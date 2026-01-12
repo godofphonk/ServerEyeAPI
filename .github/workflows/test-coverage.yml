@@ -1,0 +1,123 @@
+name: Test Coverage
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: servereye_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+    
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+    
+    - name: Install dependencies
+      run: |
+        go mod download
+        go install github.com/golang/mock/mockgen@v1.6.0
+    
+    - name: Run tests with coverage
+      env:
+        DATABASE_URL: postgres://postgres:postgres@localhost:5432/servereye_test?sslmode=disable
+        REDIS_URL: redis://localhost:6379
+        JWT_SECRET: test-jwt-secret
+      run: |
+        go test -v -race -coverprofile=coverage.out ./...
+    
+    - name: Install coverage tool
+      run: go install github.com/wadey/gocovmerge@latest
+    
+    - name: Merge coverage files
+      run: |
+        find . -name "*.out" -type f | xargs gocovmerge > coverage-merged.out
+    
+    - name: Generate coverage report
+      run: |
+        go tool cover -html=coverage-merged.out -o coverage.html
+    
+    - name: Check coverage threshold
+      run: |
+        COVERAGE=$(go tool cover -func=coverage-merged.out | grep total | awk '{print $3}' | sed 's/%//')
+        echo "Current coverage: ${COVERAGE}%"
+        if (( $(echo "$COVERAGE < 80" | bc -l) )); then
+          echo "Coverage is below 80%"
+          exit 1
+        fi
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage-merged.out
+        flags: unittests
+        name: codecov-umbrella
+    
+    - name: Upload coverage report
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-report
+        path: coverage.html
+    
+    - name: Comment coverage on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const coverage = fs.readFileSync('coverage-merged.out', 'utf8');
+          const lines = coverage.split('\n');
+          const totalLine = lines.find(line => line.includes('total:'));
+          const coveragePercent = totalLine.match(/(\d+\.\d+)%/)[1];
+          
+          const comment = `## 📊 Test Coverage Report
+          
+          **Current Coverage: ${coveragePercent}%** 
+          
+          ${coveragePercent >= 80 ? '✅ Coverage threshold met!' : '❌ Coverage below 80% threshold'}
+          
+          Coverage report is available in the artifacts.`;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });

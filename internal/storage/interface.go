@@ -37,6 +37,9 @@ type Storage interface {
 	StoreConnection(ctx context.Context, serverID string, connectionInfo map[string]interface{}) error
 	GetConnections(ctx context.Context, serverID string) ([]map[string]interface{}, error)
 
+	// Health check operations
+	Ping() error
+
 	// Close cleanup
 	Close() error
 }

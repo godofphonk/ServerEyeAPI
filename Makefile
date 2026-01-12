@@ -1,6 +1,6 @@
 # ServerEye API Makefile
 
-.PHONY: build build-api test clean docker-build docker-run docker-stop
+.PHONY: build build-api test test-coverage test-coverage-threshold test-integration test-all install-coverage-tools clean docker-build docker-run docker-stop
 
 # Go parameters
 GOCMD=go
@@ -9,6 +9,44 @@ GOCLEAN=$(GOCMD) clean
 GOTEST=$(GOCMD) test
 GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
+
+# Test targets
+test:
+	@echo "Running tests..."
+	$(GOTEST) -v ./...
+
+test-coverage:
+	@echo "Running tests with coverage..."
+	@mkdir -p coverage
+	$(GOTEST) -v -race -coverprofile=coverage/coverage.out ./...
+	@echo "Generating coverage report..."
+	go tool cover -html=coverage/coverage.out -o coverage/coverage.html
+	@echo "Coverage report generated: coverage/coverage.html"
+
+test-coverage-threshold:
+	@echo "Running tests with coverage threshold check..."
+	@mkdir -p coverage
+	$(GOTEST) -v -race -coverprofile=coverage/coverage.out ./...
+	@COVERAGE=$$(go tool cover -func=coverage/coverage.out | grep total | awk '{print $$3}' | sed 's/%//'); \
+	echo "Current coverage: $$COVERAGE%"; \
+	if (( $$(echo "$$COVERAGE < 80" | bc -l) )); then \
+		echo "❌ Coverage is below 80%"; \
+		exit 1; \
+	else \
+		echo "✅ Coverage threshold met!"; \
+	fi
+
+test-integration:
+	@echo "Running integration tests..."
+	$(GOTEST) -v -tags=integration ./...
+
+test-all: test test-coverage
+
+# Coverage tools
+install-coverage-tools:
+	@echo "Installing coverage tools..."
+	go install github.com/wadey/gocovmerge@latest
+	go install github.com/axw/gocov/gocov@latest
 
 # Binary name
 API_BINARY=servereye-api
