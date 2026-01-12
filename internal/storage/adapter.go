@@ -151,3 +151,9 @@ func (s *StorageAdapter) GetPendingCommands(ctx context.Context, serverID string
 	// TODO: Implement commands repository
 	return nil, nil
 }
+
+// Ping checks database connectivity through repository
+func (s *StorageAdapter) Ping() error {
+	ctx := context.Background()
+	return s.keyRepo.Ping(ctx)
+}
