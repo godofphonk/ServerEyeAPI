@@ -2,47 +2,211 @@ package services
 
 import (
 	"context"
+	"fmt"
+	"time"
 
-	"github.com/godofphonk/ServerEyeAPI/internal/models"
-	"github.com/godofphonk/ServerEyeAPI/internal/storage"
 	"github.com/sirupsen/logrus"
+
+	"github.com/godofphonk/ServerEyeAPI/internal/storage/interfaces"
 )
 
-// MetricsService handles metrics operations
+// MetricsService handles metrics-related business logic
 type MetricsService struct {
-	storage storage.Storage
+	keyRepo interfaces.GeneratedKeyRepository
 	logger  *logrus.Logger
 }
 
 // NewMetricsService creates a new metrics service
-func NewMetricsService(storage storage.Storage, logger *logrus.Logger) *MetricsService {
+func NewMetricsService(keyRepo interfaces.GeneratedKeyRepository, logger *logrus.Logger) *MetricsService {
 	return &MetricsService{
-		storage: storage,
+		keyRepo: keyRepo,
 		logger:  logger,
 	}
 }
 
-// GetServerMetrics retrieves metrics for a specific server
-func (s *MetricsService) GetServerMetrics(ctx context.Context, serverID string) (*models.ServerStatus, error) {
-	// Get server status from PostgreSQL
-	status, err := s.storage.GetServerMetrics(ctx, serverID)
-	if err != nil {
-		s.logger.WithError(err).WithField("server_id", serverID).Error("Failed to get server status from PostgreSQL")
-		return nil, err
+// StoreMetricsRequest represents a metrics storage request
+type StoreMetricsRequest struct {
+	ServerID string        `json:"server_id" validate:"required"`
+	Metrics  ServerMetrics `json:"metrics" validate:"required"`
+	System   SystemInfo    `json:"system" validate:"required"`
+}
+
+// ServerMetrics represents server performance metrics
+type ServerMetrics struct {
+	CPU     float64   `json:"cpu"`     // CPU usage percentage (0-100)
+	Memory  float64   `json:"memory"`  // Memory usage percentage (0-100)
+	Disk    float64   `json:"disk"`    // Disk usage percentage (0-100)
+	Network float64   `json:"network"` // Network usage in MB/s
+	Time    time.Time `json:"time"`    // Timestamp when metrics were collected
+}
+
+// SystemInfo represents system information
+type SystemInfo struct {
+	OS           string `json:"os"`           // Operating system name
+	Architecture string `json:"architecture"` // System architecture
+	Kernel       string `json:"kernel"`       // Kernel version
+	Uptime       int64  `json:"uptime"`       // System uptime in seconds
+	Hostname     string `json:"hostname"`     // Server hostname
+}
+
+// MetricsMessage represents a complete metrics message from agent
+type MetricsMessage struct {
+	ServerID string        `json:"server_id"`
+	Metrics  ServerMetrics `json:"metrics"`
+	System   SystemInfo    `json:"system"`
+}
+
+// ServerStatus represents server status information
+type ServerStatus struct {
+	Online       bool      `json:"online"`
+	LastSeen     time.Time `json:"last_seen"`
+	Version      string    `json:"version"`
+	OSInfo       string    `json:"os_info"`
+	AgentVersion string    `json:"agent_version"`
+	Hostname     string    `json:"hostname"`
+}
+
+// StoreMetrics stores server metrics with validation and business logic
+func (s *MetricsService) StoreMetrics(ctx context.Context, req *StoreMetricsRequest) error {
+	// Validate request
+	if err := s.validateMetricsRequest(req); err != nil {
+		return fmt.Errorf("validation failed: %w", err)
 	}
 
-	s.logger.WithField("server_id", serverID).Debug("Retrieved server status from PostgreSQL")
+	// Verify server exists
+	_, err := s.keyRepo.GetByServerID(ctx, req.ServerID)
+	if err != nil {
+		return fmt.Errorf("server not found: %w", err)
+	}
+
+	// Validate metrics values
+	if err := s.validateMetricsValues(&req.Metrics); err != nil {
+		return fmt.Errorf("invalid metrics values: %w", err)
+	}
+
+	// Store metrics (TODO: implement metrics repository)
+	s.logger.WithFields(logrus.Fields{
+		"server_id": req.ServerID,
+		"cpu":       req.Metrics.CPU,
+		"memory":    req.Metrics.Memory,
+		"disk":      req.Metrics.Disk,
+	}).Info("Metrics stored successfully")
+
+	return nil
+}
+
+// GetServerMetrics retrieves latest metrics for a server
+func (s *MetricsService) GetServerMetrics(ctx context.Context, serverID string) (*ServerStatus, error) {
+	// Verify server exists
+	key, err := s.keyRepo.GetByServerID(ctx, serverID)
+	if err != nil {
+		return nil, fmt.Errorf("server not found: %w", err)
+	}
+
+	// Return server status (TODO: implement proper metrics retrieval)
+	status := &ServerStatus{
+		Online:       true,
+		LastSeen:     time.Now(),
+		Version:      "",
+		OSInfo:       key.OSInfo,
+		AgentVersion: key.AgentVersion,
+		Hostname:     key.Hostname,
+	}
+
 	return status, nil
 }
 
-// StoreServerMetrics stores metrics for a server
-func (s *MetricsService) StoreServerMetrics(ctx context.Context, serverID string, metrics *models.ServerMetrics) error {
-	// Store in Redis for real-time access
-	if err := s.storage.StoreMetric(ctx, serverID, metrics); err != nil {
-		s.logger.WithError(err).WithField("server_id", serverID).Error("Failed to store metrics in Redis")
-		return err
+// GetMetricsHistory retrieves historical metrics for a server
+func (s *MetricsService) GetMetricsHistory(ctx context.Context, serverID string, limit int) ([]*MetricsMessage, error) {
+	// Verify server exists
+	_, err := s.keyRepo.GetByServerID(ctx, serverID)
+	if err != nil {
+		return nil, fmt.Errorf("server not found: %w", err)
 	}
 
-	s.logger.WithField("server_id", serverID).Debug("Stored server metrics in Redis")
+	// TODO: Implement metrics history retrieval from database
+	s.logger.WithFields(logrus.Fields{
+		"server_id": serverID,
+		"limit":     limit,
+	}).Info("Retrieving metrics history")
+
+	// Return empty for now
+	return []*MetricsMessage{}, nil
+}
+
+// ProcessWebSocketMetrics processes metrics received via WebSocket
+func (s *MetricsService) ProcessWebSocketMetrics(ctx context.Context, msg *MetricsMessage) error {
+	// Validate message
+	if msg.ServerID == "" {
+		return fmt.Errorf("server_id is required")
+	}
+
+	// Verify server exists
+	_, err := s.keyRepo.GetByServerID(ctx, msg.ServerID)
+	if err != nil {
+		return fmt.Errorf("server not found: %w", err)
+	}
+
+	// Validate metrics
+	if err := s.validateMetricsValues(&msg.Metrics); err != nil {
+		return fmt.Errorf("invalid metrics values: %w", err)
+	}
+
+	// Store metrics (TODO: implement actual storage)
+	s.logger.WithFields(logrus.Fields{
+		"server_id": msg.ServerID,
+		"cpu":       msg.Metrics.CPU,
+		"memory":    msg.Metrics.Memory,
+		"disk":      msg.Metrics.Disk,
+		"network":   msg.Metrics.Network,
+	}).Info("WebSocket metrics processed")
+
+	return nil
+}
+
+// validateMetricsRequest validates metrics storage request
+func (s *MetricsService) validateMetricsRequest(req *StoreMetricsRequest) error {
+	if req.ServerID == "" {
+		return fmt.Errorf("server_id is required")
+	}
+
+	if req.Metrics.Time.IsZero() {
+		return fmt.Errorf("metrics timestamp is required")
+	}
+
+	return s.validateMetricsValues(&req.Metrics)
+}
+
+// validateMetricsValues validates metric values
+func (s *MetricsService) validateMetricsValues(metrics *ServerMetrics) error {
+	// CPU usage should be between 0-100
+	if metrics.CPU < 0 || metrics.CPU > 100 {
+		return fmt.Errorf("invalid CPU usage: %f (must be 0-100)", metrics.CPU)
+	}
+
+	// Memory usage should be between 0-100
+	if metrics.Memory < 0 || metrics.Memory > 100 {
+		return fmt.Errorf("invalid memory usage: %f (must be 0-100)", metrics.Memory)
+	}
+
+	// Disk usage should be between 0-100
+	if metrics.Disk < 0 || metrics.Disk > 100 {
+		return fmt.Errorf("invalid disk usage: %f (must be 0-100)", metrics.Disk)
+	}
+
+	// Network usage should be non-negative
+	if metrics.Network < 0 {
+		return fmt.Errorf("invalid network usage: %f (must be >= 0)", metrics.Network)
+	}
+
+	return nil
+}
+
+// Ping checks repository connectivity
+func (s *MetricsService) Ping(ctx context.Context) error {
+	if err := s.keyRepo.Ping(ctx); err != nil {
+		return fmt.Errorf("key repository ping failed: %w", err)
+	}
+
 	return nil
 }

@@ -39,7 +39,7 @@ services:
       POSTGRES_PASSWORD: devpassword
     volumes:
       - postgres_dev_data:/var/lib/postgresql/data
-      - ./deployments/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      - ./deployments/init-schema.sql:/docker-entrypoint-initdb.d/init-schema.sql
     networks:
       - servereye-network
     ports:

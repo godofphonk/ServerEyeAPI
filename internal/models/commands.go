@@ -4,12 +4,14 @@ import "time"
 
 // Command represents a command sent to a server
 type Command struct {
-	ID        string                 `json:"id"`         // Unique command ID
-	Type      string                 `json:"type"`       // Command type (restart, update, etc.)
-	Payload   map[string]interface{} `json:"payload"`    // Command parameters
-	CreatedAt time.Time              `json:"created_at"` // When command was created
-	Status    string                 `json:"status"`     // pending, executed, failed
-	ServerID  string                 `json:"server_id"`  // Target server ID
+	ID          string                 `json:"id" db:"id"`                     // Unique command ID
+	Type        string                 `json:"type" db:"type"`                 // Command type (restart, update, etc.)
+	Payload     map[string]interface{} `json:"payload" db:"payload"`           // Command parameters
+	CreatedAt   time.Time              `json:"created_at" db:"created_at"`     // When command was created
+	Status      string                 `json:"status" db:"status"`             // pending, processed, failed
+	ServerID    string                 `json:"server_id" db:"server_id"`       // Target server ID
+	ProcessedAt *time.Time             `json:"processed_at" db:"processed_at"` // When command was processed
+	Error       string                 `json:"error" db:"error"`               // Error message if failed
 }
 
 // CommandPayload represents different command types

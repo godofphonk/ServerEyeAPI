@@ -34,6 +34,8 @@ LDFLAGS = -X github.com/godofphonk/ServerEyeAPI/internal/version.Version=$(VERSI
 # Build API
 build-api:
 	@echo "Building API $(VERSION)..."
+	@echo "Generating Wire dependencies..."
+	go generate ./internal/wire
 	@mkdir -p $(BUILD_DIR)
 	$(GOBUILD) -ldflags="$(LDFLAGS)" -o $(BUILD_DIR)/$(API_BINARY) ./cmd/api
 	@echo "✅ API built: $(BUILD_DIR)/$(API_BINARY)"
@@ -41,6 +43,8 @@ build-api:
 # Run API locally
 run:
 	@echo "Running API..."
+	@echo "Generating Wire dependencies..."
+	go generate ./internal/wire
 	$(GOBUILD) -ldflags="$(LDFLAGS)" -o $(BUILD_DIR)/$(API_BINARY) ./cmd/api
 	./$(BUILD_DIR)/$(API_BINARY)
 
@@ -148,7 +152,7 @@ dev-agent:
 
 # Generate mocks (requires mockgen)
 mocks:
-	@echo "Generating mocks..."
+	@echo "Generating mocks and Wire dependencies..."
 	go generate ./...
 
 # Security scan (requires gosec)
