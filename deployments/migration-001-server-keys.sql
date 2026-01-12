@@ -1,15 +1,20 @@
--- Migration 001: Add server_id and server_key to generated_keys
--- This enables proper WebSocket authentication
+-- Migration 001: Remove secret_key and add server_id/server_key
+-- This removes secret_key dependency and adds proper server identification
 
--- Add server_id column
-ALTER TABLE generated_keys 
-ADD COLUMN IF NOT EXISTS server_id TEXT UNIQUE;
+-- Drop old indexes
+DROP INDEX IF EXISTS idx_generated_keys_secret;
 
--- Add server_key column  
+-- Remove secret_key column and add server_id/server_key
 ALTER TABLE generated_keys 
+DROP COLUMN IF EXISTS secret_key,
+ADD COLUMN IF NOT EXISTS server_id TEXT UNIQUE,
 ADD COLUMN IF NOT EXISTS server_key TEXT UNIQUE;
 
--- Create indexes for performance
+-- Update servers table
+ALTER TABLE servers 
+DROP COLUMN IF EXISTS secret_key;
+
+-- Create new indexes
 CREATE INDEX IF NOT EXISTS idx_generated_keys_server_id ON generated_keys (server_id);
 CREATE INDEX IF NOT EXISTS idx_generated_keys_server_key ON generated_keys (server_key);
 
