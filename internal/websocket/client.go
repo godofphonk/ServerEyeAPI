@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/godofphonk/ServerEyeAPI/internal/config"
 	"github.com/godofphonk/ServerEyeAPI/internal/models"
 	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
@@ -17,14 +18,16 @@ type Client struct {
 	IsAgent   bool
 	send      chan models.WSMessage
 	logger    *logrus.Logger
+	config    *config.Config
 }
 
 // NewClient creates a new WebSocket client
-func NewClient(conn *websocket.Conn, logger *logrus.Logger) *Client {
+func NewClient(conn *websocket.Conn, logger *logrus.Logger, cfg *config.Config) *Client {
 	return &Client{
 		conn:   conn,
-		send:   make(chan models.WSMessage, 256),
+		send:   make(chan models.WSMessage, cfg.WebSocket.BufferSize),
 		logger: logger,
+		config: cfg,
 	}
 }
 
@@ -43,7 +46,7 @@ func (c *Client) SendMessage(msg models.WSMessage) bool {
 		return false
 	}
 
-	c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	c.conn.SetWriteDeadline(time.Now().Add(c.config.WebSocket.WriteTimeout))
 	err = c.conn.WriteMessage(websocket.TextMessage, data)
 	if err != nil {
 		c.logger.WithError(err).Error("Failed to send message")

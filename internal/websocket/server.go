@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/godofphonk/ServerEyeAPI/internal/config"
 	"github.com/godofphonk/ServerEyeAPI/internal/models"
 	"github.com/godofphonk/ServerEyeAPI/internal/storage"
 	"github.com/gorilla/websocket"
@@ -20,10 +21,11 @@ type Server struct {
 	mutex    sync.RWMutex
 	storage  storage.Storage
 	logger   *logrus.Logger
+	config   *config.Config
 }
 
 // NewServer creates a new WebSocket server
-func NewServer(storage storage.Storage, logger *logrus.Logger) *Server {
+func NewServer(storage storage.Storage, logger *logrus.Logger, cfg *config.Config) *Server {
 	return &Server{
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
@@ -33,6 +35,7 @@ func NewServer(storage storage.Storage, logger *logrus.Logger) *Server {
 		clients: make(map[string]*Client),
 		storage: storage,
 		logger:  logger,
+		config:  cfg,
 	}
 }
 
@@ -44,7 +47,7 @@ func (s *Server) HandleConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := NewClient(conn, s.logger)
+	client := NewClient(conn, s.logger, s.config)
 	go s.handleClient(client)
 }
 

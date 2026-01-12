@@ -4,13 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/godofphonk/ServerEyeAPI/internal/models"
 	"github.com/redis/go-redis/v9"
 )
 
-// StoreMetric stores metric data with TTL of 60 seconds
+// StoreMetric stores metric data with configured TTL
 func (c *Client) StoreMetric(ctx context.Context, serverID string, metrics *models.ServerMetrics) error {
 	key := fmt.Sprintf("metrics:%s", serverID)
 
@@ -19,8 +18,8 @@ func (c *Client) StoreMetric(ctx context.Context, serverID string, metrics *mode
 		return fmt.Errorf("failed to marshal metric data: %w", err)
 	}
 
-	// Store with 60 seconds TTL
-	if err := c.client.Set(ctx, key, jsonData, 60*time.Second).Err(); err != nil {
+	// Store with configured TTL
+	if err := c.client.Set(ctx, key, jsonData, c.config.Redis.TTL).Err(); err != nil {
 		return fmt.Errorf("failed to store metric: %w", err)
 	}
 
