@@ -98,6 +98,57 @@ jobs:
         script: |
           cd /opt/servereye
           
+          # Create init schema file
+          echo '-- ServerEye Database Schema' > init-schema.sql
+          echo '-- Compatible with new architecture' >> init-schema.sql
+          echo '' >> init-schema.sql
+          echo '-- Create extensions' >> init-schema.sql
+          echo 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";' >> init-schema.sql
+          echo '' >> init-schema.sql
+          echo '-- Generated Keys table (for key registration)' >> init-schema.sql
+          echo 'CREATE TABLE IF NOT EXISTS generated_keys (' >> init-schema.sql
+          echo '    id BIGSERIAL PRIMARY KEY,' >> init-schema.sql
+          echo '    server_id TEXT UNIQUE,' >> init-schema.sql
+          echo '    server_key TEXT UNIQUE,' >> init-schema.sql
+          echo '    agent_version TEXT,' >> init-schema.sql
+          echo '    os_info TEXT,' >> init-schema.sql
+          echo '    hostname TEXT,' >> init-schema.sql
+          echo '    status TEXT DEFAULT '"'"'generated'"'"',' >> init-schema.sql
+          echo '    created_at TIMESTAMPTZ DEFAULT NOW()' >> init-schema.sql
+          echo ');' >> init-schema.sql
+          echo '' >> init-schema.sql
+          echo '-- Servers table (for server metadata)' >> init-schema.sql
+          echo 'CREATE TABLE IF NOT EXISTS servers (' >> init-schema.sql
+          echo '    id BIGSERIAL PRIMARY KEY,' >> init-schema.sql
+          echo '    server_id TEXT UNIQUE NOT NULL,' >> init-schema.sql
+          echo '    hostname TEXT,' >> init-schema.sql
+          echo '    os_info TEXT,' >> init-schema.sql
+          echo '    agent_version TEXT,' >> init-schema.sql
+          echo '    status TEXT DEFAULT '"'"'offline'"'"',' >> init-schema.sql
+          echo '    last_seen TIMESTAMPTZ DEFAULT NOW(),' >> init-schema.sql
+          echo '    created_at TIMESTAMPTZ DEFAULT NOW()' >> init-schema.sql
+          echo ');' >> init-schema.sql
+          echo '' >> init-schema.sql
+          echo '-- Dead Letter Queue for failed messages' >> init-schema.sql
+          echo 'CREATE TABLE IF NOT EXISTS dead_letter_queue (' >> init-schema.sql
+          echo '    id BIGSERIAL PRIMARY KEY,' >> init-schema.sql
+          echo '    topic TEXT NOT NULL,' >> init-schema.sql
+          echo '    partition INTEGER,' >> init-schema.sql
+          echo '    message_offset BIGINT,' >> init-schema.sql
+          echo '    message JSONB NOT NULL,' >> init-schema.sql
+          echo '    error TEXT NOT NULL,' >> init-schema.sql
+          echo '    attempts INTEGER DEFAULT 0,' >> init-schema.sql
+          echo '    created_at TIMESTAMPTZ DEFAULT NOW()' >> init-schema.sql
+          echo ');' >> init-schema.sql
+          echo '' >> init-schema.sql
+          echo '-- Indexes for performance' >> init-schema.sql
+          echo 'CREATE INDEX IF NOT EXISTS idx_generated_keys_server_id ON generated_keys (server_id);' >> init-schema.sql
+          echo 'CREATE INDEX IF NOT EXISTS idx_generated_keys_server_key ON generated_keys (server_key);' >> init-schema.sql
+          echo 'CREATE INDEX IF NOT EXISTS idx_servers_server_id ON servers (server_id);' >> init-schema.sql
+          echo 'CREATE INDEX IF NOT EXISTS idx_servers_last_seen ON servers (last_seen);' >> init-schema.sql
+          echo 'CREATE INDEX IF NOT EXISTS idx_dlq_created_at ON dead_letter_queue (created_at);' >> init-schema.sql
+          echo 'CREATE INDEX IF NOT EXISTS idx_dlq_topic ON dead_letter_queue (topic);' >> init-schema.sql
+
           # Create docker-compose.yml if not exists or update it
           cat > docker-compose.yml << 'EOF'
           services:
@@ -142,7 +193,7 @@ jobs:
                 POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
               volumes:
                 - postgres_data:/var/lib/postgresql/data
-                - ./deployments/init-schema.sql:/docker-entrypoint-initdb.d/01-init-schema.sql:ro
+                - ./init-schema.sql:/docker-entrypoint-initdb.d/01-init-schema.sql:ro
               networks:
                 - servereye-network
               healthcheck:
