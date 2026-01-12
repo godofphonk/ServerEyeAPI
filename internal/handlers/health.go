@@ -27,16 +27,6 @@ func NewHealthHandler(storage storage.Storage, logger *logrus.Logger) *HealthHan
 
 // Health handles health check requests
 func (h *HealthHandler) Health(w http.ResponseWriter, r *http.Request) {
-	// Check database connection
-	if err := h.storage.Ping(); err != nil {
-		h.logger.WithError(err).Error("Database health check failed")
-		h.writeJSON(w, http.StatusServiceUnavailable, map[string]string{
-			"status": "unhealthy",
-			"error":  "database connection failed",
-		})
-		return
-	}
-
 	response := &models.HealthResponse{
 		Status:    "healthy",
 		Timestamp: time.Now(),

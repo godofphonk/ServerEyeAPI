@@ -8,7 +8,7 @@ import (
 	"github.com/godofphonk/ServerEyeAPI/internal/storage/redis"
 )
 
-// Storage defines the interface for storage operations
+// Storage defines the interface for all storage operations
 type Storage interface {
 	// Key operations
 	InsertGeneratedKey(ctx context.Context, secretKey, agentVersion, operatingSystem, hostname string) error
@@ -28,13 +28,16 @@ type Storage interface {
 	// Command operations
 	StoreCommand(ctx context.Context, serverID string, command map[string]interface{}) error
 	GetCommands(ctx context.Context, serverID string) ([]map[string]interface{}, error)
-	GetPendingCommands(ctx context.Context, serverID string) ([]string, error)
 
 	// DLQ operations
-	StoreDLQMessage(ctx context.Context, topic string, partition int, offset int64, message []byte, errorMsg string) error
+	StoreDLQ(ctx context.Context, topic, message string, metadata map[string]interface{}) error
+	GetDLQ(ctx context.Context, topic string, limit int) ([]map[string]interface{}, error)
 
 	// Connection operations
-	Ping() error
+	StoreConnection(ctx context.Context, serverID string, connectionInfo map[string]interface{}) error
+	GetConnections(ctx context.Context, serverID string) ([]map[string]interface{}, error)
+
+	// Close cleanup
 	Close() error
 }
 
@@ -110,6 +113,26 @@ func (s *CombinedStorage) GetCommands(ctx context.Context, serverID string) ([]m
 // GetPendingCommands retrieves from Redis
 func (s *CombinedStorage) GetPendingCommands(ctx context.Context, serverID string) ([]string, error) {
 	return s.redis.GetPendingCommands(ctx, serverID)
+}
+
+// StoreDLQ stores in Redis
+func (s *CombinedStorage) StoreDLQ(ctx context.Context, topic, message string, metadata map[string]interface{}) error {
+	return s.redis.StoreDLQ(ctx, topic, message, metadata)
+}
+
+// GetDLQ retrieves from Redis
+func (s *CombinedStorage) GetDLQ(ctx context.Context, topic string, limit int) ([]map[string]interface{}, error) {
+	return s.redis.GetDLQ(ctx, topic, limit)
+}
+
+// StoreConnection stores in Redis
+func (s *CombinedStorage) StoreConnection(ctx context.Context, serverID string, connectionInfo map[string]interface{}) error {
+	return s.redis.StoreConnection(ctx, serverID, connectionInfo)
+}
+
+// GetConnections retrieves from Redis
+func (s *CombinedStorage) GetConnections(ctx context.Context, serverID string) ([]map[string]interface{}, error) {
+	return s.redis.GetConnections(ctx, serverID)
 }
 
 // StoreDLQMessage stores in PostgreSQL

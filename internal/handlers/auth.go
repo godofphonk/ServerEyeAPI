@@ -23,22 +23,32 @@ func NewAuthHandler(authService *services.AuthService, logger *logrus.Logger) *A
 	}
 }
 
-// RegisterKey handles server registration
+// RegisterKey handles POST /RegisterKey
 func (h *AuthHandler) RegisterKey(w http.ResponseWriter, r *http.Request) {
 	var req models.RegisterKeyRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		h.writeError(w, "Invalid JSON", http.StatusBadRequest)
+		h.writeError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
 	// Validate required fields
-	if req.SecretKey == "" {
-		h.writeError(w, "secret_key is required", http.StatusBadRequest)
+	if req.Hostname == "" {
+		h.writeError(w, "hostname is required", http.StatusBadRequest)
+		return
+	}
+	if req.OperatingSystem == "" {
+		h.writeError(w, "operating_system is required", http.StatusBadRequest)
+		return
+	}
+	if req.AgentVersion == "" {
+		h.writeError(w, "agent_version is required", http.StatusBadRequest)
 		return
 	}
 
+	// Register key
 	response, err := h.authService.RegisterKey(r.Context(), &req)
 	if err != nil {
+		h.logger.WithError(err).Error("Failed to register key")
 		h.writeError(w, "Failed to register key", http.StatusInternalServerError)
 		return
 	}

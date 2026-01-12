@@ -26,25 +26,19 @@ func NewAuthService(storage storage.Storage, logger *logrus.Logger) *AuthService
 
 // RegisterKey registers a new server key
 func (s *AuthService) RegisterKey(ctx context.Context, req *models.RegisterKeyRequest) (*models.RegisterKeyResponse, error) {
-	// Validate request
-	if err := utils.ValidateSecretKey(req.SecretKey); err != nil {
-		return nil, fmt.Errorf("invalid secret key: %w", err)
-	}
-
 	// Generate server ID and key
 	serverID := utils.GenerateServerID()
 	serverKey := utils.GenerateServerKey()
 
 	s.logger.WithFields(logrus.Fields{
-		"secret_key":       req.SecretKey,
 		"hostname":         req.Hostname,
 		"operating_system": req.OperatingSystem,
 		"agent_version":    req.AgentVersion,
 	}).Info("Registering new server key")
 
-	// Store in database
-	if err := s.storage.InsertGeneratedKeyWithIDs(ctx, req.SecretKey, serverID, serverKey, req.AgentVersion, req.OperatingSystem, req.Hostname); err != nil {
-		s.logger.WithError(err).WithField("secret_key", req.SecretKey).Error("Failed to insert generated key with IDs")
+	// Store in database (without secret_key)
+	if err := s.storage.InsertGeneratedKeyWithIDs(ctx, "", serverID, serverKey, req.AgentVersion, req.OperatingSystem, req.Hostname); err != nil {
+		s.logger.WithError(err).WithField("server_id", serverID).Error("Failed to insert generated key with IDs")
 		return nil, fmt.Errorf("failed to register key: %w", err)
 	}
 

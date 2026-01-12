@@ -2,7 +2,6 @@ package models
 
 // RegisterKeyRequest represents request to register a key
 type RegisterKeyRequest struct {
-	SecretKey       string `json:"secret_key"`
 	AgentVersion    string `json:"agent_version"`
 	OperatingSystem string `json:"operating_system"`
 	Hostname        string `json:"hostname"`

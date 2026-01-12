@@ -1,7 +1,7 @@
 const WebSocket = require('ws');
 
 // Connect to WebSocket
-const ws = new WebSocket('ws://localhost:8080/ws');
+const ws = new WebSocket('ws://localhost:8082/ws');
 
 ws.on('open', function open() {
     console.log('Connected to WebSocket');
@@ -9,8 +9,8 @@ ws.on('open', function open() {
     // Authenticate as agent
     ws.send(JSON.stringify({
         type: "auth",
-        server_id: "srv_46KekYs6AeIm",
-        server_key: "key_WKeSw0E8MgUy2GaOiWA4IcQk"
+        server_id: "srv_b428b6a8093b5ee4",
+        server_key: "key_3add063ec79621e6d640a2439239ef7f"
     }));
 });
 
@@ -22,25 +22,18 @@ ws.on('message', function message(data) {
     if (msg.type === 'auth_success') {
         console.log('Authentication successful, sending metrics...');
         
-        // Send metrics with new strict typing structure
+        // Send metrics
         ws.send(JSON.stringify({
             type: "metrics",
             data: {
-                server_id: "srv_46KekYs6AeIm",
-                metrics: {
-                    cpu: 45.2,
-                    memory: 67.8,
-                    disk: 23.1,
-                    network: 120.5,
-                    time: new Date().toISOString()
+                cpu: 45.2,
+                memory: 67.8,
+                disk: 23.4,
+                network: {
+                    bytes_sent: 1024000,
+                    bytes_recv: 2048000
                 },
-                system: {
-                    os: "Ubuntu 22.04",
-                    architecture: "x86_64",
-                    kernel: "5.15.0",
-                    uptime: 86400,
-                    hostname: "test-server"
-                }
+                timestamp: new Date().toISOString()
             }
         }));
         
@@ -49,6 +42,9 @@ ws.on('message', function message(data) {
             type: "heartbeat",
             timestamp: Math.floor(Date.now() / 1000)
         }));
+        
+        // Test API endpoints
+        testAPIEndpoints();
     }
 });
 
@@ -60,66 +56,43 @@ ws.on('close', function close() {
     console.log('WebSocket disconnected');
 });
 
-// Test API endpoints after a delay
-setTimeout(() => {
+// Test API endpoints
+function testAPIEndpoints() {
     console.log('\n=== Testing API endpoints ===');
     
-    const http = require('http');
+    const testServerId = 'srv_b428b6a8093b5ee4';
     
-    // Get server metrics
-    http.get('http://localhost:8080/api/servers/srv_46KekYs6AeIm/metrics', (res) => {
-        let data = '';
-        res.on('data', chunk => data += chunk);
-        res.on('end', () => {
-            console.log('Metrics API:', JSON.parse(data));
-        });
-    });
+    // Test metrics API
+    fetch(`http://localhost:8082/api/v1/metrics/${testServerId}`)
+        .then(res => res.json())
+        .then(data => console.log('Metrics API:', data))
+        .catch(err => console.error('Metrics API error:', err));
     
-    // Get server status
-    http.get('http://localhost:8080/api/servers/srv_46KekYs6AeIm/status', (res) => {
-        let data = '';
-        res.on('data', chunk => data += chunk);
-        res.on('end', () => {
-            console.log('Status API:', JSON.parse(data));
-        });
-    });
+    // Test servers API
+    fetch('http://localhost:8082/api/v1/servers')
+        .then(res => res.json())
+        .then(data => console.log('Servers API:', data))
+        .catch(err => console.error('Servers API error:', err));
     
-    // List all servers
-    http.get('http://localhost:8080/api/servers', (res) => {
-        let data = '';
-        res.on('data', chunk => data += chunk);
-        res.on('end', () => {
-            console.log('Servers API:', JSON.parse(data));
-        });
-    });
+    // Test status API
+    fetch(`http://localhost:8082/api/v1/status/${testServerId}`)
+        .then(res => res.json())
+        .then(data => console.log('Status API:', data))
+        .catch(err => console.error('Status API error:', err));
     
-    // Send command
-    const postData = JSON.stringify({
-        server_id: "srv_46KekYs6AeIm",
-        command: {
-            restart: true,
-            message: "Test command from API"
-        }
-    });
-    
-    const req = http.request({
-        hostname: 'localhost',
-        port: 8080,
-        path: '/api/servers/srv_46KekYs6AeIm/command',
+    // Test command API
+    fetch(`http://localhost:8082/api/v1/commands/${testServerId}`, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(postData)
-        }
-    }, (res) => {
-        let data = '';
-        res.on('data', chunk => data += chunk);
-        res.on('end', () => {
-            console.log('Command API:', JSON.parse(data));
-        });
-    });
-    
-    req.write(postData);
-    req.end();
-    
-}, 3000);
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            command: {
+                message: 'Test command from API',
+                restart: true,
+                timestamp: Math.floor(Date.now() / 1000)
+            }
+        })
+    })
+        .then(res => res.json())
+        .then(data => console.log('Command API:', data))
+        .catch(err => console.error('Command API error:', err));
+}
