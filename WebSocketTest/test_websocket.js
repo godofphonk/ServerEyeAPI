@@ -9,8 +9,8 @@ ws.on('open', function open() {
     // Authenticate as agent
     ws.send(JSON.stringify({
         type: "auth",
-        server_id: "srv_894b11536e431c50",
-        server_key: "key_c3ba319c3aa7c90a2d62a33f92c4ba0a"
+        server_id: "srv_ab676f04f3cb81c7",
+        server_key: "key_b1cdafa453b9c70945d81a5be6372421"
     }));
 });
 
@@ -60,9 +60,9 @@ ws.on('close', function close() {
 function testAPIEndpoints() {
     console.log('\n=== Testing API endpoints ===');
     
-    const testServerId = 'srv_894b11536e431c50';
+    const testServerId = 'srv_ab676f04f3cb81c7';
     const headers = {
-        'Authorization': 'Bearer srv_894b11536e431c50:key_c3ba319c3aa7c90a2d62a33f92c4ba0a'
+        'Authorization': 'Bearer srv_ab676f04f3cb81c7:key_b1cdafa453b9c70945d81a5be6372421'
     };
     
     // Test metrics API
