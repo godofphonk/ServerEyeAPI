@@ -16,7 +16,8 @@ func (c *Client) initSchema() error {
 	-- Generated Keys table (for key registration)
 	CREATE TABLE IF NOT EXISTS generated_keys (
 		id BIGSERIAL PRIMARY KEY,
-		secret_key TEXT UNIQUE NOT NULL,
+		server_id TEXT UNIQUE,
+		server_key TEXT UNIQUE,
 		agent_version TEXT,
 		os_info TEXT,
 		hostname TEXT,
@@ -24,13 +25,13 @@ func (c *Client) initSchema() error {
 		created_at TIMESTAMPTZ DEFAULT NOW()
 	);
 
-	CREATE INDEX IF NOT EXISTS idx_generated_keys_secret ON generated_keys (secret_key);
+	CREATE INDEX IF NOT EXISTS idx_generated_keys_server_id ON generated_keys (server_id);
+	CREATE INDEX IF NOT EXISTS idx_generated_keys_server_key ON generated_keys (server_key);
 
 	-- Create servers table for metadata
 	CREATE TABLE IF NOT EXISTS servers (
 		id BIGSERIAL PRIMARY KEY,
 		server_id TEXT UNIQUE NOT NULL,
-		secret_key TEXT NOT NULL,
 		hostname TEXT,
 		os_info TEXT,
 		agent_version TEXT,
