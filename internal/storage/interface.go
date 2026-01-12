@@ -17,13 +17,13 @@ type Storage interface {
 	GetServers(ctx context.Context) ([]string, error)
 
 	// Metrics operations
-	StoreMetric(ctx context.Context, serverID string, data map[string]interface{}) error
-	GetMetric(ctx context.Context, serverID string) (map[string]interface{}, error)
-	GetServerMetrics(ctx context.Context, serverID string) (map[string]interface{}, error)
+	StoreMetric(ctx context.Context, serverID string, metrics *models.ServerMetrics) error
+	GetMetric(ctx context.Context, serverID string) (*models.ServerMetrics, error)
+	GetServerMetrics(ctx context.Context, serverID string) (*models.ServerStatus, error)
 
 	// Server status operations
-	SetServerStatus(ctx context.Context, serverID string, status map[string]interface{}) error
-	GetServerStatus(ctx context.Context, serverID string) (map[string]interface{}, error)
+	SetServerStatus(ctx context.Context, serverID string, status *models.ServerStatus) error
+	GetServerStatus(ctx context.Context, serverID string) (*models.ServerStatus, error)
 
 	// Command operations
 	StoreCommand(ctx context.Context, serverID string, command map[string]interface{}) error
@@ -73,27 +73,27 @@ func (s *CombinedStorage) GetServers(ctx context.Context) ([]string, error) {
 }
 
 // StoreMetric stores in Redis
-func (s *CombinedStorage) StoreMetric(ctx context.Context, serverID string, data map[string]interface{}) error {
-	return s.redis.StoreMetric(ctx, serverID, data)
+func (s *CombinedStorage) StoreMetric(ctx context.Context, serverID string, metrics *models.ServerMetrics) error {
+	return s.redis.StoreMetric(ctx, serverID, metrics)
 }
 
 // GetMetric retrieves from Redis
-func (s *CombinedStorage) GetMetric(ctx context.Context, serverID string) (map[string]interface{}, error) {
+func (s *CombinedStorage) GetMetric(ctx context.Context, serverID string) (*models.ServerMetrics, error) {
 	return s.redis.GetMetric(ctx, serverID)
 }
 
 // GetServerMetrics retrieves from PostgreSQL
-func (s *CombinedStorage) GetServerMetrics(ctx context.Context, serverID string) (map[string]interface{}, error) {
+func (s *CombinedStorage) GetServerMetrics(ctx context.Context, serverID string) (*models.ServerStatus, error) {
 	return s.postgres.GetServerMetrics(ctx, serverID)
 }
 
 // SetServerStatus stores in Redis
-func (s *CombinedStorage) SetServerStatus(ctx context.Context, serverID string, status map[string]interface{}) error {
+func (s *CombinedStorage) SetServerStatus(ctx context.Context, serverID string, status *models.ServerStatus) error {
 	return s.redis.SetServerStatus(ctx, serverID, status)
 }
 
 // GetServerStatus retrieves from Redis
-func (s *CombinedStorage) GetServerStatus(ctx context.Context, serverID string) (map[string]interface{}, error) {
+func (s *CombinedStorage) GetServerStatus(ctx context.Context, serverID string) (*models.ServerStatus, error) {
 	return s.redis.GetServerStatus(ctx, serverID)
 }
 

@@ -6,16 +6,14 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/godofphonk/ServerEyeAPI/internal/models"
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 )
 
 // SetServerStatus stores server status with TTL of 5 minutes
-func (c *Client) SetServerStatus(ctx context.Context, serverID string, status map[string]interface{}) error {
+func (c *Client) SetServerStatus(ctx context.Context, serverID string, status *models.ServerStatus) error {
 	key := fmt.Sprintf("status:%s", serverID)
-
-	// Add last_seen timestamp
-	status["last_seen"] = time.Now().Unix()
 
 	jsonData, err := json.Marshal(status)
 	if err != nil {
@@ -29,31 +27,34 @@ func (c *Client) SetServerStatus(ctx context.Context, serverID string, status ma
 
 	c.logger.WithFields(logrus.Fields{
 		"server_id": serverID,
-		"status":    status,
+		"online":    status.Online,
 	}).Debug("Server status stored in Redis")
 
 	return nil
 }
 
 // GetServerStatus retrieves server status
-func (c *Client) GetServerStatus(ctx context.Context, serverID string) (map[string]interface{}, error) {
+func (c *Client) GetServerStatus(ctx context.Context, serverID string) (*models.ServerStatus, error) {
 	key := fmt.Sprintf("status:%s", serverID)
 
 	result, err := c.client.Get(ctx, key).Result()
 	if err != nil {
 		if err == redis.Nil {
-			return map[string]interface{}{"online": false}, nil
+			return &models.ServerStatus{
+				Online:   false,
+				LastSeen: time.Time{},
+			}, nil
 		}
 		return nil, fmt.Errorf("failed to get server status: %w", err)
 	}
 
-	var status map[string]interface{}
+	var status models.ServerStatus
 	if err := json.Unmarshal([]byte(result), &status); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal server status: %w", err)
 	}
 
 	c.logger.WithField("server_id", serverID).Debug("Server status retrieved from Redis")
-	return status, nil
+	return &status, nil
 }
 
 // GetAllServers returns all servers with status

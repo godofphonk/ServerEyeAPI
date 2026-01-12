@@ -128,58 +128,73 @@ func (s *Storage) GetServers(ctx context.Context) ([]string, error) {
 }
 
 // GetServerMetrics retrieves metrics for a server
-func (s *Storage) GetServerMetrics(ctx context.Context, serverID string) (map[string]interface{}, error) {
+func (s *Storage) GetServerMetrics(ctx context.Context, serverID string) (*models.ServerStatus, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
 	if server, exists := s.servers[serverID]; exists {
-		return map[string]interface{}{
-			"hostname":  server.Hostname,
-			"os_info":   server.OSInfo,
-			"status":    server.Status,
-			"last_seen": server.LastSeen,
+		return &models.ServerStatus{
+			Online:       server.Status == "online",
+			LastSeen:     server.LastSeen,
+			Version:      "", // Not stored in memory
+			OSInfo:       server.OSInfo,
+			AgentVersion: "", // Not stored in memory
+			Hostname:     server.Hostname,
 		}, nil
 	}
 
-	return map[string]interface{}{}, nil
+	return &models.ServerStatus{
+		Online:   false,
+		LastSeen: time.Time{},
+	}, nil
 }
 
-// StoreMetric stores metrics for a server (no-op in memory storage)
-func (s *Storage) StoreMetric(ctx context.Context, serverID string, data map[string]interface{}) error {
+// StoreMetric stores metrics for a server
+func (s *Storage) StoreMetric(ctx context.Context, serverID string, metrics *models.ServerMetrics) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
+	// Convert to map for internal storage (temporary)
+	data := map[string]interface{}{
+		"cpu":     metrics.CPU,
+		"memory":  metrics.Memory,
+		"disk":    metrics.Disk,
+		"network": metrics.Network,
+		"time":    metrics.Time,
+	}
 	s.metrics[serverID] = data
 	return nil
 }
 
 // GetMetric retrieves metrics for a server
-func (s *Storage) GetMetric(ctx context.Context, serverID string) (map[string]interface{}, error) {
+func (s *Storage) GetMetric(ctx context.Context, serverID string) (*models.ServerMetrics, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
-	if metrics, exists := s.metrics[serverID]; exists {
-		return metrics, nil
+	if data, exists := s.metrics[serverID]; exists {
+		return &models.ServerMetrics{
+			CPU:     data["cpu"].(float64),
+			Memory:  data["memory"].(float64),
+			Disk:    data["disk"].(float64),
+			Network: data["network"].(float64),
+			Time:    data["time"].(time.Time),
+		}, nil
 	}
 
-	return map[string]interface{}{}, nil
+	return nil, fmt.Errorf("metrics not found")
 }
 
 // SetServerStatus sets server status
-func (s *Storage) SetServerStatus(ctx context.Context, serverID string, status map[string]interface{}) error {
+func (s *Storage) SetServerStatus(ctx context.Context, serverID string, status *models.ServerStatus) error {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
 	if server, exists := s.servers[serverID]; exists {
-		if online, ok := status["online"].(bool); ok {
-			server.Status = "offline"
-			if online {
-				server.Status = "online"
-			}
+		server.Status = "offline"
+		if status.Online {
+			server.Status = "online"
 		}
-		if lastSeen, ok := status["last_seen"].(int64); ok {
-			server.LastSeen = time.Unix(lastSeen, 0)
-		}
+		server.LastSeen = status.LastSeen
 		s.servers[serverID] = server
 	}
 
@@ -187,18 +202,25 @@ func (s *Storage) SetServerStatus(ctx context.Context, serverID string, status m
 }
 
 // GetServerStatus retrieves server status
-func (s *Storage) GetServerStatus(ctx context.Context, serverID string) (map[string]interface{}, error) {
+func (s *Storage) GetServerStatus(ctx context.Context, serverID string) (*models.ServerStatus, error) {
 	s.mutex.RLock()
 	defer s.mutex.RUnlock()
 
 	if server, exists := s.servers[serverID]; exists {
-		return map[string]interface{}{
-			"online":    server.Status == "online",
-			"last_seen": server.LastSeen.Unix(),
+		return &models.ServerStatus{
+			Online:       server.Status == "online",
+			LastSeen:     server.LastSeen,
+			Version:      "", // Not stored in memory
+			OSInfo:       server.OSInfo,
+			AgentVersion: "", // Not stored in memory
+			Hostname:     server.Hostname,
 		}, nil
 	}
 
-	return map[string]interface{}{"online": false}, nil
+	return &models.ServerStatus{
+		Online:   false,
+		LastSeen: time.Time{},
+	}, nil
 }
 
 // StoreCommand stores a command for a server
