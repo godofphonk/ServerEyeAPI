@@ -44,7 +44,15 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 
 		// Initialize Redis if URL is provided
 		if cfg.RedisURL != "" {
-			redisClient, err = redisStorage.NewClient(cfg.RedisURL, "", 0, logger, cfg)
+			// Extract host:port from redis://host:port format
+			redisAddr := "redis:6379" // Default for Docker Compose
+			if cfg.RedisURL != "" {
+				// Parse URL to get host:port
+				if len(cfg.RedisURL) > 9 && cfg.RedisURL[:9] == "redis://" {
+					redisAddr = cfg.RedisURL[9:] // Remove "redis://" prefix
+				}
+			}
+			redisClient, err = redisStorage.NewClient(redisAddr, "", 0, logger, cfg)
 			if err != nil {
 				return nil, err
 			}

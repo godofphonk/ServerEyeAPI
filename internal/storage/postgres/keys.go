@@ -36,10 +36,9 @@ func (c *Client) InsertGeneratedKey(ctx context.Context, secretKey, agentVersion
 // InsertGeneratedKeyWithIDs inserts a new generated key with server_id and server_key
 func (c *Client) InsertGeneratedKeyWithIDs(ctx context.Context, secretKey, serverID, serverKey, agentVersion, operatingSystem, hostname string) error {
 	query := `
-		INSERT INTO generated_keys (secret_key, server_id, server_key, agent_version, os_info, hostname, status)
-		VALUES ($1, $2, $3, $4, $5, $6, 'generated')
-		ON CONFLICT (secret_key) DO UPDATE SET
-			server_id = EXCLUDED.server_id,
+		INSERT INTO generated_keys (server_id, server_key, agent_version, os_info, hostname, status)
+		VALUES ($1, $2, $3, $4, $5, 'generated')
+		ON CONFLICT (server_id) DO UPDATE SET
 			server_key = EXCLUDED.server_key,
 			agent_version = EXCLUDED.agent_version,
 			os_info = EXCLUDED.os_info,
@@ -47,7 +46,7 @@ func (c *Client) InsertGeneratedKeyWithIDs(ctx context.Context, secretKey, serve
 			status = EXCLUDED.status
 	`
 
-	_, err := c.db.ExecContext(ctx, query, secretKey, serverID, serverKey, agentVersion, operatingSystem, hostname)
+	_, err := c.db.ExecContext(ctx, query, serverID, serverKey, agentVersion, operatingSystem, hostname)
 	if err != nil {
 		return fmt.Errorf("failed to insert generated key with IDs: %w", err)
 	}
@@ -67,7 +66,7 @@ func (c *Client) InsertGeneratedKeyWithIDs(ctx context.Context, secretKey, serve
 // GetServerByKey retrieves server information by server key
 func (c *Client) GetServerByKey(ctx context.Context, serverKey string) (*models.ServerInfo, error) {
 	query := `
-		SELECT server_id, secret_key, hostname
+		SELECT server_id, hostname
 		FROM generated_keys 
 		WHERE server_key = $1 AND status = 'generated'
 	`
@@ -75,7 +74,6 @@ func (c *Client) GetServerByKey(ctx context.Context, serverKey string) (*models.
 	var info models.ServerInfo
 	err := c.db.QueryRowContext(ctx, query, serverKey).Scan(
 		&info.ServerID,
-		&info.SecretKey,
 		&info.Hostname,
 	)
 

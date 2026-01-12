@@ -1,7 +1,7 @@
 const WebSocket = require('ws');
 
 // Connect to WebSocket
-const ws = new WebSocket('ws://localhost:8082/ws');
+const ws = new WebSocket('ws://localhost:8080/ws');
 
 ws.on('open', function open() {
     console.log('Connected to WebSocket');
@@ -63,25 +63,25 @@ function testAPIEndpoints() {
     const testServerId = 'srv_b428b6a8093b5ee4';
     
     // Test metrics API
-    fetch(`http://localhost:8082/api/v1/metrics/${testServerId}`)
+    fetch(`http://localhost:8080/api/servers/${testServerId}/metrics`)
         .then(res => res.json())
         .then(data => console.log('Metrics API:', data))
         .catch(err => console.error('Metrics API error:', err));
     
     // Test servers API
-    fetch('http://localhost:8082/api/v1/servers')
+    fetch('http://localhost:8080/api/servers')
         .then(res => res.json())
         .then(data => console.log('Servers API:', data))
         .catch(err => console.error('Servers API error:', err));
     
     // Test status API
-    fetch(`http://localhost:8082/api/v1/status/${testServerId}`)
+    fetch(`http://localhost:8080/api/servers/${testServerId}/status`)
         .then(res => res.json())
         .then(data => console.log('Status API:', data))
         .catch(err => console.error('Status API error:', err));
     
     // Test command API
-    fetch(`http://localhost:8082/api/v1/commands/${testServerId}`, {
+    fetch(`http://localhost:8080/api/servers/${testServerId}/command`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
