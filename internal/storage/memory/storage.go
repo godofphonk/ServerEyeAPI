@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/godofphonk/ServerEyeAPI/internal/models"
 	"github.com/sirupsen/logrus"
 )
 
@@ -22,6 +23,8 @@ type Storage struct {
 // GeneratedKey represents a generated key
 type GeneratedKey struct {
 	SecretKey       string
+	ServerID        string
+	ServerKey       string
 	AgentVersion    string
 	OperatingSystem string
 	Hostname        string
@@ -67,6 +70,48 @@ func (s *Storage) InsertGeneratedKey(ctx context.Context, secretKey, agentVersio
 
 	s.logger.WithField("secret_key", secretKey).Info("Generated key stored in memory")
 	return nil
+}
+
+// InsertGeneratedKeyWithIDs inserts a new generated key with server_id and server_key
+func (s *Storage) InsertGeneratedKeyWithIDs(ctx context.Context, secretKey, serverID, serverKey, agentVersion, operatingSystem, hostname string) error {
+	s.mutex.Lock()
+	defer s.mutex.Unlock()
+
+	s.generatedKeys[secretKey] = GeneratedKey{
+		SecretKey:       secretKey,
+		ServerID:        serverID,
+		ServerKey:       serverKey,
+		AgentVersion:    agentVersion,
+		OperatingSystem: operatingSystem,
+		Hostname:        hostname,
+		Status:          "generated",
+		CreatedAt:       time.Now(),
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"secret_key": secretKey,
+		"server_id":  serverID,
+		"server_key": serverKey,
+	}).Info("Generated key with IDs stored in memory")
+	return nil
+}
+
+// GetServerByKey retrieves server information by server key
+func (s *Storage) GetServerByKey(ctx context.Context, serverKey string) (*models.ServerInfo, error) {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	for _, key := range s.generatedKeys {
+		if key.ServerKey == serverKey && key.Status == "generated" {
+			return &models.ServerInfo{
+				ServerID:  key.ServerID,
+				SecretKey: key.SecretKey,
+				Hostname:  key.Hostname,
+			}, nil
+		}
+	}
+
+	return nil, fmt.Errorf("server key not found")
 }
 
 // GetServers retrieves all server IDs

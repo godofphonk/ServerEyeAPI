@@ -43,8 +43,8 @@ func (s *AuthService) RegisterKey(ctx context.Context, req *models.RegisterKeyRe
 	}).Info("Registering new server key")
 
 	// Store in database
-	if err := s.storage.InsertGeneratedKey(ctx, req.SecretKey, req.AgentVersion, req.OperatingSystem, req.Hostname); err != nil {
-		s.logger.WithError(err).WithField("secret_key", req.SecretKey).Error("Failed to insert generated key")
+	if err := s.storage.InsertGeneratedKeyWithIDs(ctx, req.SecretKey, serverID, serverKey, req.AgentVersion, req.OperatingSystem, req.Hostname); err != nil {
+		s.logger.WithError(err).WithField("secret_key", req.SecretKey).Error("Failed to insert generated key with IDs")
 		return nil, fmt.Errorf("failed to register key: %w", err)
 	}
 

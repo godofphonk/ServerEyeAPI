@@ -120,11 +120,32 @@ func (s *Server) handleClient(client *Client) {
 
 // authenticate validates server credentials
 func (s *Server) authenticate(serverID, serverKey string) bool {
-	// For now, just validate format
-	// In production, check against database
-	if len(serverID) < 5 || len(serverKey) < 10 {
+	// Check server key in database
+	serverInfo, err := s.storage.GetServerByKey(context.Background(), serverKey)
+	if err != nil {
+		s.logger.WithFields(logrus.Fields{
+			"server_key": serverKey,
+			"error":      err.Error(),
+		}).Warn("Authentication failed: key not found")
 		return false
 	}
+
+	// Verify server ID matches
+	if serverInfo.ServerID != serverID {
+		s.logger.WithFields(logrus.Fields{
+			"server_id":  serverID,
+			"stored_id":  serverInfo.ServerID,
+			"server_key": serverKey,
+			"hostname":   serverInfo.Hostname,
+		}).Warn("Authentication failed: server ID mismatch")
+		return false
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"server_id": serverID,
+		"hostname":  serverInfo.Hostname,
+	}).Info("WebSocket authentication successful")
+
 	return true
 }
 

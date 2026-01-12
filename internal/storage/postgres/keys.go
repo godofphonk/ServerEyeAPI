@@ -2,8 +2,10 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 
+	"github.com/godofphonk/ServerEyeAPI/internal/models"
 	"github.com/sirupsen/logrus"
 )
 
@@ -28,6 +30,62 @@ func (c *Client) InsertGeneratedKey(ctx context.Context, secretKey, agentVersion
 	}).Info("Generated key inserted successfully")
 
 	return nil
+}
+
+// InsertGeneratedKeyWithIDs inserts a new generated key with server_id and server_key
+func (c *Client) InsertGeneratedKeyWithIDs(ctx context.Context, secretKey, serverID, serverKey, agentVersion, operatingSystem, hostname string) error {
+	query := `
+		INSERT INTO generated_keys (secret_key, server_id, server_key, agent_version, os_info, hostname, status)
+		VALUES ($1, $2, $3, $4, $5, $6, 'generated')
+		ON CONFLICT (secret_key) DO UPDATE SET
+			server_id = EXCLUDED.server_id,
+			server_key = EXCLUDED.server_key,
+			agent_version = EXCLUDED.agent_version,
+			os_info = EXCLUDED.os_info,
+			hostname = EXCLUDED.hostname,
+			status = EXCLUDED.status
+	`
+
+	_, err := c.db.ExecContext(ctx, query, secretKey, serverID, serverKey, agentVersion, operatingSystem, hostname)
+	if err != nil {
+		return fmt.Errorf("failed to insert generated key with IDs: %w", err)
+	}
+
+	c.logger.WithFields(logrus.Fields{
+		"secret_key":       secretKey,
+		"server_id":        serverID,
+		"server_key":       serverKey,
+		"agent_version":    agentVersion,
+		"operating_system": operatingSystem,
+		"hostname":         hostname,
+	}).Info("Generated key with IDs inserted successfully")
+
+	return nil
+}
+
+// GetServerByKey retrieves server information by server key
+func (c *Client) GetServerByKey(ctx context.Context, serverKey string) (*models.ServerInfo, error) {
+	query := `
+		SELECT server_id, secret_key, hostname
+		FROM generated_keys 
+		WHERE server_key = $1 AND status = 'generated'
+	`
+
+	var info models.ServerInfo
+	err := c.db.QueryRowContext(ctx, query, serverKey).Scan(
+		&info.ServerID,
+		&info.SecretKey,
+		&info.Hostname,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("server key not found")
+		}
+		return nil, fmt.Errorf("failed to get server by key: %w", err)
+	}
+
+	return &info, nil
 }
 
 // GetServers retrieves all server IDs

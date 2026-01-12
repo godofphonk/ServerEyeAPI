@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 
+	"github.com/godofphonk/ServerEyeAPI/internal/models"
 	"github.com/godofphonk/ServerEyeAPI/internal/storage/postgres"
 	"github.com/godofphonk/ServerEyeAPI/internal/storage/redis"
 )
@@ -11,6 +12,8 @@ import (
 type Storage interface {
 	// Key operations
 	InsertGeneratedKey(ctx context.Context, secretKey, agentVersion, operatingSystem, hostname string) error
+	InsertGeneratedKeyWithIDs(ctx context.Context, secretKey, serverID, serverKey, agentVersion, operatingSystem, hostname string) error
+	GetServerByKey(ctx context.Context, serverKey string) (*models.ServerInfo, error)
 	GetServers(ctx context.Context) ([]string, error)
 
 	// Metrics operations
@@ -52,6 +55,16 @@ func NewCombinedStorage(pg *postgres.Client, r *redis.Client) *CombinedStorage {
 // InsertGeneratedKey stores in PostgreSQL
 func (s *CombinedStorage) InsertGeneratedKey(ctx context.Context, secretKey, agentVersion, operatingSystem, hostname string) error {
 	return s.postgres.InsertGeneratedKey(ctx, secretKey, agentVersion, operatingSystem, hostname)
+}
+
+// InsertGeneratedKeyWithIDs stores in PostgreSQL with server_id and server_key
+func (s *CombinedStorage) InsertGeneratedKeyWithIDs(ctx context.Context, secretKey, serverID, serverKey, agentVersion, operatingSystem, hostname string) error {
+	return s.postgres.InsertGeneratedKeyWithIDs(ctx, secretKey, serverID, serverKey, agentVersion, operatingSystem, hostname)
+}
+
+// GetServerByKey retrieves from PostgreSQL
+func (s *CombinedStorage) GetServerByKey(ctx context.Context, serverKey string) (*models.ServerInfo, error) {
+	return s.postgres.GetServerByKey(ctx, serverKey)
 }
 
 // GetServers retrieves from PostgreSQL
