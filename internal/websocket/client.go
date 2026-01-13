@@ -26,6 +26,15 @@ type Client struct {
 
 // NewClient creates a new WebSocket client
 func NewClient(conn *websocket.Conn, logger *logrus.Logger, cfg *config.Config) *Client {
+	// Set read/write deadlines
+	conn.SetReadDeadline(time.Now().Add(cfg.WebSocket.ReadTimeout))
+	conn.SetWriteDeadline(time.Now().Add(cfg.WebSocket.WriteTimeout))
+
+	// Set pong handler
+	conn.SetPongHandler(func(string) error {
+		return conn.SetReadDeadline(time.Now().Add(cfg.WebSocket.PongWait))
+	})
+
 	return &Client{
 		conn:   conn,
 		send:   make(chan models.WSMessage, cfg.WebSocket.BufferSize),
@@ -38,6 +47,10 @@ func NewClient(conn *websocket.Conn, logger *logrus.Logger, cfg *config.Config) 
 // ReadMessage reads a message from the WebSocket connection
 func (c *Client) ReadMessage() (models.WSMessage, error) {
 	var msg models.WSMessage
+
+	// Extend read deadline before reading
+	c.conn.SetReadDeadline(time.Now().Add(c.config.WebSocket.ReadTimeout))
+
 	err := c.conn.ReadJSON(&msg)
 	return msg, err
 }
