@@ -198,6 +198,12 @@ func (s *Server) authenticate(serverID, serverKey string) bool {
 
 // handleMessage handles incoming WebSocket messages
 func (s *Server) handleMessage(ctx context.Context, client *Client, msg models.WSMessage) {
+	s.logger.WithFields(logrus.Fields{
+		"server_id":    client.ServerID,
+		"message_type": msg.Type,
+		"has_data":     msg.Data != nil,
+	}).Info("Received WebSocket message")
+
 	switch msg.Type {
 	case models.WSMessageTypeMetrics:
 		s.handleMetrics(ctx, client, msg)
@@ -211,6 +217,7 @@ func (s *Server) handleMessage(ctx context.Context, client *Client, msg models.W
 // handleMetrics handles metrics messages
 func (s *Server) handleMetrics(ctx context.Context, client *Client, msg models.WSMessage) {
 	if msg.Data == nil {
+		s.logger.WithField("server_id", client.ServerID).Warn("Metrics message has no data")
 		return
 	}
 
@@ -230,9 +237,10 @@ func (s *Server) handleMetrics(ctx context.Context, client *Client, msg models.W
 	// Store metrics in Redis
 	if err := s.storage.StoreMetric(ctx, client.ServerID, &metricsMsg.Metrics); err != nil {
 		s.logger.WithError(err).WithField("server_id", client.ServerID).Error("Failed to store metrics")
+		return
 	}
 
-	s.logger.WithField("server_id", client.ServerID).Debug("Stored metrics from WebSocket")
+	s.logger.WithField("server_id", client.ServerID).Info("✅ Successfully stored metrics from WebSocket")
 }
 
 // handleHeartbeat handles heartbeat messages
