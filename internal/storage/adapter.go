@@ -2,15 +2,19 @@ package storage
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/godofphonk/ServerEyeAPI/internal/models"
 	"github.com/godofphonk/ServerEyeAPI/internal/storage/interfaces"
+	"github.com/godofphonk/ServerEyeAPI/internal/storage/redis"
 )
 
 // StorageAdapter adapts new repository interfaces to old Storage interface
 type StorageAdapter struct {
-	keyRepo    interfaces.GeneratedKeyRepository
-	serverRepo interfaces.ServerRepository
+	keyRepo     interfaces.GeneratedKeyRepository
+	serverRepo  interfaces.ServerRepository
+	redisClient *redis.Client
 }
 
 // NewStorageAdapter creates a new storage adapter
@@ -18,6 +22,15 @@ func NewStorageAdapter(keyRepo interfaces.GeneratedKeyRepository, serverRepo int
 	return &StorageAdapter{
 		keyRepo:    keyRepo,
 		serverRepo: serverRepo,
+	}
+}
+
+// NewStorageAdapterWithRedis creates a new storage adapter with Redis support
+func NewStorageAdapterWithRedis(keyRepo interfaces.GeneratedKeyRepository, serverRepo interfaces.ServerRepository, redisClient *redis.Client) *StorageAdapter {
+	return &StorageAdapter{
+		keyRepo:     keyRepo,
+		serverRepo:  serverRepo,
+		redisClient: redisClient,
 	}
 }
 
@@ -68,70 +81,93 @@ func (s *StorageAdapter) GetServers(ctx context.Context) ([]string, error) {
 	return serverIDs, nil
 }
 
-// StoreMetric - not implemented in new architecture yet
+// StoreMetric stores in Redis
 func (s *StorageAdapter) StoreMetric(ctx context.Context, serverID string, metrics *models.ServerMetrics) error {
-	// TODO: Implement metrics repository
-	return nil
+	if s.redisClient == nil {
+		return fmt.Errorf("Redis client not initialized")
+	}
+	return s.redisClient.StoreMetric(ctx, serverID, metrics)
 }
 
-// GetMetric - not implemented in new architecture yet
+// GetMetric retrieves from Redis
 func (s *StorageAdapter) GetMetric(ctx context.Context, serverID string) (*models.ServerMetrics, error) {
-	// TODO: Implement metrics repository
-	return nil, nil
+	if s.redisClient == nil {
+		return nil, fmt.Errorf("Redis client not initialized")
+	}
+	return s.redisClient.GetMetric(ctx, serverID)
 }
 
-// GetServerMetrics - not implemented in new architecture yet
+// GetServerMetrics retrieves from PostgreSQL (placeholder)
 func (s *StorageAdapter) GetServerMetrics(ctx context.Context, serverID string) (*models.ServerStatus, error) {
-	// TODO: Implement server status repository
-	return nil, nil
+	// TODO: Implement server status repository - for now return basic status
+	return &models.ServerStatus{
+		Online:   true,
+		LastSeen: time.Now(),
+	}, nil
 }
 
-// SetServerStatus - not implemented in new architecture yet
+// SetServerStatus stores in Redis
 func (s *StorageAdapter) SetServerStatus(ctx context.Context, serverID string, status *models.ServerStatus) error {
-	// TODO: Implement server status repository
-	return nil
+	if s.redisClient == nil {
+		return fmt.Errorf("Redis client not initialized")
+	}
+	return s.redisClient.SetServerStatus(ctx, serverID, status)
 }
 
-// GetServerStatus - not implemented in new architecture yet
+// GetServerStatus retrieves from Redis
 func (s *StorageAdapter) GetServerStatus(ctx context.Context, serverID string) (*models.ServerStatus, error) {
-	// TODO: Implement server status repository
-	return nil, nil
+	if s.redisClient == nil {
+		return nil, fmt.Errorf("Redis client not initialized")
+	}
+	return s.redisClient.GetServerStatus(ctx, serverID)
 }
 
-// StoreCommand - not implemented in new architecture yet
+// StoreCommand stores in Redis
 func (s *StorageAdapter) StoreCommand(ctx context.Context, serverID string, command map[string]interface{}) error {
-	// TODO: Implement commands repository
-	return nil
+	if s.redisClient == nil {
+		return fmt.Errorf("Redis client not initialized")
+	}
+	return s.redisClient.StoreCommand(ctx, serverID, command)
 }
 
-// GetCommands - not implemented in new architecture yet
+// GetCommands retrieves from Redis
 func (s *StorageAdapter) GetCommands(ctx context.Context, serverID string) ([]map[string]interface{}, error) {
-	// TODO: Implement commands repository
-	return nil, nil
+	if s.redisClient == nil {
+		return nil, fmt.Errorf("Redis client not initialized")
+	}
+	return s.redisClient.GetCommands(ctx, serverID)
 }
 
-// StoreDLQ - not implemented in new architecture yet
+// StoreDLQ stores in Redis
 func (s *StorageAdapter) StoreDLQ(ctx context.Context, topic, message string, metadata map[string]interface{}) error {
-	// TODO: Implement DLQ repository
-	return nil
+	if s.redisClient == nil {
+		return fmt.Errorf("Redis client not initialized")
+	}
+	return s.redisClient.StoreDLQ(ctx, topic, message, metadata)
 }
 
-// GetDLQ - not implemented in new architecture yet
+// GetDLQ retrieves from Redis
 func (s *StorageAdapter) GetDLQ(ctx context.Context, topic string, limit int) ([]map[string]interface{}, error) {
-	// TODO: Implement DLQ repository
-	return nil, nil
+	if s.redisClient == nil {
+		return nil, fmt.Errorf("Redis client not initialized")
+	}
+	return s.redisClient.GetDLQ(ctx, topic, limit)
 }
 
-// StoreConnection - not implemented in new architecture yet
+// StoreConnection stores in Redis
 func (s *StorageAdapter) StoreConnection(ctx context.Context, serverID string, connectionInfo map[string]interface{}) error {
-	// TODO: Implement connections repository
-	return nil
+	if s.redisClient == nil {
+		return fmt.Errorf("Redis client not initialized")
+	}
+	return s.redisClient.StoreConnection(ctx, serverID, connectionInfo)
 }
 
-// GetConnections - not implemented in new architecture yet
+// GetConnections retrieves from Redis
 func (s *StorageAdapter) GetConnections(ctx context.Context, serverID string) ([]map[string]interface{}, error) {
-	// TODO: Implement connections repository
-	return nil, nil
+	if s.redisClient == nil {
+		return nil, fmt.Errorf("Redis client not initialized")
+	}
+	return s.redisClient.GetConnections(ctx, serverID)
 }
 
 // Close cleanup
@@ -140,16 +176,18 @@ func (s *StorageAdapter) Close() error {
 	return nil
 }
 
-// StoreDLQMessage stores in PostgreSQL
+// StoreDLQMessage stores in PostgreSQL (placeholder)
 func (s *StorageAdapter) StoreDLQMessage(ctx context.Context, topic string, partition int, offset int64, message []byte, errorMsg string) error {
-	// TODO: Implement DLQ repository
-	return nil
+	// TODO: Implement DLQ repository in PostgreSQL
+	return fmt.Errorf("DLQ storage not yet implemented")
 }
 
 // GetPendingCommands retrieves from Redis
 func (s *StorageAdapter) GetPendingCommands(ctx context.Context, serverID string) ([]string, error) {
-	// TODO: Implement commands repository
-	return nil, nil
+	if s.redisClient == nil {
+		return nil, fmt.Errorf("Redis client not initialized")
+	}
+	return s.redisClient.GetPendingCommands(ctx, serverID)
 }
 
 // Ping checks database connectivity through repository

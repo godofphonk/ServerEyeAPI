@@ -62,7 +62,15 @@ func (s *Server) HandleConnection(w http.ResponseWriter, r *http.Request) {
 
 // handleClient handles a WebSocket client
 func (s *Server) handleClient(client *Client) {
-	defer client.Close()
+	defer func() {
+		// Unregister client
+		s.mutex.Lock()
+		delete(s.clients, client.ServerID)
+		s.mutex.Unlock()
+
+		s.logger.WithField("server_id", client.ServerID).Info("WebSocket client disconnected")
+		client.Close()
+	}()
 
 	s.logger.Info("Waiting for authentication message...")
 
@@ -174,13 +182,6 @@ func (s *Server) handleClient(client *Client) {
 			return
 		}
 	}
-
-	// Unregister client
-	s.mutex.Lock()
-	delete(s.clients, client.ServerID)
-	s.mutex.Unlock()
-
-	s.logger.WithField("server_id", client.ServerID).Info("WebSocket client disconnected")
 }
 
 // authenticate validates server credentials

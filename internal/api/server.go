@@ -13,6 +13,7 @@ import (
 	"github.com/godofphonk/ServerEyeAPI/internal/storage"
 	"github.com/godofphonk/ServerEyeAPI/internal/storage/interfaces"
 	postgresStorage "github.com/godofphonk/ServerEyeAPI/internal/storage/postgres"
+	"github.com/godofphonk/ServerEyeAPI/internal/storage/redis"
 	redisStorage "github.com/godofphonk/ServerEyeAPI/internal/storage/redis"
 	postgresRepo "github.com/godofphonk/ServerEyeAPI/internal/storage/repositories/postgres"
 	"github.com/godofphonk/ServerEyeAPI/internal/version"
@@ -50,10 +51,8 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 	keyRepo = postgresRepo.NewGeneratedKeyRepository(pgClient.DB(), logger)
 	serverRepo = postgresRepo.NewServerRepository(pgClient.DB(), logger)
 
-	// Create storage adapter for compatibility
-	storageImpl = storage.NewStorageAdapter(keyRepo, serverRepo)
-
 	// Initialize Redis if URL is provided
+	var redisClient *redis.Client
 	if cfg.RedisURL != "" {
 		// Extract host:port from redis://host:port format
 		redisAddr := "redis:6379" // Default for Docker Compose
@@ -63,11 +62,15 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 				redisAddr = cfg.RedisURL[9:] // Remove "redis://" prefix
 			}
 		}
-		_, err = redisStorage.NewClient(redisAddr, "", 0, logger, cfg)
+		var err error
+		redisClient, err = redisStorage.NewClient(redisAddr, "", 0, logger, cfg)
 		if err != nil {
 			return nil, err
 		}
 	}
+
+	// Create storage adapter with Redis support
+	storageImpl = storage.NewStorageAdapterWithRedis(keyRepo, serverRepo, redisClient)
 
 	// Initialize WebSocket server
 	wsServer := websocket.NewServer(storageImpl, logger, cfg)
