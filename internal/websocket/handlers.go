@@ -45,10 +45,24 @@ func (h *MessageHandlers) HandleMetrics(ctx context.Context, client *Client, msg
 		return err
 	}
 
+	// Log incoming raw data for debugging
+	h.logger.WithFields(logrus.Fields{
+		"server_id": client.ServerID,
+		"raw_data":  string(dataBytes),
+		"msg_data":  msg.Data,
+	}).Info("Received raw metrics data")
+
 	if err := json.Unmarshal(dataBytes, &metricsMsg); err != nil {
 		h.logger.WithError(err).WithField("server_id", client.ServerID).Error("Invalid metrics message format")
 		return err
 	}
+
+	// Log parsed metrics for debugging
+	h.logger.WithFields(logrus.Fields{
+		"server_id": client.ServerID,
+		"cpu":       metricsMsg.Metrics.CPU,
+		"cpu_usage": metricsMsg.Metrics.CPUUsage,
+	}).Info("Parsed metrics with CPU usage")
 
 	// Store metrics in Redis
 	if err := h.storage.StoreMetric(ctx, client.ServerID, &metricsMsg.Metrics); err != nil {
