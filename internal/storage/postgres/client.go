@@ -27,10 +27,11 @@ func NewClient(databaseURL string, logger *logrus.Logger) (*Client, error) {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Configure connection pool
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(5)
-	db.SetConnMaxLifetime(5 * time.Minute)
+	// Configure connection pool for production
+	db.SetMaxOpenConns(50)                  // Increase for higher concurrency
+	db.SetMaxIdleConns(10)                  // Keep more idle connections ready
+	db.SetConnMaxLifetime(30 * time.Minute) // Allow longer connection reuse
+	db.SetConnMaxIdleTime(5 * time.Minute)  // Close idle connections faster
 
 	// Test connection
 	if err := db.Ping(); err != nil {

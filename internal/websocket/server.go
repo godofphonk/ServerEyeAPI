@@ -62,7 +62,22 @@ func (s *Server) HandleConnection(w http.ResponseWriter, r *http.Request) {
 
 // handleClient handles a WebSocket client
 func (s *Server) handleClient(client *Client) {
-	defer client.Close()
+	defer func() {
+		if r := recover(); r != nil {
+			s.logger.WithFields(logrus.Fields{
+				"server_id": client.ServerID,
+				"panic":     r,
+			}).Error("Recovered from panic in WebSocket client handler")
+		}
+
+		// Unregister client
+		s.mutex.Lock()
+		delete(s.clients, client.ServerID)
+		s.mutex.Unlock()
+
+		s.logger.WithField("server_id", client.ServerID).Info("WebSocket client disconnected")
+		client.Close()
+	}()
 
 	s.logger.Info("Waiting for authentication message...")
 
@@ -126,24 +141,85 @@ func (s *Server) handleClient(client *Client) {
 		},
 	})
 
-	// Handle messages
+	// Create channels for non-blocking message handling
+	messageChan := make(chan models.WSMessage, 10)
+	errorChan := make(chan error, 1)
+
+	// Start message reader in separate goroutine
+	go func() {
+		defer close(messageChan)
+		defer close(errorChan)
+
+		for {
+			// Set read deadline before each read attempt
+			deadline := time.Now().Add(s.config.WebSocket.PongWait)
+			client.conn.SetReadDeadline(deadline)
+
+			s.logger.WithFields(logrus.Fields{
+				"server_id": client.ServerID,
+				"deadline":  deadline.Format("15:04:05"),
+			}).Debug("Waiting for WebSocket message")
+
+			msg, err := client.ReadMessage()
+			if err != nil {
+				s.logger.WithFields(logrus.Fields{
+					"server_id": client.ServerID,
+					"error":     err.Error(),
+				}).Info("WebSocket read error, exiting reader")
+				errorChan <- err
+				return
+			}
+
+			s.logger.WithFields(logrus.Fields{
+				"server_id":    client.ServerID,
+				"message_type": msg.Type,
+			}).Debug("Received message in reader")
+			messageChan <- msg
+		}
+	}()
+
+	// Start ping ticker
+	pingTicker := time.NewTicker(s.config.WebSocket.PingInterval)
+	defer pingTicker.Stop()
+
+	// Main event loop
 	ctx := context.Background()
 	for {
-		msg, err := client.ReadMessage()
-		if err != nil {
-			s.logger.WithError(err).WithField("server_id", client.ServerID).Error("Failed to read message")
-			break
+		select {
+		case <-pingTicker.C:
+			// Send ping to keep connection alive
+			if err := client.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				s.logger.WithFields(logrus.Fields{
+					"server_id":  client.ServerID,
+					"error":      err.Error(),
+					"error_type": "ping_failed",
+				}).Error("Failed to send ping, connection unstable")
+				return
+			}
+			s.logger.WithField("server_id", client.ServerID).Debug("Sent ping to client")
+
+		case msg := <-messageChan:
+			// Handle incoming message
+			s.handleMessage(ctx, client, msg)
+
+		case err := <-errorChan:
+			// Handle read error with better classification
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				s.logger.WithFields(logrus.Fields{
+					"server_id":  client.ServerID,
+					"error":      err.Error(),
+					"error_type": "unexpected_close",
+				}).Error("WebSocket closed unexpectedly")
+			} else {
+				s.logger.WithFields(logrus.Fields{
+					"server_id":  client.ServerID,
+					"error":      err.Error(),
+					"error_type": "read_error",
+				}).Error("WebSocket read error, disconnecting")
+			}
+			return
 		}
-
-		s.handleMessage(ctx, client, msg)
 	}
-
-	// Unregister client
-	s.mutex.Lock()
-	delete(s.clients, client.ServerID)
-	s.mutex.Unlock()
-
-	s.logger.WithField("server_id", client.ServerID).Info("WebSocket client disconnected")
 }
 
 // authenticate validates server credentials
@@ -179,21 +255,50 @@ func (s *Server) authenticate(serverID, serverKey string) bool {
 
 // handleMessage handles incoming WebSocket messages
 func (s *Server) handleMessage(ctx context.Context, client *Client, msg models.WSMessage) {
+	s.logger.WithFields(logrus.Fields{
+		"server_id":    client.ServerID,
+		"message_type": msg.Type,
+		"has_data":     msg.Data != nil,
+		"timestamp":    msg.Timestamp,
+	}).Info("Received WebSocket message")
+
 	switch msg.Type {
 	case models.WSMessageTypeMetrics:
+		s.logger.WithFields(logrus.Fields{
+			"server_id":    client.ServerID,
+			"message_type": msg.Type,
+		}).Info("Processing metrics message")
 		s.handleMetrics(ctx, client, msg)
 	case models.WSMessageTypeHeartbeat:
+		s.logger.WithFields(logrus.Fields{
+			"server_id":    client.ServerID,
+			"message_type": msg.Type,
+		}).Info("Processing heartbeat message")
 		s.handleHeartbeat(ctx, client, msg)
 	default:
-		s.logger.WithField("type", msg.Type).Warn("Unknown message type")
+		s.logger.WithFields(logrus.Fields{
+			"server_id":    client.ServerID,
+			"unknown_type": msg.Type,
+		}).Warn("Unknown message type")
 	}
 }
 
 // handleMetrics handles metrics messages
 func (s *Server) handleMetrics(ctx context.Context, client *Client, msg models.WSMessage) {
+	s.logger.WithFields(logrus.Fields{
+		"server_id":    client.ServerID,
+		"message_type": msg.Type,
+	}).Info("Starting handleMetrics")
+
 	if msg.Data == nil {
+		s.logger.WithField("server_id", client.ServerID).Warn("Metrics message has no data")
 		return
 	}
+
+	s.logger.WithFields(logrus.Fields{
+		"server_id": client.ServerID,
+		"data_keys": len(msg.Data),
+	}).Info("Metrics message has data, parsing...")
 
 	// Parse metrics message
 	var metricsMsg models.MetricsMessage
@@ -208,12 +313,20 @@ func (s *Server) handleMetrics(ctx context.Context, client *Client, msg models.W
 		return
 	}
 
+	s.logger.WithFields(logrus.Fields{
+		"server_id": metricsMsg.ServerID,
+		"cpu":       metricsMsg.Metrics.CPU,
+		"memory":    metricsMsg.Metrics.Memory,
+		"disk":      metricsMsg.Metrics.Disk,
+	}).Info("Parsed metrics message, storing in Redis")
+
 	// Store metrics in Redis
 	if err := s.storage.StoreMetric(ctx, client.ServerID, &metricsMsg.Metrics); err != nil {
 		s.logger.WithError(err).WithField("server_id", client.ServerID).Error("Failed to store metrics")
+		return
 	}
 
-	s.logger.WithField("server_id", client.ServerID).Debug("Stored metrics from WebSocket")
+	s.logger.WithField("server_id", client.ServerID).Info("✅ Successfully stored metrics from WebSocket")
 }
 
 // handleHeartbeat handles heartbeat messages

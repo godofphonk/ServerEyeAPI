@@ -55,8 +55,32 @@ func Auth(storage storage.Storage, logger *logrus.Logger) func(http.Handler) htt
 			}
 
 			// Check if server exists and is authenticated
-			// This would typically check against a database or Redis
-			// For now, we'll just validate the format
+			serverInfo, err := storage.GetServerByKey(context.Background(), serverKey)
+			if err != nil {
+				logger.WithFields(logrus.Fields{
+					"server_id":  serverID,
+					"server_key": serverKey[:10] + "...",
+					"error":      err.Error(),
+				}).Error("Authentication failed - server key not found")
+				http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+				return
+			}
+
+			// Verify server ID matches
+			if serverInfo.ServerID != serverID {
+				logger.WithFields(logrus.Fields{
+					"server_id":   serverID,
+					"expected_id": serverInfo.ServerID,
+					"server_key":  serverKey[:10] + "...",
+				}).Error("Authentication failed - server ID mismatch")
+				http.Error(w, "Invalid credentials", http.StatusUnauthorized)
+				return
+			}
+
+			logger.WithFields(logrus.Fields{
+				"server_id": serverID,
+				"hostname":  serverInfo.Hostname,
+			}).Info("Authentication successful")
 
 			// Add server info to context
 			ctx := context.WithValue(r.Context(), "server_id", serverID)

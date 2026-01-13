@@ -7,19 +7,23 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/godofphonk/ServerEyeAPI/internal/models"
+	"github.com/godofphonk/ServerEyeAPI/internal/storage"
 	"github.com/godofphonk/ServerEyeAPI/internal/storage/interfaces"
 )
 
 // MetricsService handles metrics-related business logic
 type MetricsService struct {
 	keyRepo interfaces.GeneratedKeyRepository
+	storage storage.Storage
 	logger  *logrus.Logger
 }
 
 // NewMetricsService creates a new metrics service
-func NewMetricsService(keyRepo interfaces.GeneratedKeyRepository, logger *logrus.Logger) *MetricsService {
+func NewMetricsService(keyRepo interfaces.GeneratedKeyRepository, storage storage.Storage, logger *logrus.Logger) *MetricsService {
 	return &MetricsService{
 		keyRepo: keyRepo,
+		storage: storage,
 		logger:  logger,
 	}
 }
@@ -84,7 +88,23 @@ func (s *MetricsService) StoreMetrics(ctx context.Context, req *StoreMetricsRequ
 		return fmt.Errorf("invalid metrics values: %w", err)
 	}
 
-	// Store metrics (TODO: implement metrics repository)
+	// Store metrics in storage
+	serverMetrics := &models.ServerMetrics{
+		CPU:     req.Metrics.CPU,
+		Memory:  req.Metrics.Memory,
+		Disk:    req.Metrics.Disk,
+		Network: req.Metrics.Network,
+		Time:    req.Metrics.Time,
+	}
+
+	if err := s.storage.StoreMetric(ctx, req.ServerID, serverMetrics); err != nil {
+		s.logger.WithFields(logrus.Fields{
+			"server_id": req.ServerID,
+			"error":     err.Error(),
+		}).Error("Failed to store metrics")
+		return fmt.Errorf("failed to store metrics: %w", err)
+	}
+
 	s.logger.WithFields(logrus.Fields{
 		"server_id": req.ServerID,
 		"cpu":       req.Metrics.CPU,
@@ -152,14 +172,30 @@ func (s *MetricsService) ProcessWebSocketMetrics(ctx context.Context, msg *Metri
 		return fmt.Errorf("invalid metrics values: %w", err)
 	}
 
-	// Store metrics (TODO: implement actual storage)
+	// Store metrics in storage
+	serverMetrics := &models.ServerMetrics{
+		CPU:     msg.Metrics.CPU,
+		Memory:  msg.Metrics.Memory,
+		Disk:    msg.Metrics.Disk,
+		Network: msg.Metrics.Network,
+		Time:    msg.Metrics.Time,
+	}
+
+	if err := s.storage.StoreMetric(ctx, msg.ServerID, serverMetrics); err != nil {
+		s.logger.WithFields(logrus.Fields{
+			"server_id": msg.ServerID,
+			"error":     err.Error(),
+		}).Error("Failed to store WebSocket metrics")
+		return fmt.Errorf("failed to store WebSocket metrics: %w", err)
+	}
+
 	s.logger.WithFields(logrus.Fields{
 		"server_id": msg.ServerID,
 		"cpu":       msg.Metrics.CPU,
 		"memory":    msg.Metrics.Memory,
 		"disk":      msg.Metrics.Disk,
 		"network":   msg.Metrics.Network,
-	}).Info("WebSocket metrics processed")
+	}).Info("WebSocket metrics processed successfully")
 
 	return nil
 }

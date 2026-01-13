@@ -11,6 +11,8 @@ services:
       - HOST=0.0.0.0
       - PORT=8080
       - DATABASE_URL=${DATABASE_URL}
+      - KEYS_DATABASE_URL=${KEYS_DATABASE_URL:-${DATABASE_URL}}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
       - JWT_SECRET=${JWT_SECRET}
       - WEBHOOK_SECRET=${WEBHOOK_SECRET}
       - WEB_URL=${WEB_URL}
@@ -22,6 +24,11 @@ services:
       - ./.env:/app/.env:ro
     networks:
       - servereye-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s
@@ -51,8 +58,26 @@ services:
       timeout: 10s
       retries: 3
 
+  # Optional: Redis for production
+  redis:
+    image: redis:7-alpine
+    container_name: servereye-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - servereye-network
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_data:
+  redis_data:
 
 networks:
   servereye-network:

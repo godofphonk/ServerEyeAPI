@@ -37,7 +37,7 @@ type Config struct {
 
 	// Redis Configuration
 	Redis struct {
-		TTL         time.Duration `env:"REDIS_TTL" envDefault:"60s"`
+		TTL         time.Duration `env:"REDIS_TTL" envDefault:"5m"`
 		ConnTimeout time.Duration `env:"REDIS_CONN_TIMEOUT" envDefault:"5s"`
 		MaxRetries  int           `env:"REDIS_MAX_RETRIES" envDefault:"3"`
 	}
@@ -46,9 +46,9 @@ type Config struct {
 	WebSocket struct {
 		BufferSize   int           `env:"WS_BUFFER_SIZE" envDefault:"256"`
 		WriteTimeout time.Duration `env:"WS_WRITE_TIMEOUT" envDefault:"30s"`
-		ReadTimeout  time.Duration `env:"WS_READ_TIMEOUT" envDefault:"60s"`
-		PingInterval time.Duration `env:"WS_PING_INTERVAL" envDefault:"30s"`
-		PongWait     time.Duration `env:"WS_PONG_WAIT" envDefault:"60s"`
+		ReadTimeout  time.Duration `env:"WS_READ_TIMEOUT" envDefault:"300s"`
+		PingInterval time.Duration `env:"WS_PING_INTERVAL" envDefault:"60s"`
+		PongWait     time.Duration `env:"WS_PONG_WAIT" envDefault:"600s"`
 	}
 
 	// Rate Limiting Configuration
@@ -81,6 +81,12 @@ func Load() (*Config, error) {
 	// Load environment variables with env tags
 	if err := env.Parse(cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse environment variables: %w", err)
+	}
+
+	// Use DATABASE_URL for KEYS_DATABASE_URL if not provided (backward compatibility)
+	if cfg.KeysDatabaseURL == "" {
+		cfg.KeysDatabaseURL = cfg.DatabaseURL
+		logrus.Info("Using DATABASE_URL for KEYS_DATABASE_URL (backward compatibility)")
 	}
 
 	// Validate required fields
@@ -152,4 +158,46 @@ func NewConsumerConfig(cfg *Config) ConsumerConfig {
 		HeartbeatInterval: cfg.Consumer.HeartbeatInterval,
 		MaxPollRecords:    cfg.Consumer.MaxPollRecords,
 	}
+}
+
+// Validate validates critical configuration values
+func (c *Config) Validate() error {
+	var errors []string
+
+	// Validate required security fields
+	if c.JWTSecret == "" {
+		errors = append(errors, "JWT_SECRET is required")
+	} else if len(c.JWTSecret) < 32 {
+		errors = append(errors, "JWT_SECRET must be at least 32 characters")
+	}
+
+	if c.WebhookSecret == "" {
+		errors = append(errors, "WEBHOOK_SECRET is required")
+	} else if len(c.WebhookSecret) < 16 {
+		errors = append(errors, "WEBHOOK_SECRET must be at least 16 characters")
+	}
+
+	// Validate database URLs
+	if c.DatabaseURL == "" {
+		errors = append(errors, "DATABASE_URL is required")
+	}
+
+	// KEYS_DATABASE_URL is optional for backward compatibility
+	// If not provided, will use the same database as DATABASE_URL
+
+	// Validate port range
+	if c.Port < 1 || c.Port > 65535 {
+		errors = append(errors, "PORT must be between 1 and 65535")
+	}
+
+	// Validate Redis URL format
+	if c.RedisURL != "" && len(c.RedisURL) < 9 {
+		errors = append(errors, "REDIS_URL must be a valid URL (e.g., redis://localhost:6379)")
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("configuration validation failed: %v", errors)
+	}
+
+	return nil
 }

@@ -26,12 +26,13 @@ type Client struct {
 
 // NewClient creates a new WebSocket client
 func NewClient(conn *websocket.Conn, logger *logrus.Logger, cfg *config.Config) *Client {
-	// Set read/write deadlines
-	conn.SetReadDeadline(time.Now().Add(cfg.WebSocket.ReadTimeout))
+	// Set initial read deadline
+	conn.SetReadDeadline(time.Now().Add(cfg.WebSocket.PongWait))
 	conn.SetWriteDeadline(time.Now().Add(cfg.WebSocket.WriteTimeout))
 
-	// Set pong handler
-	conn.SetPongHandler(func(string) error {
+	// Set pong handler to extend read deadline on pong responses
+	conn.SetPongHandler(func(appData string) error {
+		logger.Debug("Received pong from client, extending read deadline")
 		return conn.SetReadDeadline(time.Now().Add(cfg.WebSocket.PongWait))
 	})
 
@@ -48,9 +49,8 @@ func NewClient(conn *websocket.Conn, logger *logrus.Logger, cfg *config.Config) 
 func (c *Client) ReadMessage() (models.WSMessage, error) {
 	var msg models.WSMessage
 
-	// Extend read deadline before reading
-	c.conn.SetReadDeadline(time.Now().Add(c.config.WebSocket.ReadTimeout))
-
+	// Read message without setting deadline here
+	// Deadline is set by pong handler and main server loop
 	err := c.conn.ReadJSON(&msg)
 	return msg, err
 }
