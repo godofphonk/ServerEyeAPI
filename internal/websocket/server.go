@@ -152,13 +152,28 @@ func (s *Server) handleClient(client *Client) {
 
 		for {
 			// Set read deadline before each read attempt
-			client.conn.SetReadDeadline(time.Now().Add(s.config.WebSocket.PongWait))
+			deadline := time.Now().Add(s.config.WebSocket.PongWait)
+			client.conn.SetReadDeadline(deadline)
+
+			s.logger.WithFields(logrus.Fields{
+				"server_id": client.ServerID,
+				"deadline":  deadline.Format("15:04:05"),
+			}).Debug("Waiting for WebSocket message")
 
 			msg, err := client.ReadMessage()
 			if err != nil {
+				s.logger.WithFields(logrus.Fields{
+					"server_id": client.ServerID,
+					"error":     err.Error(),
+				}).Info("WebSocket read error, exiting reader")
 				errorChan <- err
 				return
 			}
+
+			s.logger.WithFields(logrus.Fields{
+				"server_id":    client.ServerID,
+				"message_type": msg.Type,
+			}).Debug("Received message in reader")
 			messageChan <- msg
 		}
 	}()
@@ -244,24 +259,46 @@ func (s *Server) handleMessage(ctx context.Context, client *Client, msg models.W
 		"server_id":    client.ServerID,
 		"message_type": msg.Type,
 		"has_data":     msg.Data != nil,
+		"timestamp":    msg.Timestamp,
 	}).Info("Received WebSocket message")
 
 	switch msg.Type {
 	case models.WSMessageTypeMetrics:
+		s.logger.WithFields(logrus.Fields{
+			"server_id":    client.ServerID,
+			"message_type": msg.Type,
+		}).Info("Processing metrics message")
 		s.handleMetrics(ctx, client, msg)
 	case models.WSMessageTypeHeartbeat:
+		s.logger.WithFields(logrus.Fields{
+			"server_id":    client.ServerID,
+			"message_type": msg.Type,
+		}).Info("Processing heartbeat message")
 		s.handleHeartbeat(ctx, client, msg)
 	default:
-		s.logger.WithField("type", msg.Type).Warn("Unknown message type")
+		s.logger.WithFields(logrus.Fields{
+			"server_id":    client.ServerID,
+			"unknown_type": msg.Type,
+		}).Warn("Unknown message type")
 	}
 }
 
 // handleMetrics handles metrics messages
 func (s *Server) handleMetrics(ctx context.Context, client *Client, msg models.WSMessage) {
+	s.logger.WithFields(logrus.Fields{
+		"server_id":    client.ServerID,
+		"message_type": msg.Type,
+	}).Info("Starting handleMetrics")
+
 	if msg.Data == nil {
 		s.logger.WithField("server_id", client.ServerID).Warn("Metrics message has no data")
 		return
 	}
+
+	s.logger.WithFields(logrus.Fields{
+		"server_id": client.ServerID,
+		"data_keys": len(msg.Data),
+	}).Info("Metrics message has data, parsing...")
 
 	// Parse metrics message
 	var metricsMsg models.MetricsMessage
@@ -275,6 +312,13 @@ func (s *Server) handleMetrics(ctx context.Context, client *Client, msg models.W
 		s.logger.WithError(err).WithField("server_id", client.ServerID).Error("Invalid metrics message format")
 		return
 	}
+
+	s.logger.WithFields(logrus.Fields{
+		"server_id": metricsMsg.ServerID,
+		"cpu":       metricsMsg.Metrics.CPU,
+		"memory":    metricsMsg.Metrics.Memory,
+		"disk":      metricsMsg.Metrics.Disk,
+	}).Info("Parsed metrics message, storing in Redis")
 
 	// Store metrics in Redis
 	if err := s.storage.StoreMetric(ctx, client.ServerID, &metricsMsg.Metrics); err != nil {

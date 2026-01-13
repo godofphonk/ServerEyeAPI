@@ -37,7 +37,7 @@ type Config struct {
 
 	// Redis Configuration
 	Redis struct {
-		TTL         time.Duration `env:"REDIS_TTL" envDefault:"60s"`
+		TTL         time.Duration `env:"REDIS_TTL" envDefault:"5m"`
 		ConnTimeout time.Duration `env:"REDIS_CONN_TIMEOUT" envDefault:"5s"`
 		MaxRetries  int           `env:"REDIS_MAX_RETRIES" envDefault:"3"`
 	}
@@ -48,7 +48,7 @@ type Config struct {
 		WriteTimeout time.Duration `env:"WS_WRITE_TIMEOUT" envDefault:"30s"`
 		ReadTimeout  time.Duration `env:"WS_READ_TIMEOUT" envDefault:"300s"`
 		PingInterval time.Duration `env:"WS_PING_INTERVAL" envDefault:"60s"`
-		PongWait     time.Duration `env:"WS_PONG_WAIT" envDefault:"300s"`
+		PongWait     time.Duration `env:"WS_PONG_WAIT" envDefault:"600s"`
 	}
 
 	// Rate Limiting Configuration
