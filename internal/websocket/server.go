@@ -126,16 +126,35 @@ func (s *Server) handleClient(client *Client) {
 		},
 	})
 
+	// Start ping goroutine to keep connection alive
+	pingTicker := time.NewTicker(s.config.WebSocket.PingInterval)
+	defer pingTicker.Stop()
+
 	// Handle messages
 	ctx := context.Background()
 	for {
-		msg, err := client.ReadMessage()
-		if err != nil {
-			s.logger.WithError(err).WithField("server_id", client.ServerID).Error("Failed to read message")
-			break
+		select {
+		case <-pingTicker.C:
+			// Send ping to keep connection alive
+			if err := client.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				s.logger.WithError(err).WithField("server_id", client.ServerID).Error("Failed to send ping")
+				return
+			}
+		default:
+			// Use SetReadDeadline with non-blocking read
+			client.conn.SetReadDeadline(time.Now().Add(s.config.WebSocket.PongWait))
+
+			msg, err := client.ReadMessage()
+			if err != nil {
+				s.logger.WithError(err).WithField("server_id", client.ServerID).Error("Failed to read message")
+				break
+			}
+
+			s.handleMessage(ctx, client, msg)
 		}
 
-		s.handleMessage(ctx, client, msg)
+		// Small delay to prevent CPU spinning
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	// Unregister client
