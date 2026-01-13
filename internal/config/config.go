@@ -45,8 +45,10 @@ type Config struct {
 	// WebSocket Configuration
 	WebSocket struct {
 		BufferSize   int           `env:"WS_BUFFER_SIZE" envDefault:"256"`
-		WriteTimeout time.Duration `env:"WS_WRITE_TIMEOUT" envDefault:"10s"`
+		WriteTimeout time.Duration `env:"WS_WRITE_TIMEOUT" envDefault:"30s"`
+		ReadTimeout  time.Duration `env:"WS_READ_TIMEOUT" envDefault:"60s"`
 		PingInterval time.Duration `env:"WS_PING_INTERVAL" envDefault:"30s"`
+		PongWait     time.Duration `env:"WS_PONG_WAIT" envDefault:"60s"`
 	}
 
 	// Rate Limiting Configuration
