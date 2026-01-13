@@ -153,3 +153,46 @@ func NewConsumerConfig(cfg *Config) ConsumerConfig {
 		MaxPollRecords:    cfg.Consumer.MaxPollRecords,
 	}
 }
+
+// Validate validates critical configuration values
+func (c *Config) Validate() error {
+	var errors []string
+
+	// Validate required security fields
+	if c.JWTSecret == "" {
+		errors = append(errors, "JWT_SECRET is required")
+	} else if len(c.JWTSecret) < 32 {
+		errors = append(errors, "JWT_SECRET must be at least 32 characters")
+	}
+
+	if c.WebhookSecret == "" {
+		errors = append(errors, "WEBHOOK_SECRET is required")
+	} else if len(c.WebhookSecret) < 16 {
+		errors = append(errors, "WEBHOOK_SECRET must be at least 16 characters")
+	}
+
+	// Validate database URLs
+	if c.DatabaseURL == "" {
+		errors = append(errors, "DATABASE_URL is required")
+	}
+
+	if c.KeysDatabaseURL == "" {
+		errors = append(errors, "KEYS_DATABASE_URL is required")
+	}
+
+	// Validate port range
+	if c.Port < 1 || c.Port > 65535 {
+		errors = append(errors, "PORT must be between 1 and 65535")
+	}
+
+	// Validate Redis URL format
+	if c.RedisURL != "" && len(c.RedisURL) < 9 {
+		errors = append(errors, "REDIS_URL must be a valid URL (e.g., redis://localhost:6379)")
+	}
+
+	if len(errors) > 0 {
+		return fmt.Errorf("configuration validation failed: %v", errors)
+	}
+
+	return nil
+}

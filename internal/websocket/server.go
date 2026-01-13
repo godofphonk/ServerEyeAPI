@@ -63,6 +63,13 @@ func (s *Server) HandleConnection(w http.ResponseWriter, r *http.Request) {
 // handleClient handles a WebSocket client
 func (s *Server) handleClient(client *Client) {
 	defer func() {
+		if r := recover(); r != nil {
+			s.logger.WithFields(logrus.Fields{
+				"server_id": client.ServerID,
+				"panic":     r,
+			}).Error("Recovered from panic in WebSocket client handler")
+		}
+
 		// Unregister client
 		s.mutex.Lock()
 		delete(s.clients, client.ServerID)
@@ -167,7 +174,11 @@ func (s *Server) handleClient(client *Client) {
 		case <-pingTicker.C:
 			// Send ping to keep connection alive
 			if err := client.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
-				s.logger.WithError(err).WithField("server_id", client.ServerID).Error("Failed to send ping")
+				s.logger.WithFields(logrus.Fields{
+					"server_id":  client.ServerID,
+					"error":      err.Error(),
+					"error_type": "ping_failed",
+				}).Error("Failed to send ping, connection unstable")
 				return
 			}
 			s.logger.WithField("server_id", client.ServerID).Debug("Sent ping to client")
@@ -177,8 +188,20 @@ func (s *Server) handleClient(client *Client) {
 			s.handleMessage(ctx, client, msg)
 
 		case err := <-errorChan:
-			// Handle read error
-			s.logger.WithError(err).WithField("server_id", client.ServerID).Error("WebSocket read error, disconnecting")
+			// Handle read error with better classification
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				s.logger.WithFields(logrus.Fields{
+					"server_id":  client.ServerID,
+					"error":      err.Error(),
+					"error_type": "unexpected_close",
+				}).Error("WebSocket closed unexpectedly")
+			} else {
+				s.logger.WithFields(logrus.Fields{
+					"server_id":  client.ServerID,
+					"error":      err.Error(),
+					"error_type": "read_error",
+				}).Error("WebSocket read error, disconnecting")
+			}
 			return
 		}
 	}

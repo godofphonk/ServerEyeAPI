@@ -77,7 +77,7 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 
 	// Initialize services with repositories
 	authService := services.NewAuthService(keyRepo, serverRepo, logger)
-	metricsService := services.NewMetricsService(keyRepo, logger)
+	metricsService := services.NewMetricsService(keyRepo, storageImpl, logger)
 	commandsService := services.NewCommandsService(keyRepo, logger)
 
 	// Initialize handlers

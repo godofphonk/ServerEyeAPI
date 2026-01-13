@@ -22,6 +22,11 @@ func main() {
 		logger.WithError(err).Fatal("Failed to load configuration")
 	}
 
+	// Validate configuration
+	if err := cfg.Validate(); err != nil {
+		logger.WithError(err).Fatal("Configuration validation failed")
+	}
+
 	// Initialize API server using Wire DI container
 	server, err := wire.InitializeApp(cfg)
 	if err != nil {
