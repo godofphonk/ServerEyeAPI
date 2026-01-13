@@ -83,6 +83,12 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to parse environment variables: %w", err)
 	}
 
+	// Use DATABASE_URL for KEYS_DATABASE_URL if not provided (backward compatibility)
+	if cfg.KeysDatabaseURL == "" {
+		cfg.KeysDatabaseURL = cfg.DatabaseURL
+		logrus.Info("Using DATABASE_URL for KEYS_DATABASE_URL (backward compatibility)")
+	}
+
 	// Validate required fields
 	if cfg.JWTSecret == "" {
 		logrus.Fatal("JWT_SECRET is required")
@@ -176,9 +182,8 @@ func (c *Config) Validate() error {
 		errors = append(errors, "DATABASE_URL is required")
 	}
 
-	if c.KeysDatabaseURL == "" {
-		errors = append(errors, "KEYS_DATABASE_URL is required")
-	}
+	// KEYS_DATABASE_URL is optional for backward compatibility
+	// If not provided, will use the same database as DATABASE_URL
 
 	// Validate port range
 	if c.Port < 1 || c.Port > 65535 {
