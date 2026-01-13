@@ -126,11 +126,33 @@ func (s *Server) handleClient(client *Client) {
 		},
 	})
 
-	// Start ping goroutine to keep connection alive
+	// Create channels for non-blocking message handling
+	messageChan := make(chan models.WSMessage, 10)
+	errorChan := make(chan error, 1)
+
+	// Start message reader in separate goroutine
+	go func() {
+		defer close(messageChan)
+		defer close(errorChan)
+
+		for {
+			// Set read deadline before each read attempt
+			client.conn.SetReadDeadline(time.Now().Add(s.config.WebSocket.PongWait))
+
+			msg, err := client.ReadMessage()
+			if err != nil {
+				errorChan <- err
+				return
+			}
+			messageChan <- msg
+		}
+	}()
+
+	// Start ping ticker
 	pingTicker := time.NewTicker(s.config.WebSocket.PingInterval)
 	defer pingTicker.Stop()
 
-	// Handle messages
+	// Main event loop
 	ctx := context.Background()
 	for {
 		select {
@@ -140,21 +162,17 @@ func (s *Server) handleClient(client *Client) {
 				s.logger.WithError(err).WithField("server_id", client.ServerID).Error("Failed to send ping")
 				return
 			}
-		default:
-			// Set read deadline for each message
-			client.conn.SetReadDeadline(time.Now().Add(s.config.WebSocket.PongWait))
+			s.logger.WithField("server_id", client.ServerID).Debug("Sent ping to client")
 
-			msg, err := client.ReadMessage()
-			if err != nil {
-				s.logger.WithError(err).WithField("server_id", client.ServerID).Error("Failed to read message")
-				break
-			}
-
+		case msg := <-messageChan:
+			// Handle incoming message
 			s.handleMessage(ctx, client, msg)
-		}
 
-		// Small delay to prevent CPU spinning
-		time.Sleep(100 * time.Millisecond)
+		case err := <-errorChan:
+			// Handle read error
+			s.logger.WithError(err).WithField("server_id", client.ServerID).Error("WebSocket read error, disconnecting")
+			return
+		}
 	}
 
 	// Unregister client
