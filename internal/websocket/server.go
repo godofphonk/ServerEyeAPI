@@ -141,7 +141,7 @@ func (s *Server) handleClient(client *Client) {
 				return
 			}
 		default:
-			// Use SetReadDeadline with non-blocking read
+			// Set read deadline for each message
 			client.conn.SetReadDeadline(time.Now().Add(s.config.WebSocket.PongWait))
 
 			msg, err := client.ReadMessage()
