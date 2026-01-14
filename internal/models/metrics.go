@@ -52,6 +52,18 @@ type ServerMetrics struct {
 		TotalRxMbps float64 `json:"total_rx_mbps"` // Total receive speed across all interfaces
 		TotalTxMbps float64 `json:"total_tx_mbps"` // Total transmit speed across all interfaces
 	} `json:"network_details"` // Detailed network statistics
+	TemperatureDetails struct {
+		CPUTemperature      float64 `json:"cpu_temperature"`    // CPU temperature in Celsius
+		GPUTemperature      float64 `json:"gpu_temperature"`    // GPU temperature in Celsius (0 if not available)
+		SystemTemperature   float64 `json:"system_temperature"` // System/board temperature in Celsius
+		StorageTemperatures []struct {
+			Device      string  `json:"device"`      // Storage device name (e.g., /dev/sda, nvme0n1)
+			Type        string  `json:"type"`        // Storage type (HDD, SSD, NVMe)
+			Temperature float64 `json:"temperature"` // Storage temperature in Celsius
+		} `json:"storage_temperatures"` // Individual storage device temperatures
+		HighestTemperature float64 `json:"highest_temperature"` // Highest temperature across all sensors
+		TemperatureUnit    string  `json:"temperature_unit"`    // Temperature unit (celsius)
+	} `json:"temperature_details"` // Detailed temperature monitoring
 	Time time.Time `json:"time"` // Timestamp when metrics were collected
 }
 
