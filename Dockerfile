@@ -20,6 +20,13 @@ COPY . .
 RUN go install github.com/google/wire/cmd/wire@latest
 RUN go generate ./internal/wire
 
+# Force clean Go cache and rebuild with fresh modules
+RUN go clean -cache -modcache && \
+    rm -rf /root/.cache/go-build && \
+    rm -rf /root/go/pkg/mod && \
+    go mod download -x && \
+    go mod verify
+
 # Build the application with timestamp to force rebuild
 ARG BUILD_DATE
 ARG VERSION
