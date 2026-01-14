@@ -45,24 +45,25 @@ func (h *MessageHandlers) HandleMetrics(ctx context.Context, client *Client, msg
 		return err
 	}
 
-	// Log incoming raw data for debugging
+	// Debug: Log the raw incoming data structure
 	h.logger.WithFields(logrus.Fields{
 		"server_id": client.ServerID,
-		"raw_data":  string(dataBytes),
-		"msg_data":  msg.Data,
-	}).Info("Received raw metrics data")
+		"data_keys": len(msg.Data),
+		"raw_json":  string(dataBytes),
+	}).Info("DEBUG: Incoming WebSocket data")
 
 	if err := json.Unmarshal(dataBytes, &metricsMsg); err != nil {
 		h.logger.WithError(err).WithField("server_id", client.ServerID).Error("Invalid metrics message format")
 		return err
 	}
 
-	// Log parsed metrics for debugging
+	// Debug: Log parsed metrics
 	h.logger.WithFields(logrus.Fields{
-		"server_id": client.ServerID,
-		"cpu":       metricsMsg.Metrics.CPU,
-		"cpu_usage": metricsMsg.Metrics.CPUUsage,
-	}).Info("Parsed metrics with CPU usage")
+		"server_id":              client.ServerID,
+		"parsed_cpu":             metricsMsg.Metrics.CPU,
+		"parsed_cpu_usage_total": metricsMsg.Metrics.CPUUsage.UsageTotal,
+		"parsed_cpu_usage_cores": metricsMsg.Metrics.CPUUsage.Cores,
+	}).Info("DEBUG: Parsed metrics values")
 
 	// Store metrics in Redis
 	if err := h.storage.StoreMetric(ctx, client.ServerID, &metricsMsg.Metrics); err != nil {
