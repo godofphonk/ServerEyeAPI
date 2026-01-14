@@ -69,8 +69,8 @@ jobs:
         
     - name: Build and push Docker image with unique tag
       run: |
-        # Create unique tag to avoid any caching
-        UNIQUE_TAG="production-${{ env.VERSION }}-${{ env.BUILD_DATE }}"
+        # Create unique tag to avoid any caching (replace colons with dashes)
+        UNIQUE_TAG="production-${{ github.sha }}-$(date -u +'%Y-%m-%dT%H-%M-%SZ')"
         echo "Building with unique tag: $UNIQUE_TAG"
         
         # Build image with no-cache and unique tag
@@ -108,8 +108,8 @@ jobs:
         script: |
           cd /opt/servereye
           
-          # Set variables
-          UNIQUE_TAG="production-${{ github.sha }}-$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          # Set variables (replace colons with dashes for Docker tag compatibility)
+          UNIQUE_TAG="production-${{ github.sha }}-$(date -u +'%Y-%m-%dT%H-%M-%SZ')"
           IMAGE_NAME="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
           
           echo "Deploying image: $IMAGE_NAME:$UNIQUE_TAG"
