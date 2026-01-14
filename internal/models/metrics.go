@@ -38,6 +38,20 @@ type ServerMetrics struct {
 		UsedPercent float64 `json:"used_percent"` // Disk usage percentage (0-100)
 		Filesystem  string  `json:"filesystem"`   // Filesystem type
 	} `json:"disk_details"` // Detailed disk statistics for all mounts
+	NetworkDetails struct {
+		Interfaces []struct {
+			Name        string  `json:"name"`          // Interface name (e.g., eth0, enp111s0)
+			RxBytes     int64   `json:"rx_bytes"`      // Total received bytes
+			TxBytes     int64   `json:"tx_bytes"`      // Total transmitted bytes
+			RxPackets   int64   `json:"rx_packets"`    // Total received packets
+			TxPackets   int64   `json:"tx_packets"`    // Total transmitted packets
+			RxSpeedMbps float64 `json:"rx_speed_mbps"` // Current receive speed in Mbps
+			TxSpeedMbps float64 `json:"tx_speed_mbps"` // Current transmit speed in Mbps
+			Status      string  `json:"status"`        // Interface status (up/down)
+		} `json:"interfaces"` // Network interfaces list
+		TotalRxMbps float64 `json:"total_rx_mbps"` // Total receive speed across all interfaces
+		TotalTxMbps float64 `json:"total_tx_mbps"` // Total transmit speed across all interfaces
+	} `json:"network_details"` // Detailed network statistics
 	Time time.Time `json:"time"` // Timestamp when metrics were collected
 }
 
