@@ -68,6 +68,7 @@ jobs:
           type=ref,event=pr
           type=sha,prefix={{branch}}-
           type=raw,value=latest,enable={{is_default_branch}}
+          type=raw,value=production,enable={{github.ref == 'refs/heads/production'}}
           
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -77,10 +78,14 @@ jobs:
       with:
         context: .
         push: true
-        tags: ${{ steps.meta.outputs.tags }}
+        tags: |
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
         labels: ${{ steps.meta.outputs.labels }}
         cache-from: type=gha
         cache-to: type=gha,mode=max
+        no-cache: false
+        pull: true
 
   deploy-production:
     needs: build-and-push
@@ -192,8 +197,14 @@ jobs:
           docker-compose exec -T postgres /bin/bash -c "cd /migrations && ./migrate.sh"
 
           # Pull new image
+          echo "Pulling new image with force update..."
+          docker image rm ghcr.io/godofphonk/servereyeapi:production || true
           docker pull ghcr.io/godofphonk/servereyeapi:production
           docker tag ghcr.io/godofphonk/servereyeapi:production servereye-api:latest
+          
+          # Verify image was updated
+          echo "Verifying image update..."
+          docker inspect ghcr.io/godofphonk/servereyeapi:production | grep Created
           
           # Start new version
           docker-compose up -d
