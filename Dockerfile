@@ -53,6 +53,9 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=builder /app/servereye-api .
 
+# Copy source code for verification
+COPY --from=builder /app/internal ./internal
+
 # Copy .env.example as template
 COPY .env.example .env.example
 
