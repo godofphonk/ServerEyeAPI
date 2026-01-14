@@ -50,7 +50,7 @@ func (h *MessageHandlers) HandleMetrics(ctx context.Context, client *Client, msg
 		"server_id": client.ServerID,
 		"data_keys": len(msg.Data),
 		"raw_json":  string(dataBytes),
-	}).Info("DEBUG: Incoming WebSocket data")
+	}).Info("INFO: Incoming WebSocket data")
 
 	if err := json.Unmarshal(dataBytes, &metricsMsg); err != nil {
 		h.logger.WithError(err).WithField("server_id", client.ServerID).Error("Invalid metrics message format")
@@ -63,7 +63,7 @@ func (h *MessageHandlers) HandleMetrics(ctx context.Context, client *Client, msg
 		"parsed_cpu":             metricsMsg.Metrics.CPU,
 		"parsed_cpu_usage_total": metricsMsg.Metrics.CPUUsage.UsageTotal,
 		"parsed_cpu_usage_cores": metricsMsg.Metrics.CPUUsage.Cores,
-	}).Info("DEBUG: Parsed metrics values")
+	}).Info("INFO: Parsed metrics values")
 
 	// Store metrics in Redis
 	if err := h.storage.StoreMetric(ctx, client.ServerID, &metricsMsg.Metrics); err != nil {
