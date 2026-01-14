@@ -101,6 +101,11 @@ jobs:
         fi
         echo "✅ Test changes found in build directory!"
         
+        # FORCE CHANGE THE FILE TO BREAK ANY CACHING
+        echo "=== Force changing handlers.go to break caching ==="
+        echo "// FORCE REBUILD $(date +%s)" >> internal/websocket/handlers.go
+        echo "✅ File timestamp and content changed!"
+        
         # Force rebuild everything
         echo "=== Building Docker image ==="
         docker system prune -a -f
