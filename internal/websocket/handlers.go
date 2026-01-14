@@ -32,6 +32,9 @@ func (h *MessageHandlers) HandleAuth(ctx context.Context, client *Client, msg mo
 
 // HandleMetrics handles metrics messages from agents
 func (h *MessageHandlers) HandleMetrics(ctx context.Context, client *Client, msg models.WSMessage) error {
+	// TEST LOG: Simple CI/CD verification
+	h.logger.WithField("server_id", client.ServerID).Info("CI/CD TEST: HandleMetrics called at " + time.Now().Format("2006-01-02 15:04:05"))
+
 	if msg.Data == nil {
 		h.logger.WithField("server_id", client.ServerID).Warn("Metrics message has no data")
 		return nil
