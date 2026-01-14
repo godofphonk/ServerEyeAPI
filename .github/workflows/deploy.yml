@@ -119,7 +119,25 @@ jobs:
           --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$UNIQUE_TAG \
           --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production \
           --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
-          .
+          . || {
+            echo "Docker build failed, trying with Go cache cleanup..."
+            # Clean Go build cache in the temp directory
+            go clean -cache -modcache
+            rm -rf $GOPATH/pkg/mod
+            rm -rf $GOCACHE
+            # Try building again
+            docker build \
+              --no-cache \
+              --pull \
+              --force-rm \
+              --build-arg BUILD_DATE=${{ env.BUILD_DATE }} \
+              --build-arg VERSION=${{ env.VERSION }} \
+              --build-arg COMMIT_SHA=${{ env.COMMIT_SHA }} \
+              --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$UNIQUE_TAG \
+              --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production \
+              --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
+              .
+          }
         
         # Verify test changes are in the built image
         echo "Verifying test changes in built image..."
