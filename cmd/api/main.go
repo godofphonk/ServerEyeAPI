@@ -33,6 +33,9 @@ func main() {
 		logger.WithError(err).Fatal("Failed to initialize server")
 	}
 
+	// CI/CD TEST: Log at startup for verification
+	logger.Info("CI/CD TEST: Application started successfully at " + time.Now().Format("2006-01-02 15:04:05"))
+
 	// Start server in goroutine
 	go func() {
 		if err := server.Start(); err != nil {
