@@ -27,11 +27,12 @@ RUN go clean -cache -modcache && \
     go mod download -x && \
     go mod verify
 
-# Build the application with timestamp to force rebuild
+# Build the application with timestamp to force rebuild - use touch to force rebuild
 ARG BUILD_DATE
 ARG VERSION
 ARG COMMIT_SHA
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s -X main.BuildDate=${BUILD_DATE} -X main.Version=${VERSION} -X main.CommitSHA=${COMMIT_SHA}" -o /app/servereye-api ./cmd/api
+RUN touch internal/websocket/handlers.go && \
+    CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s -X main.BuildDate=${BUILD_DATE} -X main.Version=${VERSION} -X main.CommitSHA=${COMMIT_SHA}" -o /app/servereye-api ./cmd/api
 
 # Final stage
 FROM alpine:latest
