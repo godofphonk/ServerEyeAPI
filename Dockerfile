@@ -20,11 +20,22 @@ COPY . .
 RUN go install github.com/google/wire/cmd/wire@latest
 RUN go generate ./internal/wire
 
-# Build the application with timestamp to force rebuild
+# Force clean Go cache and rebuild with fresh modules
+RUN go clean -cache -modcache && \
+    rm -rf /root/.cache/go-build && \
+    rm -rf /root/go/pkg/mod && \
+    go mod download -x && \
+    go mod verify
+
+# Build the application with timestamp to force rebuild - use complete rebuild
 ARG BUILD_DATE
 ARG VERSION
 ARG COMMIT_SHA
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-w -s -X main.BuildDate=${BUILD_DATE} -X main.Version=${VERSION} -X main.CommitSHA=${COMMIT_SHA}" -o /app/servereye-api ./cmd/api
+RUN rm -rf /app/servereye-api && \
+    rm -rf /app/internal/websocket/*.o && \
+    rm -rf /app/internal/websocket/*.a && \
+    go clean -cache && \
+    CGO_ENABLED=0 GOOS=linux go build -a -ldflags="-w -s -X main.BuildDate=${BUILD_DATE} -X main.Version=${VERSION} -X main.CommitSHA=${COMMIT_SHA}" -o /app/servereye-api ./cmd/api
 
 # Final stage
 FROM alpine:latest
@@ -41,6 +52,9 @@ WORKDIR /app
 
 # Copy binary from builder
 COPY --from=builder /app/servereye-api .
+
+# Copy source code for verification
+COPY --from=builder /app/internal ./internal
 
 # Copy .env.example as template
 COPY .env.example .env.example
