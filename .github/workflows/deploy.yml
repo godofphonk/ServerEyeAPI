@@ -133,11 +133,24 @@ jobs:
         
         # Verify the build
         echo "=== Verifying built image ==="
-        if ! docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$UNIQUE_TAG grep -q "CI/CD TEST" /app/servereye-api; then
-          echo "❌ Test changes NOT found in built image!"
+        
+        # Check for FORCE REBUILD comment first
+        if ! docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$UNIQUE_TAG grep -q "FORCE REBUILD" /app/servereye-api; then
+          echo "❌ Force rebuild comment NOT found in built image!"
+          echo "Checking what's actually in the binary..."
+          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$UNIQUE_TAG strings /app/servereye-api | grep -i "force\|rebuild\|test" | head -10
           exit 1
         fi
-        echo "✅ Test changes found in built image!"
+        echo "✅ Force rebuild comment found in built image!"
+        
+        # Check for CI/CD TEST
+        if ! docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$UNIQUE_TAG grep -q "CI/CD TEST" /app/servereye-api; then
+          echo "❌ CI/CD TEST NOT found in built image!"
+          echo "Checking what's actually in the binary..."
+          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$UNIQUE_TAG strings /app/servereye-api | grep -i "test\|metrics\|websocket" | head -10
+          exit 1
+        fi
+        echo "✅ CI/CD TEST found in built image!"
         
         # Push all tags
         echo "=== Pushing images ==="
