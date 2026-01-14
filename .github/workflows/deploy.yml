@@ -73,10 +73,30 @@ jobs:
         UNIQUE_TAG="production-${{ github.sha }}-$(date -u +'%Y-%m-%dT%H-%M-%SZ')"
         echo "Building with unique tag: $UNIQUE_TAG"
         
+        # Force clean git repository to avoid any caching
+        echo "Cleaning git repository..."
+        git clean -fdx
+        git reset --hard HEAD
+        git fetch --all --prune
+        
+        # Verify our changes are present
+        echo "Verifying test changes in git..."
+        if grep -q "CI/CD TEST" internal/websocket/handlers.go; then
+          echo "✅ Test changes found in git!"
+        else
+          echo "❌ Test changes NOT found in git!"
+          echo "Current git status:"
+          git status
+          echo "Contents of handlers.go:"
+          head -20 internal/websocket/handlers.go
+          exit 1
+        fi
+        
         # Build image with no-cache and unique tag
         docker build \
           --no-cache \
           --pull \
+          --force-rm \
           --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$UNIQUE_TAG \
           --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production \
           --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
@@ -84,6 +104,17 @@ jobs:
           --build-arg VERSION=${{ env.VERSION }} \
           --build-arg COMMIT_SHA=${{ env.COMMIT_SHA }} \
           .
+        
+        # Verify test changes are in the built image
+        echo "Verifying test changes in built image..."
+        if docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$UNIQUE_TAG grep -q "CI/CD TEST" /app/servereye-api; then
+          echo "✅ Test changes found in built image!"
+        else
+          echo "❌ Test changes NOT found in built image!"
+          echo "Built image does not contain our changes!"
+          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$UNIQUE_TAG strings /app/servereye-api | grep -i "ci/cd test" || echo "No CI/CD test found"
+          exit 1
+        fi
         
         # Push all tags
         docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$UNIQUE_TAG
