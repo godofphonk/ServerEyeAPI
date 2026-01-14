@@ -92,7 +92,23 @@ jobs:
           exit 1
         fi
         
-        # Build image with no-cache and unique tag
+        # Create a temporary directory to avoid any filesystem caching
+        TEMP_DIR=$(mktemp -d)
+        echo "Using temporary directory: $TEMP_DIR"
+        
+        # Copy all files to temp directory to avoid any caching issues
+        cp -r . $TEMP_DIR/
+        cd $TEMP_DIR
+        
+        # Verify files are copied correctly
+        if grep -q "CI/CD TEST" internal/websocket/handlers.go; then
+          echo "✅ Test changes found in temp directory!"
+        else
+          echo "❌ Test changes NOT found in temp directory!"
+          exit 1
+        fi
+        
+        # Build image with no-cache and unique tag from temp directory
         docker build \
           --no-cache \
           --pull \
@@ -112,7 +128,9 @@ jobs:
         else
           echo "❌ Test changes NOT found in built image!"
           echo "Built image does not contain our changes!"
-          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$UNIQUE_TAG strings /app/servereye-api | grep -i "ci/cd test" || echo "No CI/CD test found"
+          echo "Checking what's actually in the binary..."
+          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$UNIQUE_TAG strings /app/servereye-api | grep -i "handlemetrics" | head -5
+          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$UNIQUE_TAG strings /app/servereye-api | grep -i "test" | head -5
           exit 1
         fi
         
