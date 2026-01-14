@@ -97,12 +97,12 @@ jobs:
           --no-cache \
           --pull \
           --force-rm \
-          --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$UNIQUE_TAG \
-          --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production \
-          --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
           --build-arg BUILD_DATE=${{ env.BUILD_DATE }} \
           --build-arg VERSION=${{ env.VERSION }} \
           --build-arg COMMIT_SHA=${{ env.COMMIT_SHA }} \
+          --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$UNIQUE_TAG \
+          --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production \
+          --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
           .
         
         # Verify test changes are in the built image
