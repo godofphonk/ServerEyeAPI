@@ -53,13 +53,7 @@ jobs:
       with:
         fetch-depth: 0
         clean: true
-        
-    - name: Set BUILD_DATE and VERSION
-      run: |
-        echo "BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_ENV
-        echo "VERSION=${{ github.sha }}" >> $GITHUB_ENV
-        echo "COMMIT_SHA=${{ github.sha }}" >> $GITHUB_ENV
-        
+      
     - name: Log in to Container Registry
       uses: docker/login-action@v3
       with:
@@ -67,31 +61,41 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
         
-    - name: Build and push Docker image with unique tag
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+          type=raw,value=production,enable=${{ github.ref == 'refs/heads/production' }}
+          type=raw,value=${{ github.sha }}
+          
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      with:
+        driver: docker-container
+        driver-opts: |
+          image=moby/buildkit:buildx-stable-1
+          
+    - name: Clear Docker BuildKit cache
       run: |
-        # Create unique tag to avoid any caching
-        UNIQUE_TAG="production-${{ env.VERSION }}-${{ env.BUILD_DATE }}"
-        echo "Building with unique tag: $UNIQUE_TAG"
+        docker buildx prune --force --all
         
-        # Build image with no-cache and unique tag
-        docker build \
-          --no-cache \
-          --pull \
-          --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$UNIQUE_TAG \
-          --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production \
-          --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
-          --build-arg BUILD_DATE=${{ env.BUILD_DATE }} \
-          --build-arg VERSION=${{ env.VERSION }} \
-          --build-arg COMMIT_SHA=${{ env.COMMIT_SHA }} \
-          .
-        
-        # Push all tags
-        docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$UNIQUE_TAG
-        docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production
-        docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-        
-        # Store unique tag for deployment
-        echo "UNIQUE_TAG=$UNIQUE_TAG" >> $GITHUB_ENV
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        push: true
+        tags: |
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production
+          ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+        labels: ${{ steps.meta.outputs.labels }}
+        no-cache: true
+        pull: true
 
   deploy-production:
     needs: build-and-push
@@ -107,12 +111,6 @@ jobs:
         key: ${{ secrets.PROD_SSH_KEY }}
         script: |
           cd /opt/servereye
-          
-          # Set variables
-          UNIQUE_TAG="production-${{ github.sha }}-$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
-          IMAGE_NAME="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
-          
-          echo "Deploying image: $IMAGE_NAME:$UNIQUE_TAG"
           
           # Copy updated schema from repository
           echo "Using updated database schema with Wire DI support..."
@@ -161,7 +159,7 @@ jobs:
                 POSTGRES_USER: postgres
                 POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
               volumes:
-                - postgres_data:/var/lib/postgres/data
+                - postgres_data:/var/lib/postgresql/data
                 - ./deployments:/migrations:ro
               networks:
                 - servereye-network
@@ -195,78 +193,54 @@ jobs:
               driver: bridge
           EOF
 
-          # Stop and remove everything completely
-          echo "Stopping all services..."
-          docker-compose down -v --remove-orphans || true
-          docker stop servereye-api || true
-          docker rm servereye-api || true
-          
-          # Clean up all Docker images and containers
-          echo "Cleaning up Docker..."
-          docker system prune -a -f
-          docker volume prune -f
-          
-          # Pull fresh image with unique tag
-          echo "Pulling new image: $IMAGE_NAME:$UNIQUE_TAG"
-          docker pull $IMAGE_NAME:$UNIQUE_TAG
-          
-          # Tag as production and latest
-          docker tag $IMAGE_NAME:$UNIQUE_TAG $IMAGE_NAME:production
-          docker tag $IMAGE_NAME:$UNIQUE_TAG $IMAGE_NAME:latest
-          
-          # Verify image contains our changes
-          echo "Verifying image contains test changes..."
-          if docker run --rm $IMAGE_NAME:production grep -q "CI/CD TEST" /app/servereye-api; then
-            echo "✅ Test changes found in image!"
-          else
-            echo "❌ Test changes NOT found in image!"
-            docker run --rm $IMAGE_NAME:production ls -la /app/
-            docker run --rm $IMAGE_NAME:production grep -n "CI/CD TEST" /app/servereye-api || echo "CI/CD TEST NOT FOUND"
-            exit 1
-          fi
-          
-          # Start database services
-          echo "Starting database services..."
+          # Backup current version
+          docker-compose down
+          docker tag servereye-api:latest servereye-api:backup
+
+          # Apply database migrations using script
+          echo "Applying database migrations..."
           docker-compose up -d postgres redis
           sleep 15
           
-          # Apply database migrations
-          echo "Applying database migrations..."
-          chmod +x ./deployments/migrate.sh || true
-          docker-compose exec -T postgres /bin/bash -c "cd /migrations && ./migrate.sh" || echo "Migration script not found, continuing..."
+          # Make migration script executable and run it
+          chmod +x ./deployments/migrate.sh
+          docker-compose exec -T postgres /bin/bash -c "cd /migrations && ./migrate.sh"
+
+          # Pull new image
+          echo "Pulling new image with force update..."
+          docker image rm ghcr.io/godofphonk/servereyeapi:production || true
+          docker pull ghcr.io/godofphonk/servereyeapi:production
+          docker tag ghcr.io/godofphonk/servereyeapi:production servereye-api:latest
           
-          # Start main application
-          echo "Starting main application..."
-          docker-compose up -d servereye-api
+          # Verify image was updated
+          echo "Verifying image update..."
+          docker inspect ghcr.io/godofphonk/servereyeapi:production | grep Created
           
+          # Start new version
+          docker-compose up -d
+
           # Wait for services to be ready
           echo "Waiting for services to start..."
           sleep 30
-          
-          # Check logs for test message
-          echo "Checking for test logs..."
-          sleep 10
-          
-          # Health check
+
+          # Check logs
+          echo "Checking API logs..."
+          docker logs servereye-api
+
+          # Health check with more time
           echo "Performing health check..."
-          if curl -f http://localhost:8080/health; then
-            echo "✅ Health check passed!"
-            echo "Checking for CI/CD TEST logs..."
-            sleep 10
-            if docker logs servereye-api 2>&1 | grep -q "CI/CD TEST"; then
-              echo "✅ CI/CD TEST logs found!"
-            else
-              echo "❌ CI/CD TEST logs NOT found!"
-              docker logs servereye-api --tail 20
-            fi
-          else
-            echo "❌ Health check failed!"
-            docker logs servereye-api --tail 50
-            docker logs servereye-redis --tail 20
-            docker logs servereye-postgres --tail 20
+          sleep 60
+          if ! curl -f http://localhost:8080/health; then
+            echo "Health check failed, checking logs..."
+            docker logs servereye-api
+            docker logs servereye-redis
+            docker logs servereye-postgres
+            echo "Rolling back..."
+            docker-compose down
+            docker tag servereye-api:backup servereye-api:latest
+            docker-compose up -d
             exit 1
           fi
-          
-          # Final cleanup
+          # Cleanup
           docker image prune -f
-          echo "Production deployment successful!"
+          echo "Production deployment successful! Redis integration enabled."
