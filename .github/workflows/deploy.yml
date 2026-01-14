@@ -106,6 +106,13 @@ jobs:
         echo "// FORCE REBUILD $(date +%s)" >> internal/websocket/handlers.go
         echo "✅ File timestamp and content changed!"
         
+        # Verify the change was made
+        if ! grep -q "FORCE REBUILD" internal/websocket/handlers.go; then
+          echo "❌ Force rebuild comment NOT found!"
+          exit 1
+        fi
+        echo "✅ Force rebuild comment verified!"
+        
         # Force rebuild everything
         echo "=== Building Docker image ==="
         docker system prune -a -f
