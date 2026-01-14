@@ -75,7 +75,15 @@ jobs:
           
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
-      
+      with:
+        driver: docker-container
+        driver-opts: |
+          image=moby/buildkit:buildx-stable-1
+          
+    - name: Clear Docker BuildKit cache
+      run: |
+        docker buildx prune --force --all
+        
     - name: Build and push Docker image
       uses: docker/build-push-action@v6
       with:
