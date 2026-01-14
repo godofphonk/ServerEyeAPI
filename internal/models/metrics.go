@@ -64,6 +64,18 @@ type ServerMetrics struct {
 		HighestTemperature float64 `json:"highest_temperature"` // Highest temperature across all sensors
 		TemperatureUnit    string  `json:"temperature_unit"`    // Temperature unit (celsius)
 	} `json:"temperature_details"` // Detailed temperature monitoring
+	SystemDetails struct {
+		Hostname          string `json:"hostname"`           // System hostname
+		OS                string `json:"os"`                 // Operating system name and version
+		Kernel            string `json:"kernel"`             // Kernel version
+		Architecture      string `json:"architecture"`       // System architecture (x86_64, arm64, etc.)
+		UptimeSeconds     int64  `json:"uptime_seconds"`     // System uptime in seconds
+		UptimeHuman       string `json:"uptime_human"`       // Human-readable uptime format
+		BootTime          string `json:"boot_time"`          // System boot timestamp
+		ProcessesTotal    int    `json:"processes_total"`    // Total number of processes
+		ProcessesRunning  int    `json:"processes_running"`  // Number of running processes
+		ProcessesSleeping int    `json:"processes_sleeping"` // Number of sleeping processes
+	} `json:"system_details"` // Detailed system information
 	Time time.Time `json:"time"` // Timestamp when metrics were collected
 }
 
