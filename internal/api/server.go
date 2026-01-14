@@ -77,6 +77,7 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 
 	// Initialize services with repositories
 	authService := services.NewAuthService(keyRepo, serverRepo, logger)
+	serverService := services.NewServerService(serverRepo, keyRepo, logger)
 	metricsService := services.NewMetricsService(keyRepo, storageImpl, logger)
 	commandsService := services.NewCommandsService(keyRepo, logger)
 
@@ -85,6 +86,7 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 	healthHandler := handlers.NewHealthHandler(storageImpl, logger)
 	metricsHandler := handlers.NewMetricsHandler(metricsService, logger)
 	serversHandler := handlers.NewServersHandler(storageImpl, logger)
+	serverSourcesHandler := handlers.NewServerSourcesHandler(serverService, logger)
 	commandsHandler := handlers.NewCommandsHandler(commandsService, logger)
 
 	// Setup routes
@@ -93,6 +95,7 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 		healthHandler,
 		metricsHandler,
 		serversHandler,
+		serverSourcesHandler,
 		commandsHandler,
 		wsServer,
 		storageImpl,

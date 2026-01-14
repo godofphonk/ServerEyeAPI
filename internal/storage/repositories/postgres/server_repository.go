@@ -59,7 +59,7 @@ func (r *ServerRepository) Create(ctx context.Context, server *models.Server) er
 // GetByID retrieves a server by ID
 func (r *ServerRepository) GetByID(ctx context.Context, id string) (*models.Server, error) {
 	query := `
-		SELECT server_id, server_key, hostname, os_info, agent_version, status, last_seen, created_at, updated_at
+		SELECT server_id, server_key, hostname, os_info, agent_version, status, sources, last_seen, created_at, updated_at
 		FROM servers
 		WHERE server_id = $1
 	`
@@ -72,6 +72,7 @@ func (r *ServerRepository) GetByID(ctx context.Context, id string) (*models.Serv
 		&server.OSInfo,
 		&server.AgentVersion,
 		&server.Status,
+		&server.Sources,
 		&server.LastSeen,
 		&server.CreatedAt,
 		&server.UpdatedAt,
@@ -338,6 +339,36 @@ func (r *ServerRepository) UpdateLastSeen(ctx context.Context, serverID string, 
 	if rowsAffected == 0 {
 		return fmt.Errorf("no rows affected when updating last seen for server_id: %s", serverID)
 	}
+
+	return nil
+}
+
+// UpdateSources updates server sources
+func (r *ServerRepository) UpdateSources(ctx context.Context, serverID string, sources string) error {
+	query := `
+		UPDATE servers
+		SET sources = $2, updated_at = $3
+		WHERE server_id = $1
+	`
+
+	result, err := r.db.ExecContext(ctx, query, serverID, sources, time.Now())
+	if err != nil {
+		return fmt.Errorf("failed to update server sources: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("no rows affected when updating sources for server_id: %s", serverID)
+	}
+
+	r.logger.WithFields(logrus.Fields{
+		"server_id": serverID,
+		"sources":   sources,
+	}).Info("Server sources updated successfully")
 
 	return nil
 }

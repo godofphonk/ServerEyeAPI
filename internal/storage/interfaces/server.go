@@ -24,6 +24,7 @@ type ServerRepository interface {
 	// Status operations
 	UpdateStatus(ctx context.Context, serverID string, status string) error
 	UpdateLastSeen(ctx context.Context, serverID string, lastSeen time.Time) error
+	UpdateSources(ctx context.Context, serverID string, sources string) error
 
 	// Health check
 	Ping(ctx context.Context) error

@@ -18,6 +18,7 @@ type Server struct {
 	OSInfo       string    `json:"os_info" db:"os_info"`
 	AgentVersion string    `json:"agent_version" db:"agent_version"`
 	Status       string    `json:"status" db:"status"`
+	Sources      string    `json:"sources" db:"sources"` // TGBot, Web, TGBot,Web etc.
 	LastSeen     time.Time `json:"last_seen" db:"last_seen"`
 	CreatedAt    time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at" db:"updated_at"`

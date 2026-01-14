@@ -33,17 +33,15 @@ func (h *MetricsHandler) GetServerMetrics(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	status, err := h.metricsService.GetServerMetrics(r.Context(), serverID)
+	// Get complete metrics with status
+	response, err := h.metricsService.GetServerMetricsWithStatus(r.Context(), serverID)
 	if err != nil {
 		h.logger.WithError(err).WithField("server_id", serverID).Error("Failed to get server metrics")
 		h.writeError(w, "Failed to get server metrics", http.StatusInternalServerError)
 		return
 	}
 
-	h.writeJSON(w, http.StatusOK, map[string]interface{}{
-		"server_id": serverID,
-		"status":    status,
-	})
+	h.writeJSON(w, http.StatusOK, response)
 }
 
 // writeJSON writes JSON response

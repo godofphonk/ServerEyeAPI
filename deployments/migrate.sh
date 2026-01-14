@@ -38,5 +38,6 @@ apply_migration() {
 apply_migration "/migrations/init-schema.sql" "Initial schema"
 apply_migration "/migrations/migration-001-server-keys.sql" "Server keys migration"  
 apply_migration "/migrations/migration-002-fix-server-table.sql" "Server table fix"
+apply_migration "/migrations/migration-003-add-sources-column.sql" "Add sources column"
 
 echo "🎉 All migrations completed!"

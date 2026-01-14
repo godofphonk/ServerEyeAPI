@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -267,4 +268,90 @@ func (s *ServerService) Ping(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// AddServerSource adds a source (TGBot/Web) to a server
+func (s *ServerService) AddServerSource(ctx context.Context, serverID, source string) error {
+	// Get current server info
+	server, err := s.serverRepo.GetByID(ctx, serverID)
+	if err != nil {
+		return fmt.Errorf("server not found: %w", err)
+	}
+
+	// Parse current sources
+	currentSources := server.Sources
+	if currentSources == "" {
+		currentSources = source
+	} else {
+		// Check if source already exists
+		sources := strings.Split(currentSources, ",")
+		for _, src := range sources {
+			if strings.TrimSpace(src) == source {
+				return fmt.Errorf("source %s already exists for server", source)
+			}
+		}
+		// Add new source
+		currentSources += "," + source
+	}
+
+	// Update server sources
+	return s.serverRepo.UpdateSources(ctx, serverID, currentSources)
+}
+
+// GetServerSources gets all sources for a server
+func (s *ServerService) GetServerSources(ctx context.Context, serverID string) ([]string, error) {
+	server, err := s.serverRepo.GetByID(ctx, serverID)
+	if err != nil {
+		return nil, fmt.Errorf("server not found: %w", err)
+	}
+
+	if server.Sources == "" {
+		return []string{}, nil
+	}
+
+	sources := strings.Split(server.Sources, ",")
+	for i, src := range sources {
+		sources[i] = strings.TrimSpace(src)
+	}
+
+	return sources, nil
+}
+
+// RemoveServerSource removes a source from a server
+func (s *ServerService) RemoveServerSource(ctx context.Context, serverID, source string) error {
+	// Get current server info
+	server, err := s.serverRepo.GetByID(ctx, serverID)
+	if err != nil {
+		return fmt.Errorf("server not found: %w", err)
+	}
+
+	if server.Sources == "" {
+		return fmt.Errorf("no sources to remove")
+	}
+
+	// Parse and remove source
+	sources := strings.Split(server.Sources, ",")
+	var newSources []string
+	found := false
+
+	for _, src := range sources {
+		src = strings.TrimSpace(src)
+		if src == source {
+			found = true
+			continue // Skip this source
+		}
+		newSources = append(newSources, src)
+	}
+
+	if !found {
+		return fmt.Errorf("source %s not found for server", source)
+	}
+
+	// Update server sources
+	var newSourcesStr string
+	if len(newSources) > 0 {
+		newSourcesStr = strings.Join(newSources, ",")
+	}
+
+	return s.serverRepo.UpdateSources(ctx, serverID, newSourcesStr)
 }
