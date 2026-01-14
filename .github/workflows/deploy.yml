@@ -67,48 +67,46 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
         
-    - name: Build and push Docker image with unique tag
+    - name: Build and push Docker image
       run: |
-        # Create unique tag to avoid any caching (replace colons with dashes)
+        # Create unique tag
         UNIQUE_TAG="production-${{ github.sha }}-$(date -u +'%Y-%m-%dT%H-%M-%SZ')"
         echo "Building with unique tag: $UNIQUE_TAG"
         
-        # Force clean git repository to avoid any caching
-        echo "Cleaning git repository..."
+        # Force clean everything
+        echo "=== Cleaning git repository ==="
         git clean -fdx
         git reset --hard HEAD
         git fetch --all --prune
         
-        # Verify our changes are present
-        echo "Verifying test changes in git..."
-        if grep -q "CI/CD TEST" internal/websocket/handlers.go; then
-          echo "✅ Test changes found in git!"
-        else
+        # Verify our changes exist
+        echo "=== Verifying test changes ==="
+        if ! grep -q "CI/CD TEST" internal/websocket/handlers.go; then
           echo "❌ Test changes NOT found in git!"
-          echo "Current git status:"
-          git status
-          echo "Contents of handlers.go:"
-          head -20 internal/websocket/handlers.go
           exit 1
         fi
+        echo "✅ Test changes found in git!"
         
-        # Create a temporary directory to avoid any filesystem caching
-        TEMP_DIR=$(mktemp -d)
-        echo "Using temporary directory: $TEMP_DIR"
+        # Create completely isolated build environment
+        echo "=== Creating isolated build environment ==="
+        BUILD_DIR="/tmp/servereye-build-$(date +%s)"
+        mkdir -p $BUILD_DIR
+        cp -r . $BUILD_DIR/
+        cd $BUILD_DIR
         
-        # Copy all files to temp directory to avoid any caching issues
-        cp -r . $TEMP_DIR/
-        cd $TEMP_DIR
-        
-        # Verify files are copied correctly
-        if grep -q "CI/CD TEST" internal/websocket/handlers.go; then
-          echo "✅ Test changes found in temp directory!"
-        else
-          echo "❌ Test changes NOT found in temp directory!"
+        # Verify files copied correctly
+        if ! grep -q "CI/CD TEST" internal/websocket/handlers.go; then
+          echo "❌ Test changes NOT found in build directory!"
           exit 1
         fi
+        echo "✅ Test changes found in build directory!"
         
-        # Build image with no-cache and unique tag from temp directory
+        # Force rebuild everything
+        echo "=== Building Docker image ==="
+        docker system prune -a -f
+        docker builder prune -a -f
+        
+        # Build with explicit context and no caching
         docker build \
           --no-cache \
           --pull \
@@ -119,46 +117,23 @@ jobs:
           --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$UNIQUE_TAG \
           --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production \
           --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
-          . || {
-            echo "Docker build failed, trying with Go cache cleanup..."
-            # Clean Go build cache in the temp directory
-            go clean -cache -modcache
-            rm -rf $GOPATH/pkg/mod
-            rm -rf $GOCACHE
-            # Try building again
-            docker build \
-              --no-cache \
-              --pull \
-              --force-rm \
-              --build-arg BUILD_DATE=${{ env.BUILD_DATE }} \
-              --build-arg VERSION=${{ env.VERSION }} \
-              --build-arg COMMIT_SHA=${{ env.COMMIT_SHA }} \
-              --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$UNIQUE_TAG \
-              --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production \
-              --tag ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
-              .
-          }
+          .
         
-        # Verify test changes are in the built image
-        echo "Verifying test changes in built image..."
-        if docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$UNIQUE_TAG grep -q "CI/CD TEST" /app/servereye-api; then
-          echo "✅ Test changes found in built image!"
-        else
+        # Verify the build
+        echo "=== Verifying built image ==="
+        if ! docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$UNIQUE_TAG grep -q "CI/CD TEST" /app/servereye-api; then
           echo "❌ Test changes NOT found in built image!"
-          echo "Built image does not contain our changes!"
-          echo "Checking what's actually in the binary..."
-          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$UNIQUE_TAG strings /app/servereye-api | grep -i "handlemetrics" | head -5
-          docker run --rm ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$UNIQUE_TAG strings /app/servereye-api | grep -i "test" | head -5
           exit 1
         fi
+        echo "✅ Test changes found in built image!"
         
         # Push all tags
+        echo "=== Pushing images ==="
         docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$UNIQUE_TAG
         docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production
         docker push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
         
-        # Store unique tag for deployment
-        echo "UNIQUE_TAG=$UNIQUE_TAG" >> $GITHUB_ENV
+        echo "✅ Build and push completed successfully!"
 
   deploy-production:
     needs: build-and-push
@@ -175,17 +150,39 @@ jobs:
         script: |
           cd /opt/servereye
           
-          # Set variables (replace colons with dashes for Docker tag compatibility)
+          # Set variables
           UNIQUE_TAG="production-${{ github.sha }}-$(date -u +'%Y-%m-%dT%H-%M-%SZ')"
           IMAGE_NAME="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
           
-          echo "Deploying image: $IMAGE_NAME:$UNIQUE_TAG"
+          echo "=== Deploying image: $IMAGE_NAME:$UNIQUE_TAG ==="
           
-          # Copy updated schema from repository
-          echo "Using updated database schema with Wire DI support..."
+          # Stop everything completely
+          echo "=== Stopping all services ==="
+          docker-compose down -v --remove-orphans || true
+          docker stop servereye-api || true
+          docker rm servereye-api || true
           
-          # Create docker-compose.yml if not exists or update it
-          cat > docker-compose.yml << 'EOF'
+          # Clean up Docker completely
+          echo "=== Cleaning up Docker ==="
+          docker system prune -a -f
+          docker volume prune -f
+          
+          # Pull fresh image
+          echo "=== Pulling new image ==="
+          docker pull $IMAGE_NAME:$UNIQUE_TAG
+          docker tag $IMAGE_NAME:$UNIQUE_TAG $IMAGE_NAME:production
+          docker tag $IMAGE_NAME:$UNIQUE_TAG $IMAGE_NAME:latest
+          
+          # Verify image contains our changes
+          echo "=== Verifying image contains changes ==="
+          if ! docker run --rm $IMAGE_NAME:production grep -q "CI/CD TEST" /app/servereye-api; then
+            echo "❌ Test changes NOT found in production image!"
+            exit 1
+          fi
+          echo "✅ Test changes found in production image!"
+          
+          # Create docker-compose.yml
+          cat > docker-compose.yml << 'COMPOSE_EOF'
           services:
             servereye-api:
               image: ghcr.io/godofphonk/servereyeapi:production
@@ -228,7 +225,7 @@ jobs:
                 POSTGRES_USER: postgres
                 POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
               volumes:
-                - postgres_data:/var/lib/postgres/data
+                - postgres_data:/var/lib/postgresql/data
                 - ./deployments:/migrations:ro
               networks:
                 - servereye-network
@@ -260,73 +257,32 @@ jobs:
           networks:
             servereye-network:
               driver: bridge
-          EOF
+          COMPOSE_EOF
 
-          # Stop and remove everything completely
-          echo "Stopping all services..."
-          docker-compose down -v --remove-orphans || true
-          docker stop servereye-api || true
-          docker rm servereye-api || true
-          
-          # Clean up all Docker images and containers
-          echo "Cleaning up Docker..."
-          docker system prune -a -f
-          docker volume prune -f
-          
-          # Pull fresh image with unique tag
-          echo "Pulling new image: $IMAGE_NAME:$UNIQUE_TAG"
-          docker pull $IMAGE_NAME:$UNIQUE_TAG
-          
-          # Tag as production and latest
-          docker tag $IMAGE_NAME:$UNIQUE_TAG $IMAGE_NAME:production
-          docker tag $IMAGE_NAME:$UNIQUE_TAG $IMAGE_NAME:latest
-          
-          # Verify image contains our changes
-          echo "Verifying image contains test changes..."
-          if docker run --rm $IMAGE_NAME:production grep -q "CI/CD TEST" /app/servereye-api; then
-            echo "✅ Test changes found in image!"
-          else
-            echo "❌ Test changes NOT found in image!"
-            docker run --rm $IMAGE_NAME:production ls -la /app/
-            docker run --rm $IMAGE_NAME:production grep -n "CI/CD TEST" /app/servereye-api || echo "CI/CD TEST NOT FOUND"
-            exit 1
-          fi
-          
           # Start database services
-          echo "Starting database services..."
+          echo "=== Starting database services ==="
           docker-compose up -d postgres redis
           sleep 15
           
-          # Apply database migrations
-          echo "Applying database migrations..."
-          chmod +x ./deployments/migrate.sh || true
-          docker-compose exec -T postgres /bin/bash -c "cd /migrations && ./migrate.sh" || echo "Migration script not found, continuing..."
+          # Apply migrations if needed
+          echo "=== Applying migrations ==="
+          if [ -f "./deployments/migrate.sh" ]; then
+            chmod +x ./deployments/migrate.sh
+            docker-compose exec -T postgres /bin/bash -c "cd /migrations && ./migrate.sh" || echo "Migration completed or not needed"
+          fi
           
           # Start main application
-          echo "Starting main application..."
+          echo "=== Starting main application ==="
           docker-compose up -d servereye-api
           
-          # Wait for services to be ready
-          echo "Waiting for services to start..."
+          # Wait for services
+          echo "=== Waiting for services to start ==="
           sleep 30
           
-          # Check logs for test message
-          echo "Checking for test logs..."
-          sleep 10
-          
           # Health check
-          echo "Performing health check..."
-          if curl -f http://localhost:8080/health; then
-            echo "✅ Health check passed!"
-            echo "Checking for CI/CD TEST logs..."
-            sleep 10
-            if docker logs servereye-api 2>&1 | grep -q "CI/CD TEST"; then
-              echo "✅ CI/CD TEST logs found!"
-            else
-              echo "❌ CI/CD TEST logs NOT found!"
-              docker logs servereye-api --tail 20
-            fi
-          else
+          echo "=== Performing health check ==="
+          sleep 30
+          if ! curl -f http://localhost:8080/health; then
             echo "❌ Health check failed!"
             docker logs servereye-api --tail 50
             docker logs servereye-redis --tail 20
@@ -334,6 +290,17 @@ jobs:
             exit 1
           fi
           
+          # Check for CI/CD TEST logs
+          echo "=== Checking for CI/CD TEST logs ==="
+          sleep 10
+          if docker logs servereye-api 2>&1 | grep -q "CI/CD TEST"; then
+            echo "✅ CI/CD TEST logs found!"
+          else
+            echo "❌ CI/CD TEST logs NOT found!"
+            docker logs servereye-api --tail 30
+            exit 1
+          fi
+          
           # Final cleanup
           docker image prune -f
-          echo "Production deployment successful!"
+          echo "✅ Production deployment successful!"
