@@ -48,7 +48,7 @@ func (c *Client) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_generated_keys_server_id ON generated_keys (server_id);
 	CREATE INDEX IF NOT EXISTS idx_generated_keys_server_key ON generated_keys (server_key);
 
-	-- Create servers table for metadata
+	-- Create servers table for metadata (basic version for migration)
 	CREATE TABLE IF NOT EXISTS servers (
 		id BIGSERIAL PRIMARY KEY,
 		server_id TEXT UNIQUE NOT NULL,
@@ -82,6 +82,32 @@ func (c *Client) initSchema() error {
 	_, err := c.db.ExecContext(ctx, schema)
 	if err != nil {
 		return fmt.Errorf("failed to execute schema: %w", err)
+	}
+
+	// Always run migration to ensure columns exist
+	migration := `
+	-- Add server_key column to servers table if it doesn't exist
+	DO $$
+	BEGIN
+		IF NOT EXISTS (
+			SELECT 1 FROM information_schema.columns 
+			WHERE table_name='servers' AND column_name='server_key'
+		) THEN
+			ALTER TABLE servers ADD COLUMN server_key TEXT UNIQUE;
+		END IF;
+		
+		IF NOT EXISTS (
+			SELECT 1 FROM information_schema.columns 
+			WHERE table_name='servers' AND column_name='updated_at'
+		) THEN
+			ALTER TABLE servers ADD COLUMN updated_at TIMESTAMPTZ DEFAULT NOW();
+		END IF;
+	END $$;
+	`
+
+	_, err = c.db.ExecContext(ctx, migration)
+	if err != nil {
+		return fmt.Errorf("failed to execute migration: %w", err)
 	}
 
 	c.logger.Info("Database schema initialized successfully")
