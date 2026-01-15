@@ -57,7 +57,7 @@ func (s *ServerService) RegisterServer(ctx context.Context, req *RegisterServerR
 
 	// Generate unique server ID and key
 	serverID := fmt.Sprintf("srv_%s", uuid.New().String()[:8])
-	serverKey := fmt.Sprintf("key_%s", uuid.New().String()[:24])
+	serverKey := fmt.Sprintf("key_%s", uuid.New().String()[:8])
 
 	s.logger.WithFields(logrus.Fields{
 		"hostname":         req.Hostname,

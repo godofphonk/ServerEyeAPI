@@ -35,8 +35,8 @@ func ValidateServerID(id string) error {
 
 // ValidateServerKey validates server key format
 func ValidateServerKey(key string) error {
-	if len(key) < 10 {
-		return errors.New("server key must be at least 10 characters")
+	if len(key) < 5 {
+		return errors.New("server key must be at least 5 characters")
 	}
 
 	matched, _ := regexp.MatchString(`^key_[a-zA-Z0-9]+$`, key)
