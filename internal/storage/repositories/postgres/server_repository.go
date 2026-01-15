@@ -111,7 +111,7 @@ func (r *ServerRepository) GetByID(ctx context.Context, id string) (*models.Serv
 // GetByKey retrieves a server by server key
 func (r *ServerRepository) GetByKey(ctx context.Context, serverKey string) (*models.Server, error) {
 	query := `
-		SELECT server_id, server_key, hostname, os_info, agent_version, status, last_seen, created_at, updated_at
+		SELECT server_id, server_key, hostname, os_info, agent_version, status, sources, last_seen, created_at, updated_at
 		FROM servers
 		WHERE server_key = $1
 	`
@@ -124,6 +124,7 @@ func (r *ServerRepository) GetByKey(ctx context.Context, serverKey string) (*mod
 		&server.OSInfo,
 		&server.AgentVersion,
 		&server.Status,
+		&server.Sources,
 		&server.LastSeen,
 		&server.CreatedAt,
 		&server.UpdatedAt,
@@ -210,7 +211,7 @@ func (r *ServerRepository) List(ctx context.Context, opts ...interfaces.ListOpti
 	}
 
 	query := `
-		SELECT server_id, server_key, hostname, os_info, agent_version, status, last_seen, created_at, updated_at
+		SELECT server_id, server_key, hostname, os_info, agent_version, status, sources, last_seen, created_at, updated_at
 		FROM servers
 	`
 
@@ -252,6 +253,7 @@ func (r *ServerRepository) List(ctx context.Context, opts ...interfaces.ListOpti
 			&server.OSInfo,
 			&server.AgentVersion,
 			&server.Status,
+			&server.Sources,
 			&server.LastSeen,
 			&server.CreatedAt,
 			&server.UpdatedAt,
@@ -273,7 +275,7 @@ func (r *ServerRepository) ListByStatus(ctx context.Context, status string) ([]*
 // ListByHostname retrieves servers by hostname
 func (r *ServerRepository) ListByHostname(ctx context.Context, hostname string) ([]*models.Server, error) {
 	query := `
-		SELECT server_id, server_key, hostname, os_info, agent_version, status, last_seen, created_at, updated_at
+		SELECT server_id, server_key, hostname, os_info, agent_version, status, sources, last_seen, created_at, updated_at
 		FROM servers
 		WHERE hostname = $1
 		ORDER BY created_at DESC
@@ -295,6 +297,7 @@ func (r *ServerRepository) ListByHostname(ctx context.Context, hostname string) 
 			&server.OSInfo,
 			&server.AgentVersion,
 			&server.Status,
+			&server.Sources,
 			&server.LastSeen,
 			&server.CreatedAt,
 			&server.UpdatedAt,

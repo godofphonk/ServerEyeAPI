@@ -102,6 +102,13 @@ func (c *Client) initSchema() error {
 		) THEN
 			ALTER TABLE servers ADD COLUMN updated_at TIMESTAMPTZ DEFAULT NOW();
 		END IF;
+		
+		IF NOT EXISTS (
+			SELECT 1 FROM information_schema.columns 
+			WHERE table_name='servers' AND column_name='sources'
+		) THEN
+			ALTER TABLE servers ADD COLUMN sources TEXT;
+		END IF;
 	END $$;
 	`
 
