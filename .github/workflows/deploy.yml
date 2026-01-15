@@ -204,8 +204,8 @@ jobs:
           # Stop everything completely
           echo "=== Stopping all services ==="
           docker-compose down -v --remove-orphans || true
-          docker stop servereye-api || true
-          docker rm servereye-api || true
+          docker stop $(docker ps -aq) || true
+          docker rm $(docker ps -aq) || true
           
           # Clean up Docker completely
           echo "=== Cleaning up Docker ==="
@@ -214,9 +214,7 @@ jobs:
           
           # Pull fresh image
           echo "=== Pulling new image ==="
-          docker pull $IMAGE_NAME:$UNIQUE_TAG
-          docker tag $IMAGE_NAME:$UNIQUE_TAG $IMAGE_NAME:production
-          docker tag $IMAGE_NAME:$UNIQUE_TAG $IMAGE_NAME:latest
+          docker pull $IMAGE_NAME:production
           
           # Verify image contains our changes in source code
           echo "=== Verifying image contains changes ==="
@@ -308,7 +306,15 @@ jobs:
           # Start database services
           echo "=== Starting database services ==="
           docker-compose up -d postgres redis
-          sleep 15
+          
+          # Wait for databases to be ready
+          echo "=== Waiting for databases to be ready ==="
+          sleep 20
+          
+          # Check database health
+          echo "=== Checking database health ==="
+          timeout 60 bash -c 'until docker-compose exec -T postgres pg_isready -U postgres; do sleep 2; done'
+          timeout 30 bash -c 'until docker-compose exec -T redis redis-cli ping; do sleep 2; done'
           
           # Apply migrations if needed
           echo "=== Applying migrations ==="
@@ -325,16 +331,30 @@ jobs:
           echo "=== Waiting for services to start ==="
           sleep 30
           
+          # Check if containers are running
+          echo "=== Checking container status ==="
+          docker-compose ps
+          
           # Health check
           echo "=== Performing health check ==="
-          sleep 30
-          if ! curl -f http://localhost:8080/health; then
-            echo "❌ Health check failed!"
-            docker logs servereye-api --tail 50
-            docker logs servereye-redis --tail 20
-            docker logs servereye-postgres --tail 20
-            exit 1
-          fi
+          for i in {1..6}; do
+            echo "Health check attempt $i..."
+            if curl -f http://localhost:8080/health; then
+              echo "✅ Health check passed!"
+              break
+            else
+              echo "Health check failed, retrying in 10s..."
+              sleep 10
+              if [ $i -eq 6 ]; then
+                echo "❌ Health check failed after 6 attempts!"
+                docker logs servereye-api --tail 50
+                docker logs servereye-redis --tail 20
+                docker logs servereye-postgres --tail 20
+                docker-compose ps
+                exit 1
+              fi
+            fi
+          done
           
           # Check for CI/CD TEST logs
           echo "=== Checking for CI/CD TEST logs ==="
