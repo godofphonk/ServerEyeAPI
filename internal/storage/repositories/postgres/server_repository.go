@@ -85,6 +85,7 @@ func (r *ServerRepository) GetByID(ctx context.Context, id string) (*models.Serv
 	`
 
 	var server models.Server
+	var sources sql.NullString
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
 		&server.ID,
 		&server.ServerKey,
@@ -92,11 +93,17 @@ func (r *ServerRepository) GetByID(ctx context.Context, id string) (*models.Serv
 		&server.OSInfo,
 		&server.AgentVersion,
 		&server.Status,
-		&server.Sources,
+		&sources,
 		&server.LastSeen,
 		&server.CreatedAt,
 		&server.UpdatedAt,
 	)
+
+	if sources.Valid {
+		server.Sources = sources.String
+	} else {
+		server.Sources = ""
+	}
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -117,6 +124,7 @@ func (r *ServerRepository) GetByKey(ctx context.Context, serverKey string) (*mod
 	`
 
 	var server models.Server
+	var sources sql.NullString
 	err := r.db.QueryRowContext(ctx, query, serverKey).Scan(
 		&server.ID,
 		&server.ServerKey,
@@ -124,11 +132,17 @@ func (r *ServerRepository) GetByKey(ctx context.Context, serverKey string) (*mod
 		&server.OSInfo,
 		&server.AgentVersion,
 		&server.Status,
-		&server.Sources,
+		&sources,
 		&server.LastSeen,
 		&server.CreatedAt,
 		&server.UpdatedAt,
 	)
+
+	if sources.Valid {
+		server.Sources = sources.String
+	} else {
+		server.Sources = ""
+	}
 
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -246,6 +260,7 @@ func (r *ServerRepository) List(ctx context.Context, opts ...interfaces.ListOpti
 	var servers []*models.Server
 	for rows.Next() {
 		var server models.Server
+		var sources sql.NullString
 		err := rows.Scan(
 			&server.ID,
 			&server.ServerKey,
@@ -253,7 +268,7 @@ func (r *ServerRepository) List(ctx context.Context, opts ...interfaces.ListOpti
 			&server.OSInfo,
 			&server.AgentVersion,
 			&server.Status,
-			&server.Sources,
+			&sources,
 			&server.LastSeen,
 			&server.CreatedAt,
 			&server.UpdatedAt,
@@ -261,6 +276,13 @@ func (r *ServerRepository) List(ctx context.Context, opts ...interfaces.ListOpti
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan server: %w", err)
 		}
+
+		if sources.Valid {
+			server.Sources = sources.String
+		} else {
+			server.Sources = ""
+		}
+
 		servers = append(servers, &server)
 	}
 
@@ -290,6 +312,7 @@ func (r *ServerRepository) ListByHostname(ctx context.Context, hostname string) 
 	var servers []*models.Server
 	for rows.Next() {
 		var server models.Server
+		var sources sql.NullString
 		err := rows.Scan(
 			&server.ID,
 			&server.ServerKey,
@@ -297,7 +320,7 @@ func (r *ServerRepository) ListByHostname(ctx context.Context, hostname string) 
 			&server.OSInfo,
 			&server.AgentVersion,
 			&server.Status,
-			&server.Sources,
+			&sources,
 			&server.LastSeen,
 			&server.CreatedAt,
 			&server.UpdatedAt,
@@ -305,6 +328,13 @@ func (r *ServerRepository) ListByHostname(ctx context.Context, hostname string) 
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan server: %w", err)
 		}
+
+		if sources.Valid {
+			server.Sources = sources.String
+		} else {
+			server.Sources = ""
+		}
+
 		servers = append(servers, &server)
 	}
 
