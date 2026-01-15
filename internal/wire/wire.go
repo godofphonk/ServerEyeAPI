@@ -46,6 +46,7 @@ var ProviderSet = wire.NewSet(
 	handlers.NewHealthHandler,
 	handlers.NewMetricsHandler,
 	handlers.NewServersHandler,
+	handlers.NewServerSourcesHandler,
 	handlers.NewCommandsHandler,
 
 	// API Server

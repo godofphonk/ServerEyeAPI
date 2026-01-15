@@ -28,6 +28,11 @@ func NewMetricsService(keyRepo interfaces.GeneratedKeyRepository, storage storag
 	}
 }
 
+// GetServerByKey retrieves server information by server key
+func (s *MetricsService) GetServerByKey(ctx context.Context, serverKey string) (*models.GeneratedKey, error) {
+	return s.keyRepo.GetByKey(ctx, serverKey)
+}
+
 // StoreMetricsRequest represents a metrics storage request
 type StoreMetricsRequest struct {
 	ServerID string        `json:"server_id" validate:"required"`
@@ -136,6 +141,84 @@ func (s *MetricsService) GetServerMetrics(ctx context.Context, serverID string) 
 	return status, nil
 }
 
+// GetAllServerMetrics retrieves complete metrics for a server
+func (s *MetricsService) GetAllServerMetrics(ctx context.Context, serverID string) (*models.ServerMetrics, error) {
+	// Verify server exists
+	_, err := s.keyRepo.GetByServerID(ctx, serverID)
+	if err != nil {
+		return nil, fmt.Errorf("server not found: %w", err)
+	}
+
+	// Get metrics from storage (Redis with PostgreSQL fallback)
+	metrics, err := s.storage.GetMetric(ctx, serverID)
+	if err != nil {
+		s.logger.WithFields(logrus.Fields{
+			"server_id": serverID,
+			"error":     err.Error(),
+		}).Error("Failed to retrieve metrics")
+		return nil, fmt.Errorf("failed to retrieve metrics: %w", err)
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"server_id": serverID,
+		"cpu":       metrics.CPU,
+		"memory":    metrics.Memory,
+		"disk":      metrics.Disk,
+	}).Debug("Retrieved server metrics")
+
+	return metrics, nil
+}
+
+// GetServerMetricsWithStatus retrieves both metrics and status for a server
+func (s *MetricsService) GetServerMetricsWithStatus(ctx context.Context, serverID string) (map[string]interface{}, error) {
+	// Verify server exists
+	key, err := s.keyRepo.GetByServerID(ctx, serverID)
+	if err != nil {
+		return nil, fmt.Errorf("server not found: %w", err)
+	}
+
+	// Get metrics
+	metrics, err := s.storage.GetMetric(ctx, serverID)
+	if err != nil {
+		s.logger.WithFields(logrus.Fields{
+			"server_id": serverID,
+			"error":     err.Error(),
+		}).Warn("Failed to retrieve metrics, returning status only")
+
+		// Return status only if metrics not available
+		return map[string]interface{}{
+			"server_id": serverID,
+			"timestamp": time.Now(),
+			"status": map[string]interface{}{
+				"online":        false,
+				"last_seen":     key.CreatedAt,
+				"os_info":       key.OSInfo,
+				"agent_version": key.AgentVersion,
+				"hostname":      key.Hostname,
+			},
+			"metrics": nil,
+			"alerts":  []string{"Metrics not available"},
+		}, nil
+	}
+
+	// Combine metrics and status
+	response := map[string]interface{}{
+		"server_id": serverID,
+		"timestamp": metrics.Time,
+		"status": map[string]interface{}{
+			"online":        true,
+			"last_seen":     metrics.Time,
+			"os_info":       key.OSInfo,
+			"agent_version": key.AgentVersion,
+			"hostname":      key.Hostname,
+		},
+		"metrics": metrics,
+		"alerts":  s.generateAlerts(metrics),
+	}
+
+	return response, nil
+}
+
 // GetMetricsHistory retrieves historical metrics for a server
 func (s *MetricsService) GetMetricsHistory(ctx context.Context, serverID string, limit int) ([]*MetricsMessage, error) {
 	// Verify server exists
@@ -236,6 +319,53 @@ func (s *MetricsService) validateMetricsValues(metrics *ServerMetrics) error {
 	}
 
 	return nil
+}
+
+// generateAlerts creates alerts based on metrics thresholds
+func (s *MetricsService) generateAlerts(metrics *models.ServerMetrics) []string {
+	var alerts []string
+
+	// CPU alerts
+	if metrics.CPU > 80 {
+		alerts = append(alerts, fmt.Sprintf("High CPU usage: %.1f%%", metrics.CPU))
+	} else if metrics.CPU > 60 {
+		alerts = append(alerts, fmt.Sprintf("Moderate CPU usage: %.1f%%", metrics.CPU))
+	}
+
+	// Memory alerts
+	if metrics.Memory > 85 {
+		alerts = append(alerts, fmt.Sprintf("High memory usage: %.1f%%", metrics.Memory))
+	} else if metrics.Memory > 70 {
+		alerts = append(alerts, fmt.Sprintf("Moderate memory usage: %.1f%%", metrics.Memory))
+	}
+
+	// Disk alerts
+	if metrics.Disk > 90 {
+		alerts = append(alerts, fmt.Sprintf("Critical disk usage: %.1f%%", metrics.Disk))
+	} else if metrics.Disk > 80 {
+		alerts = append(alerts, fmt.Sprintf("High disk usage: %.1f%%", metrics.Disk))
+	}
+
+	// Temperature alerts
+	if metrics.TemperatureDetails.CPUTemperature > 80 {
+		alerts = append(alerts, fmt.Sprintf("High CPU temperature: %.1f°C", metrics.TemperatureDetails.CPUTemperature))
+	}
+
+	if metrics.TemperatureDetails.HighestTemperature > 85 {
+		alerts = append(alerts, fmt.Sprintf("High system temperature: %.1f°C", metrics.TemperatureDetails.HighestTemperature))
+	}
+
+	// Load average alerts
+	if metrics.CPUUsage.LoadAverage.Load1 > 2.0 {
+		alerts = append(alerts, fmt.Sprintf("High load average (1m): %.2f", metrics.CPUUsage.LoadAverage.Load1))
+	}
+
+	// Network alerts (if unusually high)
+	if metrics.Network > 1000 { // > 1GB/s
+		alerts = append(alerts, fmt.Sprintf("High network usage: %.1f MB/s", metrics.Network))
+	}
+
+	return alerts
 }
 
 // Ping checks repository connectivity

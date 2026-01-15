@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS servers (
     os_info TEXT,
     agent_version TEXT,
     status TEXT DEFAULT 'offline',
+    sources TEXT DEFAULT '',           -- TGBot, Web, TGBot,Web etc.
     last_seen TIMESTAMPTZ DEFAULT NOW(),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -48,6 +49,7 @@ CREATE INDEX IF NOT EXISTS idx_generated_keys_server_key ON generated_keys (serv
 CREATE INDEX IF NOT EXISTS idx_servers_server_id ON servers (server_id);
 CREATE INDEX IF NOT EXISTS idx_servers_server_key ON servers (server_key);
 CREATE INDEX IF NOT EXISTS idx_servers_last_seen ON servers (last_seen);
+CREATE INDEX IF NOT EXISTS idx_servers_sources ON servers (sources);
 CREATE INDEX IF NOT EXISTS idx_dlq_created_at ON dead_letter_queue (created_at);
 CREATE INDEX IF NOT EXISTS idx_dlq_topic ON dead_letter_queue (topic);
 

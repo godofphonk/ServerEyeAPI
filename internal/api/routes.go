@@ -15,6 +15,7 @@ func SetupRoutes(
 	healthHandler *handlers.HealthHandler,
 	metricsHandler *handlers.MetricsHandler,
 	serversHandler *handlers.ServersHandler,
+	serverSourcesHandler *handlers.ServerSourcesHandler,
 	commandsHandler *handlers.CommandsHandler,
 	wsServer *websocket.Server,
 	storageImpl storage.Storage,
@@ -29,11 +30,28 @@ func SetupRoutes(
 	// WebSocket route
 	router.HandleFunc("/ws", wsServer.HandleConnection).Methods("GET")
 
-	// API endpoints for Telegram bot and web dashboard
+	// Single metrics endpoint (public for testing)
+	router.HandleFunc("/api/servers/{server_id}/metrics", metricsHandler.GetServerMetrics).Methods("GET")
+
+	// Metrics endpoint by key (public for TG bot)
+	router.HandleFunc("/api/servers/by-key/{server_key}/metrics", metricsHandler.GetServerMetricsByKey).Methods("GET")
+
+	// Server sources endpoints (public for TG bot and web)
+	router.HandleFunc("/api/servers/{server_id}/sources", serverSourcesHandler.AddServerSource).Methods("POST")
+	router.HandleFunc("/api/servers/{server_id}/sources", serverSourcesHandler.GetServerSources).Methods("GET")
+	router.HandleFunc("/api/servers/{server_id}/sources/{source}", serverSourcesHandler.RemoveServerSource).Methods("DELETE")
+
+	// Server sources by key endpoints (public for TG bot)
+	router.HandleFunc("/api/servers/by-key/{server_key}/sources", serverSourcesHandler.AddServerSourceByKey).Methods("POST")
+	router.HandleFunc("/api/servers/by-key/{server_key}/sources", serverSourcesHandler.GetServerSourcesByKey).Methods("GET")
+	router.HandleFunc("/api/servers/by-key/{server_key}/sources/{source}", serverSourcesHandler.RemoveServerSourceByKey).Methods("DELETE")
+
+	// API endpoints for Telegram bot and web dashboard (with auth)
 	api := router.PathPrefix("/api").Subrouter()
 	api.Use(middleware.Auth(storageImpl, logger))
+
+	// Server endpoints (protected)
 	api.HandleFunc("/servers", serversHandler.ListServers).Methods("GET")
-	api.HandleFunc("/servers/{server_id}/metrics", metricsHandler.GetServerMetrics).Methods("GET")
 	api.HandleFunc("/servers/{server_id}/status", serversHandler.GetServerStatus).Methods("GET")
 	api.HandleFunc("/servers/{server_id}/command", commandsHandler.SendCommand).Methods("POST")
 
