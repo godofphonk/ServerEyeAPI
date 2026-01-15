@@ -29,6 +29,11 @@ func NewServerService(serverRepo interfaces.ServerRepository, keyRepo interfaces
 	}
 }
 
+// GetServerByKey retrieves server information by server key
+func (s *ServerService) GetServerByKey(ctx context.Context, serverKey string) (*models.GeneratedKey, error) {
+	return s.keyRepo.GetByKey(ctx, serverKey)
+}
+
 // RegisterServerRequest represents a server registration request
 type RegisterServerRequest struct {
 	Hostname        string `json:"hostname" validate:"required"`

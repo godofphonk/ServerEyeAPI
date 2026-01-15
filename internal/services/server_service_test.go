@@ -52,6 +52,11 @@ func (m *MockServerRepo) Ping(ctx context.Context) error {
 	return args.Error(0)
 }
 
+func (m *MockServerRepo) UpdateSources(ctx context.Context, serverID string, sources string) error {
+	args := m.Called(ctx, serverID, sources)
+	return args.Error(0)
+}
+
 func (m *MockServerRepo) ListByStatus(ctx context.Context, status string) ([]*models.Server, error) {
 	args := m.Called(ctx, status)
 	return args.Get(0).([]*models.Server), args.Error(1)

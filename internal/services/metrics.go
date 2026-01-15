@@ -28,6 +28,11 @@ func NewMetricsService(keyRepo interfaces.GeneratedKeyRepository, storage storag
 	}
 }
 
+// GetServerByKey retrieves server information by server key
+func (s *MetricsService) GetServerByKey(ctx context.Context, serverKey string) (*models.GeneratedKey, error) {
+	return s.keyRepo.GetByKey(ctx, serverKey)
+}
+
 // StoreMetricsRequest represents a metrics storage request
 type StoreMetricsRequest struct {
 	ServerID string        `json:"server_id" validate:"required"`

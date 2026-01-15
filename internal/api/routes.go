@@ -33,10 +33,18 @@ func SetupRoutes(
 	// Single metrics endpoint (public for testing)
 	router.HandleFunc("/api/servers/{server_id}/metrics", metricsHandler.GetServerMetrics).Methods("GET")
 
+	// Metrics endpoint by key (public for TG bot)
+	router.HandleFunc("/api/servers/by-key/{server_key}/metrics", metricsHandler.GetServerMetricsByKey).Methods("GET")
+
 	// Server sources endpoints (public for TG bot and web)
 	router.HandleFunc("/api/servers/{server_id}/sources", serverSourcesHandler.AddServerSource).Methods("POST")
 	router.HandleFunc("/api/servers/{server_id}/sources", serverSourcesHandler.GetServerSources).Methods("GET")
 	router.HandleFunc("/api/servers/{server_id}/sources/{source}", serverSourcesHandler.RemoveServerSource).Methods("DELETE")
+
+	// Server sources by key endpoints (public for TG bot)
+	router.HandleFunc("/api/servers/by-key/{server_key}/sources", serverSourcesHandler.AddServerSourceByKey).Methods("POST")
+	router.HandleFunc("/api/servers/by-key/{server_key}/sources", serverSourcesHandler.GetServerSourcesByKey).Methods("GET")
+	router.HandleFunc("/api/servers/by-key/{server_key}/sources/{source}", serverSourcesHandler.RemoveServerSourceByKey).Methods("DELETE")
 
 	// API endpoints for Telegram bot and web dashboard (with auth)
 	api := router.PathPrefix("/api").Subrouter()
