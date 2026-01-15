@@ -117,6 +117,18 @@ func (c *Client) initSchema() error {
 		return fmt.Errorf("failed to execute migration: %w", err)
 	}
 
+	// Update NULL values in sources column to prevent scan errors
+	updateNulls := `
+	UPDATE servers 
+	SET sources = '' 
+	WHERE sources IS NULL;
+	`
+
+	_, err = c.db.ExecContext(ctx, updateNulls)
+	if err != nil {
+		return fmt.Errorf("failed to update NULL sources: %w", err)
+	}
+
 	c.logger.Info("Database schema initialized successfully")
 	return nil
 }
