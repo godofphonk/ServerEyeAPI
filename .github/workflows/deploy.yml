@@ -201,16 +201,15 @@ jobs:
           
           echo "=== Deploying image: $IMAGE_NAME:$UNIQUE_TAG ==="
           
-          # Stop everything completely
-          echo "=== Stopping all services ==="
-          docker-compose down -v --remove-orphans || true
+          # Stop services gracefully (preserve data)
+          echo "=== Stopping services ==="
+          docker-compose down --remove-orphans || true
           docker stop $(docker ps -aq) || true
           docker rm $(docker ps -aq) || true
           
-          # Clean up Docker completely
-          echo "=== Cleaning up Docker ==="
+          # Clean up Docker images only (preserve volumes)
+          echo "=== Cleaning up Docker images ==="
           docker system prune -a -f
-          docker volume prune -f
           
           # Pull fresh image
           echo "=== Pulling new image ==="
@@ -224,6 +223,27 @@ jobs:
             exit 1
           fi
           echo "✅ Test changes found in production image source!"
+          
+          # Create external volumes for data persistence
+          echo "=== Creating external volumes ==="
+          docker volume create servereye_postgres_data || true
+          docker volume create servereye_redis_data || true
+          
+          # Create backup before deployment
+          echo "=== Creating backup before deployment ==="
+          mkdir -p /opt/servereye/backups
+          if docker volume inspect servereye_postgres_data >/dev/null 2>&1; then
+            docker run --rm -v servereye_postgres_data:/data -v /opt/servereye/backups:/backup alpine tar czf /backup/postgres_backup_$(date +%Y%m%d_%H%M%S).tar.gz -C /data .
+            echo "✅ PostgreSQL backup created"
+          fi
+          if docker volume inspect servereye_redis_data >/dev/null 2>&1; then
+            docker run --rm -v servereye_redis_data:/data -v /opt/servereye/backups:/backup alpine tar czf /backup/redis_backup_$(date +%Y%m%d_%H%M%S).tar.gz -C /data .
+            echo "✅ Redis backup created"
+          fi
+          
+          # Copy Redis configuration
+          echo "=== Copying Redis configuration ==="
+          cp redis.conf ./redis.conf.backup
           
           # Create docker-compose.yml
           cat > docker-compose.yml << 'COMPOSE_EOF'
@@ -269,7 +289,7 @@ jobs:
                 POSTGRES_USER: postgres
                 POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
               volumes:
-                - postgres_data:/var/lib/postgresql/data
+                - servereye_postgres_data:/var/lib/postgresql/data
                 - ./deployments:/migrations:ro
               networks:
                 - servereye-network
@@ -284,8 +304,9 @@ jobs:
               container_name: servereye-redis
               restart: unless-stopped
               volumes:
-                - redis_data:/data
-              command: redis-server --maxmemory 512mb --maxmemory-policy allkeys-lru
+                - servereye_redis_data:/data
+                - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+              command: redis-server /usr/local/etc/redis/redis.conf --maxmemory 512mb --maxmemory-policy allkeys-lru
               networks:
                 - servereye-network
               healthcheck:
@@ -295,8 +316,10 @@ jobs:
                 retries: 5
 
           volumes:
-            postgres_data:
-            redis_data:
+            servereye_postgres_data:
+              external: true
+            servereye_redis_data:
+              external: true
 
           networks:
             servereye-network:
