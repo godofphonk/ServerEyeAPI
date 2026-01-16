@@ -204,8 +204,9 @@ jobs:
           # Stop services gracefully (preserve data)
           echo "=== Stopping services ==="
           docker-compose down --remove-orphans || true
-          docker stop $(docker ps -aq) || true
-          docker rm $(docker ps -aq) || true
+          # Stop only API-related containers, preserve Bot containers
+          docker stop $(docker ps -q --filter "name=servereye-api" --filter "name=servereye-postgres" --filter "name=servereye-redis") || true
+          docker rm $(docker ps -aq --filter "name=servereye-api" --filter "name=servereye-postgres" --filter "name=servereye-redis") || true
           
           # Clean up Docker images only (preserve volumes)
           echo "=== Cleaning up Docker images ==="
