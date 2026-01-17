@@ -40,11 +40,16 @@ func (c *Client) StoreMetric(ctx context.Context, serverID string, metrics *mode
 	query := `
 	INSERT INTO server_metrics (
 		time, server_id, cpu_usage, memory_usage, disk_usage, network_usage,
-		cpu_usage_total, cpu_cores, memory_total_gb, memory_used_gb,
-		memory_available_gb, memory_free_gb, memory_buffers_gb, memory_cached_gb,
-		cpu_temperature, highest_temperature, hostname, os_info
+		cpu_usage_total, cpu_usage_user, cpu_usage_system, cpu_usage_idle,
+		cpu_cores, cpu_frequency,
+		load_avg_1m, load_avg_5m, load_avg_15m,
+		memory_total_gb, memory_used_gb, memory_available_gb, memory_free_gb, memory_buffers_gb, memory_cached_gb,
+		disk_details, network_details,
+		cpu_temperature, gpu_temperature, system_temperature, highest_temperature, temperature_unit,
+		hostname, os_info, kernel, architecture, uptime_seconds, uptime_human, boot_time,
+		processes_total, processes_running, processes_sleeping
 	) VALUES (
-		$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
+		$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44
 	)`
 
 	_, err := c.pool.Exec(ctx, query,
@@ -55,17 +60,37 @@ func (c *Client) StoreMetric(ctx context.Context, serverID string, metrics *mode
 		metrics.Disk,
 		metrics.Network,
 		metrics.CPUUsage.UsageTotal,
+		metrics.CPUUsage.UsageUser,
+		metrics.CPUUsage.UsageSystem,
+		metrics.CPUUsage.UsageIdle,
 		metrics.CPUUsage.Cores,
+		metrics.CPUUsage.Frequency,
+		metrics.CPUUsage.LoadAverage.Load1,
+		metrics.CPUUsage.LoadAverage.Load5,
+		metrics.CPUUsage.LoadAverage.Load15,
 		metrics.MemoryDetails.TotalGB,
 		metrics.MemoryDetails.UsedGB,
 		metrics.MemoryDetails.AvailableGB,
 		metrics.MemoryDetails.FreeGB,
 		metrics.MemoryDetails.BuffersGB,
 		metrics.MemoryDetails.CachedGB,
+		metrics.DiskDetails,
+		metrics.NetworkDetails,
 		metrics.TemperatureDetails.CPUTemperature,
+		metrics.TemperatureDetails.GPUTemperature,
+		metrics.TemperatureDetails.SystemTemperature,
 		metrics.TemperatureDetails.HighestTemperature,
+		metrics.TemperatureDetails.TemperatureUnit,
 		metrics.SystemDetails.Hostname,
 		metrics.SystemDetails.OS,
+		metrics.SystemDetails.Kernel,
+		metrics.SystemDetails.Architecture,
+		metrics.SystemDetails.UptimeSeconds,
+		metrics.SystemDetails.UptimeHuman,
+		metrics.SystemDetails.BootTime,
+		metrics.SystemDetails.ProcessesTotal,
+		metrics.SystemDetails.ProcessesRunning,
+		metrics.SystemDetails.ProcessesSleeping,
 	)
 
 	if err != nil {
@@ -96,9 +121,14 @@ func (c *Client) GetLatestMetric(ctx context.Context, serverID string) (*models.
 	query := `
 	SELECT 
 		cpu_usage, memory_usage, disk_usage, network_usage,
-		cpu_usage_total, cpu_cores, memory_total_gb, memory_used_gb,
-		memory_available_gb, memory_free_gb, memory_buffers_gb, memory_cached_gb,
-		cpu_temperature, highest_temperature, hostname, os_info, time
+		cpu_usage_total, cpu_usage_user, cpu_usage_system, cpu_usage_idle,
+		cpu_cores, cpu_frequency,
+		load_avg_1m, load_avg_5m, load_avg_15m,
+		memory_total_gb, memory_used_gb, memory_available_gb, memory_free_gb, memory_buffers_gb, memory_cached_gb,
+		disk_details, network_details,
+		cpu_temperature, gpu_temperature, system_temperature, highest_temperature, temperature_unit,
+		hostname, os_info, kernel, architecture, uptime_seconds, uptime_human, boot_time,
+		processes_total, processes_running, processes_sleeping, time
 	FROM server_metrics 
 	WHERE server_id = $1 
 	ORDER BY time DESC 
@@ -107,6 +137,7 @@ func (c *Client) GetLatestMetric(ctx context.Context, serverID string) (*models.
 	var metrics models.ServerMetrics
 
 	var availableGB, freeGB, buffersGB, cachedGB sql.NullFloat64
+	var bootTime sql.NullTime
 
 	err := c.pool.QueryRow(ctx, query, serverID).Scan(
 		&metrics.CPU,
@@ -114,17 +145,37 @@ func (c *Client) GetLatestMetric(ctx context.Context, serverID string) (*models.
 		&metrics.Disk,
 		&metrics.Network,
 		&metrics.CPUUsage.UsageTotal,
+		&metrics.CPUUsage.UsageUser,
+		&metrics.CPUUsage.UsageSystem,
+		&metrics.CPUUsage.UsageIdle,
 		&metrics.CPUUsage.Cores,
+		&metrics.CPUUsage.Frequency,
+		&metrics.CPUUsage.LoadAverage.Load1,
+		&metrics.CPUUsage.LoadAverage.Load5,
+		&metrics.CPUUsage.LoadAverage.Load15,
 		&metrics.MemoryDetails.TotalGB,
 		&metrics.MemoryDetails.UsedGB,
 		&availableGB,
 		&freeGB,
 		&buffersGB,
 		&cachedGB,
+		&metrics.DiskDetails,
+		&metrics.NetworkDetails,
 		&metrics.TemperatureDetails.CPUTemperature,
+		&metrics.TemperatureDetails.GPUTemperature,
+		&metrics.TemperatureDetails.SystemTemperature,
 		&metrics.TemperatureDetails.HighestTemperature,
+		&metrics.TemperatureDetails.TemperatureUnit,
 		&metrics.SystemDetails.Hostname,
 		&metrics.SystemDetails.OS,
+		&metrics.SystemDetails.Kernel,
+		&metrics.SystemDetails.Architecture,
+		&metrics.SystemDetails.UptimeSeconds,
+		&metrics.SystemDetails.UptimeHuman,
+		&bootTime,
+		&metrics.SystemDetails.ProcessesTotal,
+		&metrics.SystemDetails.ProcessesRunning,
+		&metrics.SystemDetails.ProcessesSleeping,
 		&metrics.Time,
 	)
 
@@ -140,6 +191,9 @@ func (c *Client) GetLatestMetric(ctx context.Context, serverID string) (*models.
 	}
 	if cachedGB.Valid {
 		metrics.MemoryDetails.CachedGB = cachedGB.Float64
+	}
+	if bootTime.Valid {
+		metrics.SystemDetails.BootTime = bootTime.Time.Format(time.RFC3339)
 	}
 
 	if err != nil {
