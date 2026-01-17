@@ -41,9 +41,10 @@ func (c *Client) StoreMetric(ctx context.Context, serverID string, metrics *mode
 	INSERT INTO server_metrics (
 		time, server_id, cpu_usage, memory_usage, disk_usage, network_usage,
 		cpu_usage_total, cpu_cores, memory_total_gb, memory_used_gb,
+		memory_available_gb, memory_free_gb, memory_buffers_gb, memory_cached_gb,
 		cpu_temperature, highest_temperature, hostname, os_info
 	) VALUES (
-		$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+		$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18
 	)`
 
 	_, err := c.pool.Exec(ctx, query,
@@ -57,6 +58,10 @@ func (c *Client) StoreMetric(ctx context.Context, serverID string, metrics *mode
 		metrics.CPUUsage.Cores,
 		metrics.MemoryDetails.TotalGB,
 		metrics.MemoryDetails.UsedGB,
+		metrics.MemoryDetails.AvailableGB,
+		metrics.MemoryDetails.FreeGB,
+		metrics.MemoryDetails.BuffersGB,
+		metrics.MemoryDetails.CachedGB,
 		metrics.TemperatureDetails.CPUTemperature,
 		metrics.TemperatureDetails.HighestTemperature,
 		metrics.SystemDetails.Hostname,
@@ -92,6 +97,7 @@ func (c *Client) GetLatestMetric(ctx context.Context, serverID string) (*models.
 	SELECT 
 		cpu_usage, memory_usage, disk_usage, network_usage,
 		cpu_usage_total, cpu_cores, memory_total_gb, memory_used_gb,
+		memory_available_gb, memory_free_gb, memory_buffers_gb, memory_cached_gb,
 		cpu_temperature, highest_temperature, hostname, os_info, time
 	FROM server_metrics 
 	WHERE server_id = $1 
@@ -99,6 +105,8 @@ func (c *Client) GetLatestMetric(ctx context.Context, serverID string) (*models.
 	LIMIT 1`
 
 	var metrics models.ServerMetrics
+
+	var availableGB, freeGB, buffersGB, cachedGB sql.NullFloat64
 
 	err := c.pool.QueryRow(ctx, query, serverID).Scan(
 		&metrics.CPU,
@@ -109,12 +117,30 @@ func (c *Client) GetLatestMetric(ctx context.Context, serverID string) (*models.
 		&metrics.CPUUsage.Cores,
 		&metrics.MemoryDetails.TotalGB,
 		&metrics.MemoryDetails.UsedGB,
+		&availableGB,
+		&freeGB,
+		&buffersGB,
+		&cachedGB,
 		&metrics.TemperatureDetails.CPUTemperature,
 		&metrics.TemperatureDetails.HighestTemperature,
 		&metrics.SystemDetails.Hostname,
 		&metrics.SystemDetails.OS,
 		&metrics.Time,
 	)
+
+	// Convert NullFloat64 to regular float64
+	if availableGB.Valid {
+		metrics.MemoryDetails.AvailableGB = availableGB.Float64
+	}
+	if freeGB.Valid {
+		metrics.MemoryDetails.FreeGB = freeGB.Float64
+	}
+	if buffersGB.Valid {
+		metrics.MemoryDetails.BuffersGB = buffersGB.Float64
+	}
+	if cachedGB.Valid {
+		metrics.MemoryDetails.CachedGB = cachedGB.Float64
+	}
 
 	if err != nil {
 		if err == pgx.ErrNoRows {
