@@ -55,13 +55,6 @@ type Config struct {
 	KafkaBrokers []string `env:"KAFKA_BROKERS" envSeparator:","`
 	KafkaGroupID string   `env:"KAFKA_GROUP_ID"`
 
-	// Redis Configuration (deprecated - use TimescaleDB for new deployments)
-	Redis struct {
-		TTL         time.Duration `env:"REDIS_TTL" envDefault:"5m"`
-		ConnTimeout time.Duration `env:"REDIS_CONN_TIMEOUT" envDefault:"5s"`
-		MaxRetries  int           `env:"REDIS_MAX_RETRIES" envDefault:"3"`
-	}
-
 	// TimescaleDB Configuration
 	TimescaleDB struct {
 		MaxConnections      int           `env:"TIMESCALEDB_MAX_CONNECTIONS" envDefault:"20"`
