@@ -39,8 +39,7 @@ type Config struct {
 	// Database
 	DatabaseURL     string `env:"DATABASE_URL"`
 	KeysDatabaseURL string `env:"KEYS_DATABASE_URL"`
-	TimescaleDBURL  string `env:"TIMESCALEDB_URL"` // New TimescaleDB URL
-	RedisURL        string `env:"REDIS_URL" envDefault:"redis://localhost:6379"`
+	TimescaleDBURL  string `env:"TIMESCALEDB_URL"` // TimescaleDB URL for time-series data
 
 	// Metrics
 	MetricsTopic string `env:"METRICS_TOPIC" envDefault:"metrics"`
@@ -225,11 +224,6 @@ func (c *Config) Validate() error {
 	// Validate port range
 	if c.Port < 1 || c.Port > 65535 {
 		errors = append(errors, "PORT must be between 1 and 65535")
-	}
-
-	// Validate Redis URL format
-	if c.RedisURL != "" && len(c.RedisURL) < 9 {
-		errors = append(errors, "REDIS_URL must be a valid URL (e.g., redis://localhost:6379)")
 	}
 
 	if len(errors) > 0 {

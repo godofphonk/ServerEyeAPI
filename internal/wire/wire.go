@@ -24,6 +24,8 @@
 package wire
 
 import (
+	"fmt"
+
 	"github.com/godofphonk/ServerEyeAPI/internal/api"
 	"github.com/godofphonk/ServerEyeAPI/internal/config"
 	"github.com/godofphonk/ServerEyeAPI/internal/handlers"
@@ -31,8 +33,8 @@ import (
 	"github.com/godofphonk/ServerEyeAPI/internal/storage"
 	"github.com/godofphonk/ServerEyeAPI/internal/storage/interfaces"
 	postgresStorage "github.com/godofphonk/ServerEyeAPI/internal/storage/postgres"
-	redisStorage "github.com/godofphonk/ServerEyeAPI/internal/storage/redis"
 	postgresRepo "github.com/godofphonk/ServerEyeAPI/internal/storage/repositories/postgres"
+	timescaledbStorage "github.com/godofphonk/ServerEyeAPI/internal/storage/timescaledb"
 	"github.com/godofphonk/ServerEyeAPI/internal/websocket"
 	"github.com/google/wire"
 	"github.com/sirupsen/logrus"
@@ -46,7 +48,6 @@ var ProviderSet = wire.NewSet(
 	// Storage layer
 	NewPostgresClient,
 	NewTimescaleDBClient,
-	NewRedisClient,
 	NewTimescaleDBStorageAdapter,
 
 	// Repository layer
@@ -95,33 +96,10 @@ func NewPostgresClient(cfg *config.Config, logger *logrus.Logger) (*postgresStor
 	return postgresStorage.NewClient(cfg.DatabaseURL, logger)
 }
 
-// NewRedisClient creates a new Redis client
-func NewRedisClient(cfg *config.Config, logger *logrus.Logger) (*redisStorage.Client, error) {
-	if cfg.RedisURL == "" {
-		return nil, nil // Redis is optional
-	}
-
-	// Extract host:port from redis://host:port format
-	redisAddr := "redis:6379" // Default for Docker Compose
-	if len(cfg.RedisURL) > 9 && cfg.RedisURL[:9] == "redis://" {
-		redisAddr = cfg.RedisURL[9:] // Remove "redis://" prefix
-	}
-
-	return redisStorage.NewClient(redisAddr, "", 0, logger, cfg)
-}
-
-// NewStorageAdapter creates a storage adapter for backward compatibility
-func NewStorageAdapter(
-	keyRepo interfaces.GeneratedKeyRepository,
-	serverRepo interfaces.ServerRepository,
-) storage.Storage {
-	return storage.NewStorageAdapter(keyRepo, serverRepo)
-}
-
 // NewTimescaleDBClient creates a new TimescaleDB client
 func NewTimescaleDBClient(cfg *config.Config, logger *logrus.Logger) (*timescaledbStorage.Client, error) {
 	if cfg.TimescaleDBURL == "" {
-		return nil, nil // TimescaleDB is optional for backward compatibility
+		return nil, fmt.Errorf("TIMESCALEDB_URL is required")
 	}
 
 	config := timescaledbStorage.DefaultClientConfig()
@@ -136,9 +114,5 @@ func NewTimescaleDBStorageAdapter(
 	logger *logrus.Logger,
 	cfg *config.Config,
 ) storage.Storage {
-	if timescaleDB != nil {
-		return storage.NewTimescaleDBStorageAdapter(keyRepo, serverRepo, timescaleDB, logger, cfg)
-	}
-	// Fallback to old adapter if TimescaleDB is not available
-	return storage.NewStorageAdapter(keyRepo, serverRepo)
+	return storage.NewTimescaleDBStorageAdapter(keyRepo, serverRepo, timescaleDB, logger, cfg)
 }
