@@ -153,13 +153,13 @@ docker-push:
 	docker push ghcr.io/godofphonk/ServerEyeAPI:latest
 
 docker-compose-up:
-	docker-compose -f docker-compose.prod.yml up -d
+	docker-compose up -d
 
 docker-compose-down:
-	docker-compose -f docker-compose.prod.yml down
+	docker-compose down
 
 docker-compose-logs:
-	docker-compose -f docker-compose.prod.yml logs -f
+	docker-compose logs -f
 
 # Start services with Docker Compose
 docker-up:
