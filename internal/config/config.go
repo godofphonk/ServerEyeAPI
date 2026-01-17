@@ -39,6 +39,7 @@ type Config struct {
 	// Database
 	DatabaseURL     string `env:"DATABASE_URL"`
 	KeysDatabaseURL string `env:"KEYS_DATABASE_URL"`
+	TimescaleDBURL  string `env:"TIMESCALEDB_URL"` // New TimescaleDB URL
 	RedisURL        string `env:"REDIS_URL" envDefault:"redis://localhost:6379"`
 
 	// Metrics
@@ -55,11 +56,19 @@ type Config struct {
 	KafkaBrokers []string `env:"KAFKA_BROKERS" envSeparator:","`
 	KafkaGroupID string   `env:"KAFKA_GROUP_ID"`
 
-	// Redis Configuration
+	// Redis Configuration (deprecated - use TimescaleDB for new deployments)
 	Redis struct {
 		TTL         time.Duration `env:"REDIS_TTL" envDefault:"5m"`
 		ConnTimeout time.Duration `env:"REDIS_CONN_TIMEOUT" envDefault:"5s"`
 		MaxRetries  int           `env:"REDIS_MAX_RETRIES" envDefault:"3"`
+	}
+
+	// TimescaleDB Configuration
+	TimescaleDB struct {
+		MaxConnections      int           `env:"TIMESCALEDB_MAX_CONNECTIONS" envDefault:"20"`
+		ConnTimeout         time.Duration `env:"TIMESCALEDB_CONN_TIMEOUT" envDefault:"30s"`
+		QueryTimeout        time.Duration `env:"TIMESCALEDB_QUERY_TIMEOUT" envDefault:"10s"`
+		HealthCheckInterval time.Duration `env:"TIMESCALEDB_HEALTH_CHECK_INTERVAL" envDefault:"30s"`
 	}
 
 	// WebSocket Configuration
@@ -75,6 +84,14 @@ type Config struct {
 	RateLimit struct {
 		Limit  int           `env:"RATE_LIMIT" envDefault:"100"`
 		Window time.Duration `env:"RATE_WINDOW" envDefault:"1m"`
+	}
+
+	// Data Retention Configuration
+	Retention struct {
+		MetricsDays  int `env:"METRICS_RETENTION_DAYS" envDefault:"30"`
+		StatusDays   int `env:"STATUS_RETENTION_DAYS" envDefault:"7"`
+		EventsDays   int `env:"EVENTS_RETENTION_DAYS" envDefault:"14"`
+		CommandsDays int `env:"COMMANDS_RETENTION_DAYS" envDefault:"14"`
 	}
 
 	// Consumer Configuration

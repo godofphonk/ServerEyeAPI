@@ -45,8 +45,9 @@ var ProviderSet = wire.NewSet(
 
 	// Storage layer
 	NewPostgresClient,
+	NewTimescaleDBClient,
 	NewRedisClient,
-	NewStorageAdapter,
+	NewTimescaleDBStorageAdapter,
 
 	// Repository layer
 	postgresRepo.NewGeneratedKeyRepository,
@@ -114,5 +115,30 @@ func NewStorageAdapter(
 	keyRepo interfaces.GeneratedKeyRepository,
 	serverRepo interfaces.ServerRepository,
 ) storage.Storage {
+	return storage.NewStorageAdapter(keyRepo, serverRepo)
+}
+
+// NewTimescaleDBClient creates a new TimescaleDB client
+func NewTimescaleDBClient(cfg *config.Config, logger *logrus.Logger) (*timescaledbStorage.Client, error) {
+	if cfg.TimescaleDBURL == "" {
+		return nil, nil // TimescaleDB is optional for backward compatibility
+	}
+
+	config := timescaledbStorage.DefaultClientConfig()
+	return timescaledbStorage.NewClient(cfg.TimescaleDBURL, logger, config)
+}
+
+// NewTimescaleDBStorageAdapter creates a TimescaleDB storage adapter
+func NewTimescaleDBStorageAdapter(
+	keyRepo interfaces.GeneratedKeyRepository,
+	serverRepo interfaces.ServerRepository,
+	timescaleDB *timescaledbStorage.Client,
+	logger *logrus.Logger,
+	cfg *config.Config,
+) storage.Storage {
+	if timescaleDB != nil {
+		return storage.NewTimescaleDBStorageAdapter(keyRepo, serverRepo, timescaleDB, logger, cfg)
+	}
+	// Fallback to old adapter if TimescaleDB is not available
 	return storage.NewStorageAdapter(keyRepo, serverRepo)
 }
