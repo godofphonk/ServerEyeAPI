@@ -325,6 +325,12 @@ SELECT add_compression_policy('server_metrics', INTERVAL '1 day', if_not_exists 
 SELECT add_compression_policy('server_status', INTERVAL '6 hours', if_not_exists => TRUE);
 
 -- Add refresh policies for continuous aggregates
+-- Remove existing policies first to avoid conflicts
+SELECT remove_continuous_aggregate_policy('metrics_5m_avg', if_exists => TRUE);
+SELECT remove_continuous_aggregate_policy('metrics_1h_avg', if_exists => TRUE);
+SELECT remove_continuous_aggregate_policy('server_uptime_daily', if_exists => TRUE);
+SELECT remove_continuous_aggregate_policy('alert_stats_hourly', if_exists => TRUE);
+
 -- Refresh 5-minute aggregates every minute
 SELECT add_continuous_aggregate_policy('metrics_5m_avg', 
     start_offset => INTERVAL '1 hour',
