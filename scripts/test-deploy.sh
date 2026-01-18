@@ -23,20 +23,21 @@ git clone --branch production https://github.com/godofphonk/ServerEyeAPI.git .
 
 # Simulate server environment
 echo "=== Simulating server environment ==="
-mkdir -p deployments
-cp -r deployments deployments-backup
+# deployments already exists from git clone
 
 # Test file copying logic
 echo "=== Testing file copying logic ==="
+# Save original deployments
+cp -r deployments deployments-original
 rm -rf ./deployments
-cp -r deployments-backup ./deployments 2>/dev/null || echo "Copy failed, trying individual files"
+mkdir -p ./deployments
+cp -r deployments-original/* ./deployments/ 2>/dev/null || echo "Copy failed, trying individual files"
 
 if [ ! -f "./deployments/timescaledb-init.sql" ]; then
     echo "=== Copying files individually ==="
-    mkdir -p ./deployments
-    find deployments-backup -name "*.sql" -type f -exec cp {} ./deployments/ \;
-    find deployments-backup -name "*.yml" -type f -exec cp {} ./deployments/ \;
-    find deployments-backup -name "*.sh" -type f -exec cp {} ./deployments/ \;
+    find deployments-original -name "*.sql" -type f -exec cp {} ./deployments/ \;
+    find deployments-original -name "*.yml" -type f -exec cp {} ./deployments/ \;
+    find deployments-original -name "*.sh" -type f -exec cp {} ./deployments/ \;
 fi
 
 # Verify files
