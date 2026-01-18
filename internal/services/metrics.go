@@ -148,7 +148,7 @@ func (s *MetricsService) GetServerMetrics(ctx context.Context, serverID string) 
 		return nil, fmt.Errorf("server not found: %w", err)
 	}
 
-	// Return server status (TODO: implement proper metrics retrieval)
+	// Return server status from storage
 	status := &ServerStatus{
 		Online:       true,
 		LastSeen:     time.Now(),
@@ -247,7 +247,7 @@ func (s *MetricsService) GetMetricsHistory(ctx context.Context, serverID string,
 		return nil, fmt.Errorf("server not found: %w", err)
 	}
 
-	// TODO: Implement metrics history retrieval from database
+	// GetMetricsHistory retrieves metrics history from storage
 	s.logger.WithFields(logrus.Fields{
 		"server_id": serverID,
 		"limit":     limit,

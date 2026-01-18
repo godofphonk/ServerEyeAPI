@@ -77,17 +77,17 @@ func (h *ServersHandler) ListServers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get server details from Redis
+	// Get server details from storage
 	serverDetails := make([]map[string]interface{}, 0)
-	for _, serverID := range servers {
-		status, err := h.storage.GetServerStatus(r.Context(), serverID)
+	for _, serverInfo := range servers {
+		status, err := h.storage.GetServerStatus(r.Context(), serverInfo.ServerID)
 		if err != nil {
-			h.logger.WithError(err).WithField("server_id", serverID).Warn("Failed to get server status")
+			h.logger.WithError(err).WithField("server_id", serverInfo.ServerID).Warn("Failed to get server status")
 			status = &models.ServerStatus{Online: false}
 		}
 
 		serverDetails = append(serverDetails, map[string]interface{}{
-			"server_id": serverID,
+			"server_id": serverInfo.ServerID,
 			"status":    status,
 		})
 	}

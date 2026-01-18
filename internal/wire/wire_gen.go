@@ -7,6 +7,7 @@
 package wire
 
 import (
+	"fmt"
 	"github.com/godofphonk/ServerEyeAPI/internal/api"
 	"github.com/godofphonk/ServerEyeAPI/internal/config"
 	"github.com/godofphonk/ServerEyeAPI/internal/handlers"
@@ -14,8 +15,8 @@ import (
 	"github.com/godofphonk/ServerEyeAPI/internal/storage"
 	"github.com/godofphonk/ServerEyeAPI/internal/storage/interfaces"
 	postgres2 "github.com/godofphonk/ServerEyeAPI/internal/storage/postgres"
-	"github.com/godofphonk/ServerEyeAPI/internal/storage/redis"
 	"github.com/godofphonk/ServerEyeAPI/internal/storage/repositories/postgres"
+	"github.com/godofphonk/ServerEyeAPI/internal/storage/timescaledb"
 	"github.com/godofphonk/ServerEyeAPI/internal/websocket"
 	"github.com/google/wire"
 	"github.com/sirupsen/logrus"
@@ -41,8 +42,8 @@ var ProviderSet = wire.NewSet(
 	NewLogger,
 
 	NewPostgresClient,
-	NewRedisClient,
-	NewStorageAdapter, postgres.NewGeneratedKeyRepository, postgres.NewServerRepository, services.NewServerService, services.NewMetricsService, services.NewCommandsService, services.NewAuthService, websocket.NewServer, handlers.NewAuthHandler, handlers.NewHealthHandler, handlers.NewMetricsHandler, handlers.NewServersHandler, handlers.NewCommandsHandler, api.New,
+	NewTimescaleDBClient,
+	NewTimescaleDBStorageAdapter, postgres.NewGeneratedKeyRepository, postgres.NewServerRepository, services.NewServerService, services.NewMetricsService, services.NewCommandsService, services.NewAuthService, websocket.NewServer, handlers.NewAuthHandler, handlers.NewHealthHandler, handlers.NewMetricsHandler, handlers.NewServersHandler, handlers.NewServerSourcesHandler, handlers.NewCommandsHandler, api.New,
 )
 
 // NewLogger creates a new logger instance
@@ -60,24 +61,22 @@ func NewPostgresClient(cfg *config.Config, logger *logrus.Logger) (*postgres2.Cl
 	return postgres2.NewClient(cfg.DatabaseURL, logger)
 }
 
-// NewRedisClient creates a new Redis client
-func NewRedisClient(cfg *config.Config, logger *logrus.Logger) (*redis.Client, error) {
-	if cfg.RedisURL == "" {
-		return nil, nil
+// NewTimescaleDBClient creates a new TimescaleDB client
+func NewTimescaleDBClient(cfg *config.Config, logger *logrus.Logger) (*timescaledb.Client, error) {
+	if cfg.TimescaleDBURL == "" {
+		return nil, fmt.Errorf("TIMESCALEDB_URL is required")
 	}
-
-	redisAddr := "redis:6379"
-	if len(cfg.RedisURL) > 9 && cfg.RedisURL[:9] == "redis://" {
-		redisAddr = cfg.RedisURL[9:]
-	}
-
-	return redis.NewClient(redisAddr, "", 0, logger, cfg)
+	config2 := timescaledb.DefaultClientConfig()
+	return timescaledb.NewClient(cfg.TimescaleDBURL, logger, config2)
 }
 
-// NewStorageAdapter creates a storage adapter for backward compatibility
-func NewStorageAdapter(
+// NewTimescaleDBStorageAdapter creates a TimescaleDB storage adapter
+func NewTimescaleDBStorageAdapter(
 	keyRepo interfaces.GeneratedKeyRepository,
 	serverRepo interfaces.ServerRepository,
+	timescaleDB *timescaledb.Client,
+	logger *logrus.Logger,
+	cfg *config.Config,
 ) storage.Storage {
-	return storage.NewStorageAdapter(keyRepo, serverRepo)
+	return storage.NewTimescaleDBStorageAdapter(keyRepo, serverRepo, timescaleDB, logger, cfg)
 }

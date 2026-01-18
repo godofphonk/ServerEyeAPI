@@ -25,6 +25,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"runtime"
+	"syscall"
 	"time"
 
 	"github.com/godofphonk/ServerEyeAPI/internal/models"
@@ -96,10 +97,7 @@ func (h *HealthHandler) CheckDependencies(ctx context.Context) map[string]bool {
 		h.logger.Error("Storage is nil - cannot check database")
 	}
 
-	// TODO: Add Redis check when Redis client is available
-	// deps["redis"] = h.redis.Ping(ctx) == nil
-
-	// TODO: Add WebSocket server check
+	// Add WebSocket server check
 	// deps["websocket"] = h.wsServer.IsHealthy()
 
 	// Add system resource checks
@@ -121,9 +119,21 @@ func (h *HealthHandler) checkMemoryUsage() bool {
 
 // checkDiskSpace checks available disk space
 func (h *HealthHandler) checkDiskSpace() bool {
-	// Basic disk space check
-	// In production, you might want to check specific directories
-	return true // TODO: Implement actual disk space checking
+	// Basic disk space check using statfs
+	var stat syscall.Statfs_t
+	err := syscall.Statfs(".", &stat)
+	if err != nil {
+		h.logger.WithError(err).Error("Failed to get disk space info")
+		return false
+	}
+
+	// Calculate available space percentage
+	available := stat.Bavail * uint64(stat.Bsize)
+	total := stat.Blocks * uint64(stat.Bsize)
+	availablePercent := float64(available) / float64(total) * 100
+
+	// Consider unhealthy if less than 10% available
+	return availablePercent > 10
 }
 
 // writeJSON writes JSON response

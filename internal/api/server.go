@@ -33,9 +33,8 @@ import (
 	"github.com/godofphonk/ServerEyeAPI/internal/storage"
 	"github.com/godofphonk/ServerEyeAPI/internal/storage/interfaces"
 	postgresStorage "github.com/godofphonk/ServerEyeAPI/internal/storage/postgres"
-	"github.com/godofphonk/ServerEyeAPI/internal/storage/redis"
-	redisStorage "github.com/godofphonk/ServerEyeAPI/internal/storage/redis"
 	postgresRepo "github.com/godofphonk/ServerEyeAPI/internal/storage/repositories/postgres"
+	"github.com/godofphonk/ServerEyeAPI/internal/storage/timescaledb"
 	"github.com/godofphonk/ServerEyeAPI/internal/version"
 	"github.com/godofphonk/ServerEyeAPI/internal/websocket"
 	"github.com/sirupsen/logrus"
@@ -71,26 +70,19 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 	keyRepo = postgresRepo.NewGeneratedKeyRepository(pgClient.DB(), logger)
 	serverRepo = postgresRepo.NewServerRepository(pgClient.DB(), logger)
 
-	// Initialize Redis if URL is provided
-	var redisClient *redis.Client
-	if cfg.RedisURL != "" {
-		// Extract host:port from redis://host:port format
-		redisAddr := "redis:6379" // Default for Docker Compose
-		if cfg.RedisURL != "" {
-			// Parse URL to get host:port
-			if len(cfg.RedisURL) > 9 && cfg.RedisURL[:9] == "redis://" {
-				redisAddr = cfg.RedisURL[9:] // Remove "redis://" prefix
-			}
-		}
+	// Initialize TimescaleDB client
+	var timescaleDBClient *timescaledb.Client
+	if cfg.TimescaleDBURL != "" {
+		tsConfig := timescaledb.DefaultClientConfig()
 		var err error
-		redisClient, err = redisStorage.NewClient(redisAddr, "", 0, logger, cfg)
+		timescaleDBClient, err = timescaledb.NewClient(cfg.TimescaleDBURL, logger, tsConfig)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	// Create storage adapter with Redis support
-	storageImpl = storage.NewStorageAdapterWithRedis(keyRepo, serverRepo, redisClient)
+	// Create storage adapter with TimescaleDB
+	storageImpl = storage.NewTimescaleDBStorageAdapter(keyRepo, serverRepo, timescaleDBClient, logger, cfg)
 
 	// Initialize WebSocket server
 	wsServer := websocket.NewServer(storageImpl, logger, cfg)

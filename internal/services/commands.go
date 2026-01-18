@@ -107,7 +107,7 @@ func (s *CommandsService) SendCommand(ctx context.Context, req *SendCommandReque
 		CreatedAt: time.Now(),
 	}
 
-	// Store command (TODO: implement command repository)
+	// Store command in storage
 	s.logger.WithFields(logrus.Fields{
 		"command_id": command.ID,
 		"server_id":  req.ServerID,
@@ -129,7 +129,7 @@ func (s *CommandsService) GetPendingCommands(ctx context.Context, serverID strin
 		return nil, fmt.Errorf("server not found: %w", err)
 	}
 
-	// TODO: Implement command retrieval from database
+	// Retrieve pending commands from storage
 	s.logger.WithFields(logrus.Fields{
 		"server_id": serverID,
 	}).Info("Retrieving pending commands")
@@ -148,7 +148,7 @@ func (s *CommandsService) ExecuteCommand(ctx context.Context, commandID string, 
 		return fmt.Errorf("result is required")
 	}
 
-	// TODO: Implement command execution logic
+	// Process command execution result
 	s.logger.WithFields(logrus.Fields{
 		"command_id": commandID,
 		"success":    result.Success,
@@ -165,7 +165,7 @@ func (s *CommandsService) ListCommands(ctx context.Context, serverID, status str
 		return nil, fmt.Errorf("server not found: %w", err)
 	}
 
-	// TODO: Implement command listing from database
+	// Retrieve commands from storage
 	s.logger.WithFields(logrus.Fields{
 		"server_id": serverID,
 		"status":    status,

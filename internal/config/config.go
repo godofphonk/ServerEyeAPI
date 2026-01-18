@@ -39,7 +39,7 @@ type Config struct {
 	// Database
 	DatabaseURL     string `env:"DATABASE_URL"`
 	KeysDatabaseURL string `env:"KEYS_DATABASE_URL"`
-	RedisURL        string `env:"REDIS_URL" envDefault:"redis://localhost:6379"`
+	TimescaleDBURL  string `env:"TIMESCALEDB_URL"` // TimescaleDB URL for time-series data
 
 	// Metrics
 	MetricsTopic string `env:"METRICS_TOPIC" envDefault:"metrics"`
@@ -55,11 +55,12 @@ type Config struct {
 	KafkaBrokers []string `env:"KAFKA_BROKERS" envSeparator:","`
 	KafkaGroupID string   `env:"KAFKA_GROUP_ID"`
 
-	// Redis Configuration
-	Redis struct {
-		TTL         time.Duration `env:"REDIS_TTL" envDefault:"5m"`
-		ConnTimeout time.Duration `env:"REDIS_CONN_TIMEOUT" envDefault:"5s"`
-		MaxRetries  int           `env:"REDIS_MAX_RETRIES" envDefault:"3"`
+	// TimescaleDB Configuration
+	TimescaleDB struct {
+		MaxConnections      int           `env:"TIMESCALEDB_MAX_CONNECTIONS" envDefault:"20"`
+		ConnTimeout         time.Duration `env:"TIMESCALEDB_CONN_TIMEOUT" envDefault:"30s"`
+		QueryTimeout        time.Duration `env:"TIMESCALEDB_QUERY_TIMEOUT" envDefault:"10s"`
+		HealthCheckInterval time.Duration `env:"TIMESCALEDB_HEALTH_CHECK_INTERVAL" envDefault:"30s"`
 	}
 
 	// WebSocket Configuration
@@ -75,6 +76,14 @@ type Config struct {
 	RateLimit struct {
 		Limit  int           `env:"RATE_LIMIT" envDefault:"100"`
 		Window time.Duration `env:"RATE_WINDOW" envDefault:"1m"`
+	}
+
+	// Data Retention Configuration
+	Retention struct {
+		MetricsDays  int `env:"METRICS_RETENTION_DAYS" envDefault:"30"`
+		StatusDays   int `env:"STATUS_RETENTION_DAYS" envDefault:"7"`
+		EventsDays   int `env:"EVENTS_RETENTION_DAYS" envDefault:"14"`
+		CommandsDays int `env:"COMMANDS_RETENTION_DAYS" envDefault:"14"`
 	}
 
 	// Consumer Configuration
@@ -208,11 +217,6 @@ func (c *Config) Validate() error {
 	// Validate port range
 	if c.Port < 1 || c.Port > 65535 {
 		errors = append(errors, "PORT must be between 1 and 65535")
-	}
-
-	// Validate Redis URL format
-	if c.RedisURL != "" && len(c.RedisURL) < 9 {
-		errors = append(errors, "REDIS_URL must be a valid URL (e.g., redis://localhost:6379)")
 	}
 
 	if len(errors) > 0 {

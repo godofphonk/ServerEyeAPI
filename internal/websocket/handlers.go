@@ -100,13 +100,8 @@ func (h *MessageHandlers) HandleMetrics(ctx context.Context, client *Client, msg
 
 // HandleHeartbeat handles heartbeat messages from agents
 func (h *MessageHandlers) HandleHeartbeat(ctx context.Context, client *Client, msg models.WSMessage) error {
-	// Update server status in Redis
-	status := &models.ServerStatus{
-		Online:   true,
-		LastSeen: time.Unix(msg.Timestamp, 0),
-	}
-
-	if err := h.storage.SetServerStatus(ctx, client.ServerID, status); err != nil {
+	// Update server status in storage
+	if err := h.storage.SetServerStatus(ctx, client.ServerID, "online"); err != nil {
 		h.logger.WithError(err).WithField("server_id", client.ServerID).Error("Failed to update server status")
 		return err
 	}

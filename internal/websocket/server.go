@@ -352,12 +352,7 @@ func (s *Server) handleMetrics(ctx context.Context, client *Client, msg models.W
 // handleHeartbeat handles heartbeat messages
 func (s *Server) handleHeartbeat(ctx context.Context, client *Client, msg models.WSMessage) {
 	// Update server status
-	status := &models.ServerStatus{
-		Online:   true,
-		LastSeen: time.Unix(msg.Timestamp, 0),
-	}
-
-	if err := s.storage.SetServerStatus(ctx, client.ServerID, status); err != nil {
+	if err := s.storage.SetServerStatus(ctx, client.ServerID, "online"); err != nil {
 		s.logger.WithError(err).WithField("server_id", client.ServerID).Error("Failed to update server status")
 	}
 }
