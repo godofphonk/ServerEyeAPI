@@ -206,11 +206,23 @@ jobs:
           mkdir -p ./deployments
           
           # Copy all deployment files from repository
+          echo "=== Debugging repository structure ==="
+          echo "Current directory: $(pwd)"
+          echo "Repository contents:"
+          find /opt/servereye -name "timescaledb-init.sql" -type f 2>/dev/null || echo "timescaledb-init.sql not found in repository"
+          echo "Deployments directory contents:"
+          ls -la /opt/servereye/deployments/ 2>/dev/null || echo "Repository deployments directory not found"
+          
           if [ -d "/opt/servereye/deployments" ]; then
-            cp -r /opt/servereye/deployments/* ./deployments/ 2>/dev/null || true
+            echo "Copying files from /opt/servereye/deployments to ./deployments"
+            cp -rv /opt/servereye/deployments/* ./deployments/ 2>/dev/null || echo "Copy command failed"
             echo "✅ Deployment files synced from repository"
+            echo "Current deployments directory contents:"
+            ls -la ./deployments/
           else
-            echo "⚠️ Repository deployments directory not found"
+            echo "❌ Repository deployments directory not found"
+            echo "Available directories in /opt/servereye:"
+            ls -la /opt/servereye/
           fi
           
           # Validate required files exist on server
@@ -232,11 +244,19 @@ jobs:
             
             # Copy from repository if available
             echo "Attempting to copy timescaledb-init.sql from repository..."
+            echo "Checking multiple possible locations..."
+            
+            # Check multiple possible locations
             if [ -f "/opt/servereye/deployments/timescaledb-init.sql" ]; then
               cp /opt/servereye/deployments/timescaledb-init.sql ./deployments/
-              echo "✅ timescaledb-init.sql copied from repository"
+              echo "✅ timescaledb-init.sql copied from /opt/servereye/deployments/"
+            elif [ -f "/opt/servereye/timescaledb-init.sql" ]; then
+              cp /opt/servereye/timescaledb-init.sql ./deployments/
+              echo "✅ timescaledb-init.sql copied from /opt/servereye/"
             else
-              echo "❌ timescaledb-init.sql not found in repository either!"
+              echo "❌ timescaledb-init.sql not found in any repository location!"
+              echo "Full search results:"
+              find /opt/servereye -name "timescaledb-init.sql" -type f 2>/dev/null || echo "No timescaledb-init.sql files found"
               exit 1
             fi
           fi
