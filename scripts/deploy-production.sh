@@ -316,6 +316,20 @@ echo "=== Checking database health ==="
 timeout 60 bash -c 'until docker-compose exec -T postgres pg_isready -U postgres; do sleep 2; done'
 timeout 60 bash -c 'until docker-compose exec -T timescaledb pg_isready -U postgres; do sleep 2; done'
 
+# Fix PostgreSQL authentication for existing databases
+echo "=== Fixing PostgreSQL authentication ==="
+docker-compose exec -T postgres bash -c "echo 'host all postgres 0.0.0.0/0 trust' >> /var/lib/postgresql/data/pg_hba.conf" || echo "Failed to update postgres pg_hba.conf"
+docker-compose exec -T timescaledb bash -c "echo 'host all postgres 0.0.0.0/0 trust' >> /var/lib/postgresql/data/pg_hba.conf" || echo "Failed to update timescaledb pg_hba.conf"
+
+# Restart databases to apply authentication changes
+docker-compose restart postgres timescaledb
+sleep 10
+
+# Wait for databases to be ready again
+echo "=== Waiting for databases after restart ==="
+timeout 60 bash -c 'until docker-compose exec -T postgres pg_isready -U postgres; do sleep 2; done'
+timeout 60 bash -c 'until docker-compose exec -T timescaledb pg_isready -U postgres; do sleep 2; done'
+
 # Verify TimescaleDB extension
 echo "=== Verifying TimescaleDB extension ==="
 docker-compose exec -T timescaledb psql -U postgres -d servereye -c "SELECT extversion FROM pg_extension WHERE extname = 'timescaledb';" || echo "TimescaleDB extension verification"
