@@ -204,16 +204,21 @@ jobs:
           # Stop services gracefully (preserve data)
           echo "=== Stopping services ==="
           
-          # CRITICAL: Verify volumes exist before stopping containers
+          # CRITICAL: Create volumes if they don't exist
+          echo "=== Creating data volumes ==="
+          docker volume create servereye_timescaledb_data || echo "TimescaleDB volume already exists"
+          docker volume create servereye_postgres_data || echo "PostgreSQL volume already exists"
+          
+          # Verify volumes exist after creation
           echo "=== Verifying data volumes exist ==="
           if ! docker volume inspect servereye_timescaledb_data >/dev/null 2>&1; then
-            echo "❌ TimescaleDB volume NOT FOUND - CANNOT PROCEED!"
+            echo "❌ TimescaleDB volume FAILED to create!"
             echo "Available volumes:"
             docker volume ls
             exit 1
           fi
           if ! docker volume inspect servereye_postgres_data >/dev/null 2>&1; then
-            echo "❌ PostgreSQL volume NOT FOUND - CANNOT PROCEED!"
+            echo "❌ PostgreSQL volume FAILED to create!"
             echo "Available volumes:"
             docker volume ls
             exit 1
@@ -254,11 +259,6 @@ jobs:
             exit 1
           fi
           echo "✅ Test changes found in production image source!"
-          
-          # Create external volumes for data persistence
-          echo "=== Creating external volumes ==="
-          docker volume create servereye_postgres_data || true
-          docker volume create servereye_timescaledb_data || true
           
           # Create backup before deployment
           echo "=== Creating backup before deployment ==="
