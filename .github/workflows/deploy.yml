@@ -393,8 +393,18 @@ jobs:
             chmod +x ./deployments/migrate.sh
             docker-compose exec -T postgres /bin/bash -c "cd /migrations && ./migrate.sh" || echo "PostgreSQL migration completed or not needed"
           fi
+          
+          # CRITICAL: Ensure TimescaleDB schema is always present
+          echo "=== Ensuring TimescaleDB schema ==="
           if [ -f "./deployments/timescaledb-init.sql" ]; then
-            echo "TimescaleDB initialization already handled by init script"
+            # Check if server_metrics table exists
+            TABLE_EXISTS=$(docker-compose exec -T timescaledb psql -U postgres -d servereye -t -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'server_metrics' AND table_schema = 'public');" | head -1 || echo "f")
+            if [ "$TABLE_EXISTS" != "t" ]; then
+              echo "TimescaleDB schema missing, applying initialization..."
+              docker-compose exec -T timescaledb psql -U postgres -d servereye -f /docker-entrypoint-initdb.d/timescaledb-init.sql || echo "TimescaleDB init completed"
+            else
+              echo "✅ TimescaleDB schema already exists"
+            fi
           fi
           
           # Start main application
