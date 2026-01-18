@@ -33,7 +33,7 @@ echo "✅ Database connection successful"
 # Apply migrations in order
 echo "Applying schema migrations..."
 
-# Check and apply init-schema.sql if needed
+# Check and apply init-schema.sql if needed (only for PostgreSQL, not TimescaleDB)
 if [ "$(table_exists 'generated_keys')" != "t" ]; then
     echo "Initial schema not found, applying init-schema.sql"
     execute_migration "init-schema.sql"
@@ -41,8 +41,8 @@ else
     echo "✅ Base schema already exists"
 fi
 
-# Apply incremental migrations
-for migration in migration-*.sql; do
+# Apply incremental migrations in order
+for migration in migration-001-*.sql migration-002-*.sql migration-003-*.sql; do
     if [ -f "$migration" ]; then
         echo "Processing migration file: $migration"
         execute_migration "$migration"
