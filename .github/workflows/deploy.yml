@@ -201,6 +201,31 @@ jobs:
           
           cd /opt/servereye
           
+          # Clone or update repository
+          echo "=== Updating repository ==="
+          if [ -d "/opt/servereye/.git" ]; then
+            echo "Repository exists, pulling latest changes..."
+            git fetch origin production
+            git reset --hard origin/production
+            git clean -fd
+          else
+            echo "Cloning fresh repository..."
+            rm -rf /opt/servereye/*
+            git clone https://github.com/godofphonk/ServerEyeAPI.git /opt/servereye/temp-repo
+            mv /opt/servereye/temp-repo/* /opt/servereye/
+            mv /opt/servereye/temp-repo/.git /opt/servereye/
+            rm -rf /opt/servereye/temp-repo
+          fi
+          
+          # Verify repository has required files
+          echo "=== Verifying repository contents ==="
+          if [ ! -f "/opt/servereye/deployments/timescaledb-init.sql" ]; then
+            echo "❌ timescaledb-init.sql not found in repository after update!"
+            echo "Repository structure:"
+            find /opt/servereye -name "*.sql" -type f 2>/dev/null || echo "No SQL files found"
+            exit 1
+          fi
+          
           # Sync deployments files from repository
           echo "=== Syncing deployments files ==="
           mkdir -p ./deployments
