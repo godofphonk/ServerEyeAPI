@@ -227,7 +227,7 @@ jobs:
           # Create external volumes for data persistence
           echo "=== Creating external volumes ==="
           docker volume create servereye_postgres_data || true
-          docker volume create servereye_redis_data || true
+          docker volume create servereye_timescaledb_data || true
           
           # Create backup before deployment
           echo "=== Creating backup before deployment ==="
@@ -236,14 +236,10 @@ jobs:
             docker run --rm -v servereye_postgres_data:/data -v /opt/servereye/backups:/backup alpine tar czf /backup/postgres_backup_$(date +%Y%m%d_%H%M%S).tar.gz -C /data .
             echo "✅ PostgreSQL backup created"
           fi
-          if docker volume inspect servereye_redis_data >/dev/null 2>&1; then
-            docker run --rm -v servereye_redis_data:/data -v /opt/servereye/backups:/backup alpine tar czf /backup/redis_backup_$(date +%Y%m%d_%H%M%S).tar.gz -C /data .
-            echo "✅ Redis backup created"
+          if docker volume inspect servereye_timescaledb_data >/dev/null 2>&1; then
+            docker run --rm -v servereye_timescaledb_data:/data -v /opt/servereye/backups:/backup alpine tar czf /backup/timescaledb_backup_$(date +%Y%m%d_%H%M%S).tar.gz -C /data .
+            echo "✅ TimescaleDB backup created"
           fi
-          
-          # Copy Redis configuration
-          echo "=== Copying Redis configuration ==="
-          cp redis.conf ./redis.conf.backup
           
           # Create docker-compose.yml
           cat > docker-compose.yml << 'COMPOSE_EOF'
@@ -259,7 +255,7 @@ jobs:
                 - PORT=8080
                 - DATABASE_URL=postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@postgres:5432/servereye?sslmode=disable
                 - KEYS_DATABASE_URL=postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@postgres:5432/servereye?sslmode=disable
-                - REDIS_URL=redis:6379
+                - TIMESCALEDB_URL=postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@timescaledb:5432/servereye?sslmode=disable
                 - JWT_SECRET=${{ secrets.JWT_SECRET }}
                 - WEBHOOK_SECRET=${{ secrets.WEBHOOK_SECRET }}
                 - WEB_URL=${{ vars.WEB_URL || 'https://api.servereye.dev' }}
@@ -271,7 +267,7 @@ jobs:
               depends_on:
                 postgres:
                   condition: service_healthy
-                redis:
+                timescaledb:
                   condition: service_healthy
               healthcheck:
                 test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -299,26 +295,29 @@ jobs:
                 timeout: 10s
                 retries: 3
 
-            redis:
-              image: redis:7-alpine
-              container_name: servereye-redis
+            timescaledb:
+              image: timescale/timescaledb:latest-pg15
+              container_name: servereye-timescaledb
               restart: unless-stopped
+              environment:
+                POSTGRES_DB: servereye
+                POSTGRES_USER: postgres
+                POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
               volumes:
-                - servereye_redis_data:/data
-                - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
-              command: redis-server /usr/local/etc/redis/redis.conf --maxmemory 512mb --maxmemory-policy allkeys-lru
+                - servereye_timescaledb_data:/var/lib/postgresql/data
+                - ./deployments:/docker-entrypoint-initdb.d:ro
               networks:
                 - servereye-network
               healthcheck:
-                test: ["CMD", "redis-cli", "ping"]
-                interval: 10s
-                timeout: 5s
-                retries: 5
+                test: ["CMD-SHELL", "pg_isready -U postgres"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
 
           volumes:
             servereye_postgres_data:
               external: true
-            servereye_redis_data:
+            servereye_timescaledb_data:
               external: true
 
           networks:
@@ -328,7 +327,7 @@ jobs:
 
           # Start database services
           echo "=== Starting database services ==="
-          docker-compose up -d postgres redis
+          docker-compose up -d postgres timescaledb
           
           # Wait for databases to be ready
           echo "=== Waiting for databases to be ready ==="
@@ -337,7 +336,7 @@ jobs:
           # Check database health
           echo "=== Checking database health ==="
           timeout 60 bash -c 'until docker-compose exec -T postgres pg_isready -U postgres; do sleep 2; done'
-          timeout 30 bash -c 'until docker-compose exec -T redis redis-cli ping; do sleep 2; done'
+          timeout 60 bash -c 'until docker-compose exec -T timescaledb pg_isready -U postgres; do sleep 2; done'
           
           # Apply migrations if needed
           echo "=== Applying migrations ==="
@@ -371,7 +370,7 @@ jobs:
               if [ $i -eq 6 ]; then
                 echo "❌ Health check failed after 6 attempts!"
                 docker logs servereye-api --tail 50
-                docker logs servereye-redis --tail 20
+                docker logs servereye-timescaledb --tail 20
                 docker logs servereye-postgres --tail 20
                 docker-compose ps
                 exit 1

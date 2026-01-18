@@ -113,7 +113,6 @@ services:
     volumes:
       - servereye_timescaledb_data:/var/lib/postgresql/data
       - ./deployments/timescaledb-init.sql:/docker-entrypoint-initdb.d/init-timescaledb.sql
-      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
     networks:
       - servereye-network
     healthcheck:
