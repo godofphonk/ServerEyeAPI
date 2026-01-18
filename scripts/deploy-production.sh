@@ -318,8 +318,21 @@ timeout 60 bash -c 'until docker-compose exec -T timescaledb pg_isready -U postg
 
 # Fix PostgreSQL authentication for existing databases
 echo "=== Fixing PostgreSQL authentication ==="
-docker-compose exec -T postgres bash -c "echo 'host all postgres 0.0.0.0/0 trust' >> /var/lib/postgresql/data/pg_hba.conf" || echo "Failed to update postgres pg_hba.conf"
-docker-compose exec -T timescaledb bash -c "echo 'host all postgres 0.0.0.0/0 trust' >> /var/lib/postgresql/data/pg_hba.conf" || echo "Failed to update timescaledb pg_hba.conf"
+# Check current pg_hba.conf content
+echo "Current postgres pg_hba.conf:"
+docker-compose exec -T postgres cat /var/lib/postgresql/data/pg_hba.conf | tail -5 || echo "Cannot read postgres pg_hba.conf"
+echo "Current timescaledb pg_hba.conf:"
+docker-compose exec -T timescaledb cat /var/lib/postgresql/data/pg_hba.conf | tail -5 || echo "Cannot read timescaledb pg_hba.conf"
+
+# Add trust rule to both databases
+docker-compose exec -T postgres bash -c 'echo "host all postgres 0.0.0.0/0 trust" >> /var/lib/postgresql/data/pg_hba.conf' || echo "Failed to update postgres pg_hba.conf"
+docker-compose exec -T timescaledb bash -c 'echo "host all postgres 0.0.0.0/0 trust" >> /var/lib/postgresql/data/pg_hba.conf' || echo "Failed to update timescaledb pg_hba.conf"
+
+# Verify the changes were applied
+echo "Updated postgres pg_hba.conf:"
+docker-compose exec -T postgres cat /var/lib/postgresql/data/pg_hba.conf | tail -3 || echo "Cannot verify postgres pg_hba.conf"
+echo "Updated timescaledb pg_hba.conf:"
+docker-compose exec -T timescaledb cat /var/lib/postgresql/data/pg_hba.conf | tail -3 || echo "Cannot verify timescaledb pg_hba.conf"
 
 # Restart databases to apply authentication changes
 docker-compose restart postgres timescaledb
