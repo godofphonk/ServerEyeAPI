@@ -193,7 +193,22 @@ jobs:
         username: ${{ secrets.PROD_USER }}
         key: ${{ secrets.PROD_SSH_KEY }}
         script: |
+          # Validate required secrets are available
+          if [ -z "${{ secrets.PROD_HOST }}" ] || [ -z "${{ secrets.PROD_USER }}" ] || [ -z "${{ secrets.PROD_SSH_KEY }}" ]; then
+            echo "❌ Missing required deployment secrets!"
+            exit 1
+          fi
+          
           cd /opt/servereye
+          
+          # Validate required files exist on server
+          if [ ! -f "./deployments/timescaledb-init.sql" ]; then
+            echo "❌ timescaledb-init.sql not found on server!"
+            echo "Available files in deployments:"
+            ls -la ./deployments/ || echo "Deployments directory not found"
+            exit 1
+          fi
+          echo "✅ timescaledb-init.sql found on server"
           
           # Ensure curl is available for health checks
           if ! command -v curl &> /dev/null; then
@@ -352,7 +367,7 @@ jobs:
                 - servereye_timescaledb_data:/var/lib/postgresql/data
                 - /opt/servereye/deployments:/docker-entrypoint-initdb.d:ro
                 - /opt/servereye/deployments:/migrations:ro
-                - /opt/servereye/deployments/timescaledb-init.sql:/migrations/timescaledb-init.sql:ro
+                - /opt/servereye/deployments/timescaledb-init.sql:/docker-entrypoint-initdb.d/timescaledb-init.sql:ro
               networks:
                 - servereye-network
               healthcheck:
@@ -422,14 +437,29 @@ jobs:
             
             # Apply schema directly from mounted volume
             echo "Checking if timescaledb-init.sql exists..."
+            docker-compose exec -T timescaledb ls -la /docker-entrypoint-initdb.d/ || echo "Init directory not found!"
+            docker-compose exec -T timescaledb ls -la /docker-entrypoint-initdb.d/timescaledb-init.sql || echo "File not found in init directory!"
             docker-compose exec -T timescaledb ls -la /migrations/ || echo "Migrations directory not found!"
-            docker-compose exec -T timescaledb ls -la /migrations/timescaledb-init.sql || echo "File not found!"
-            if docker-compose exec -T timescaledb test -f /migrations/timescaledb-init.sql; then
-              docker-compose exec -T timescaledb psql -U postgres -d servereye -f /migrations/timescaledb-init.sql || echo "TimescaleDB init completed"
+            docker-compose exec -T timescaledb ls -la /migrations/timescaledb-init.sql || echo "File not found in migrations!"
+            
+            # Check file permissions and content
+            echo "Checking file permissions and content..."
+            if docker-compose exec -T timescaledb test -f /docker-entrypoint-initdb.d/timescaledb-init.sql; then
+              echo "✅ File found in docker-entrypoint-initdb.d"
+              docker-compose exec -T timescaledb cat /docker-entrypoint-initdb.d/timescaledb-init.sql | head -5 || echo "Cannot read file content"
+              docker-compose exec -T timescaledb psql -U postgres -d servereye -f /docker-entrypoint-initdb.d/timescaledb-init.sql || echo "TimescaleDB init completed from init directory"
+            elif docker-compose exec -T timescaledb test -f /migrations/timescaledb-init.sql; then
+              echo "✅ File found in migrations directory"
+              docker-compose exec -T timescaledb cat /migrations/timescaledb-init.sql | head -5 || echo "Cannot read file content"
+              docker-compose exec -T timescaledb psql -U postgres -d servereye -f /migrations/timescaledb-init.sql || echo "TimescaleDB init completed from migrations"
             else
               echo "❌ timescaledb-init.sql not found in container!"
+              echo "Available files in /docker-entrypoint-initdb.d:"
+              docker-compose exec -T timescaledb ls -la /docker-entrypoint-initdb.d/ || echo "Cannot list init directory"
               echo "Available files in /migrations:"
               docker-compose exec -T timescaledb ls -la /migrations/ || echo "Cannot list migrations"
+              echo "Checking root directory:"
+              docker-compose exec -T timescaledb ls -la / || echo "Cannot list root"
               exit 1
             fi
             
