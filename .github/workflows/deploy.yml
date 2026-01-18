@@ -195,6 +195,12 @@ jobs:
         script: |
           cd /opt/servereye
           
+          # Ensure curl is available for health checks
+          if ! command -v curl &> /dev/null; then
+            echo "Installing curl for health checks..."
+            sudo apt-get update && sudo apt-get install -y curl || sudo yum install -y curl || echo "curl installation failed, using wget"
+          fi
+          
           # Set variables
           UNIQUE_TAG="production-${{ github.sha }}-$(date -u +'%Y-%m-%dT%H-%M-%SZ')"
           IMAGE_NAME="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}"
@@ -233,15 +239,23 @@ jobs:
           
           # Stop only API service first (keep databases running)
           echo "=== Stopping API service only ==="
-          docker-compose stop servereye-api || true
-          docker-compose rm -f servereye-api || true
+          if docker-compose ps | grep -q servereye-api; then
+            docker-compose stop servereye-api || true
+            docker-compose rm -f servereye-api || true
+          fi
           
           # Stop databases only after API is stopped
           echo "=== Stopping database services ==="
           docker-compose down --remove-orphans || true
-          # Stop only API-related containers, preserve Bot containers
-          docker stop $(docker ps -q --filter "name=servereye-api" --filter "name=servereye-postgres" --filter "name=servereye-redis") || true
-          docker rm $(docker ps -aq --filter "name=servereye-api" --filter "name=servereye-postgres" --filter "name=servereye-redis") || true
+          
+          # Additional cleanup for any remaining containers
+          echo "=== Cleaning up remaining containers ==="
+          for container in servereye-api servereye-postgres servereye-timescaledb; do
+            if docker ps -a -q --filter "name=$container" | grep -q .; then
+              docker stop $container || true
+              docker rm $container || true
+            fi
+          done
           
           # Clean up Docker images only (preserve volumes)
           echo "=== Cleaning up Docker images ==="
@@ -253,9 +267,9 @@ jobs:
           
           # Verify image contains our changes in source code
           echo "=== Verifying image contains changes ==="
-          if ! docker run --rm $IMAGE_NAME:production grep -q "CI/CD TEST" /app/internal/websocket/handlers.go; then
+          if ! docker run --rm $IMAGE_NAME:production test -f /app/internal/websocket/handlers.go || ! docker run --rm $IMAGE_NAME:production grep -q "CI/CD TEST" /app/internal/websocket/handlers.go; then
             echo "❌ Test changes NOT found in production image source!"
-            docker run --rm $IMAGE_NAME:production ls -la /app/internal/websocket/ || echo "Directory not found"
+            docker run --rm $IMAGE_NAME:production find /app -name "*.go" -type f | head -10 || echo "No Go files found"
             exit 1
           fi
           echo "✅ Test changes found in production image source!"
@@ -301,7 +315,7 @@ jobs:
                 timescaledb:
                   condition: service_healthy
               healthcheck:
-                test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+                test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
                 interval: 30s
                 timeout: 10s
                 retries: 3
@@ -337,6 +351,7 @@ jobs:
               volumes:
                 - servereye_timescaledb_data:/var/lib/postgresql/data
                 - ./deployments:/docker-entrypoint-initdb.d:ro
+                - ./deployments:/migrations:ro
               networks:
                 - servereye-network
               healthcheck:
@@ -405,7 +420,7 @@ jobs:
             docker-compose exec -T timescaledb psql -U postgres -d servereye -c "CREATE EXTENSION IF NOT EXISTS timescaledb;" || echo "TimescaleDB extension installation"
             
             # Apply schema directly from mounted volume
-            docker-compose exec -T timescaledb psql -U postgres -d servereye -f /docker-entrypoint-initdb.d/timescaledb-init.sql || echo "TimescaleDB init completed"
+            docker-compose exec -T timescaledb psql -U postgres -d servereye -f /migrations/timescaledb-init.sql || echo "TimescaleDB init completed"
             
             # Verify schema was applied
             sleep 5
