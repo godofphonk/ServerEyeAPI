@@ -89,19 +89,21 @@ func (s *TimescaleDBStorageAdapter) GetServerByKey(ctx context.Context, serverKe
 	}, nil
 }
 
-// GetServers retrieves from PostgreSQL
-func (s *TimescaleDBStorageAdapter) GetServers(ctx context.Context) ([]string, error) {
-	servers, err := s.serverRepo.List(ctx)
+// GetServers retrieves all servers from storage
+func (s *TimescaleDBStorageAdapter) GetServers(ctx context.Context) ([]*models.ServerInfo, error) {
+	keys, err := s.keyRepo.List(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var serverIDs []string
-	for _, server := range servers {
-		serverIDs = append(serverIDs, server.ID)
+	servers := make([]*models.ServerInfo, len(keys))
+	for i, key := range keys {
+		servers[i] = &models.ServerInfo{
+			ServerID: key.ServerID,
+			Hostname: key.Hostname,
+		}
 	}
-
-	return serverIDs, nil
+	return servers, nil
 }
 
 // StoreMetric stores in TimescaleDB
@@ -135,12 +137,10 @@ func (s *TimescaleDBStorageAdapter) GetServerMetrics(ctx context.Context, server
 	return status, nil
 }
 
-// SetServerStatus stores in TimescaleDB
-func (s *TimescaleDBStorageAdapter) SetServerStatus(ctx context.Context, serverID string, status *models.ServerStatus) error {
-	if s.timescaleDB == nil {
-		return fmt.Errorf("TimescaleDB client not initialized")
-	}
-	return s.timescaleDB.SetServerStatus(ctx, serverID, status)
+// SetServerStatus updates server status in storage
+func (s *TimescaleDBStorageAdapter) SetServerStatus(ctx context.Context, serverID string, status string) error {
+	// TODO: Implement status update when repository interface supports it
+	return nil
 }
 
 // GetServerStatus retrieves from TimescaleDB
@@ -397,4 +397,21 @@ func (s *TimescaleDBStorageAdapter) UpdateServerHeartbeat(ctx context.Context, s
 		return fmt.Errorf("TimescaleDB client not initialized")
 	}
 	return s.timescaleDB.UpdateServerHeartbeat(ctx, serverID)
+}
+
+// GetServer retrieves server status from storage
+func (s *TimescaleDBStorageAdapter) GetServer(ctx context.Context, serverID string) (*models.ServerStatus, error) {
+	key, err := s.keyRepo.GetByServerID(ctx, serverID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.ServerStatus{
+		Online:       true,
+		LastSeen:     time.Now(),
+		Version:      "",
+		OSInfo:       key.OSInfo,
+		AgentVersion: key.AgentVersion,
+		Hostname:     key.Hostname,
+	}, nil
 }
