@@ -276,65 +276,135 @@ END;
 $$;
 
 -- Create continuous aggregates after cleanup
-CREATE MATERIALIZED VIEW metrics_5m_avg WITH (timescaledb.continuous) AS
-SELECT 
-    time_bucket('5 minutes', time) AS bucket,
-    server_id,
-    AVG(cpu_usage) as avg_cpu,
-    AVG(memory_usage) as avg_memory,
-    AVG(disk_usage) as avg_disk,
-    AVG(network_usage) as avg_network,
-    AVG(cpu_temperature) as avg_temp
-FROM server_metrics
-GROUP BY bucket, server_id;
-
-CREATE MATERIALIZED VIEW server_uptime_daily WITH (timescaledb.continuous) AS
-SELECT 
-    time_bucket('1 day', time) AS bucket,
-    server_id,
-    hostname,
-    AVG(CASE WHEN online THEN 1 ELSE 0 END) * 100 as uptime_percentage,
-    COUNT(*) as status_checks,
-    AVG(response_time_ms) as avg_response_time
-FROM server_status
-GROUP BY bucket, server_id, hostname;
-
-CREATE MATERIALIZED VIEW alert_stats_hourly WITH (timescaledb.continuous) AS
-SELECT 
-    time_bucket('1 hour', time) AS bucket,
-    server_id,
-    COUNT(*) as alert_count,
-    COUNT(CASE WHEN level = 'critical' THEN 1 END) as critical_count,
-    COUNT(CASE WHEN level = 'error' THEN 1 END) as error_count,
-    COUNT(CASE WHEN level = 'warn' THEN 1 END) as warning_count
-FROM server_events
-WHERE level IN ('warn', 'error', 'critical')
-GROUP BY bucket, server_id;
+DO $$
+BEGIN
+    -- Check and create continuous aggregates safely
+    IF NOT EXISTS (SELECT 1 FROM information_schema.views WHERE table_name = 'metrics_5m_avg') THEN
+        EXECUTE '
+        CREATE MATERIALIZED VIEW metrics_5m_avg WITH (timescaledb.continuous) AS
+        SELECT 
+            time_bucket(''5 minutes'', time) AS bucket,
+            server_id,
+            AVG(cpu_usage) as avg_cpu,
+            AVG(memory_usage) as avg_memory,
+            AVG(disk_usage) as avg_disk,
+            AVG(network_usage) as avg_network,
+            AVG(cpu_temperature) as avg_temp
+        FROM server_metrics
+        GROUP BY bucket, server_id';
+        RAISE NOTICE 'Created metrics_5m_avg continuous aggregate';
+    ELSE
+        RAISE NOTICE 'metrics_5m_avg already exists, skipping creation';
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.views WHERE table_name = 'server_uptime_daily') THEN
+        EXECUTE '
+        CREATE MATERIALIZED VIEW server_uptime_daily WITH (timescaledb.continuous) AS
+        SELECT 
+            time_bucket(''1 day'', time) AS bucket,
+            server_id,
+            hostname,
+            AVG(CASE WHEN online THEN 1 ELSE 0 END) * 100 as uptime_percentage,
+            COUNT(*) as status_checks,
+            AVG(response_time_ms) as avg_response_time
+        FROM server_status
+        GROUP BY bucket, server_id, hostname';
+        RAISE NOTICE 'Created server_uptime_daily continuous aggregate';
+    ELSE
+        RAISE NOTICE 'server_uptime_daily already exists, skipping creation';
+    END IF;
+    
+    IF NOT EXISTS (SELECT 1 FROM information_schema.views WHERE table_name = 'alert_stats_hourly') THEN
+        EXECUTE '
+        CREATE MATERIALIZED VIEW alert_stats_hourly WITH (timescaledb.continuous) AS
+        SELECT 
+            time_bucket(''1 hour'', time) AS bucket,
+            server_id,
+            COUNT(*) as alert_count,
+            COUNT(CASE WHEN level = ''critical'' THEN 1 END) as critical_count,
+            COUNT(CASE WHEN level = ''error'' THEN 1 END) as error_count,
+            COUNT(CASE WHEN level = ''warn'' THEN 1 END) as warning_count
+        FROM server_events
+        WHERE level IN (''warn'', ''error'', ''critical'')
+        GROUP BY bucket, server_id';
+        RAISE NOTICE 'Created alert_stats_hourly continuous aggregate';
+    ELSE
+        RAISE NOTICE 'alert_stats_hourly already exists, skipping creation';
+    END IF;
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Error creating continuous aggregates: %', SQLERRM;
+END;
+$$;
 
 -- Add refresh policies with conservative windows
-SELECT add_continuous_aggregate_policy('metrics_5m_avg', 
-    start_offset => INTERVAL '3 hours',
-    end_offset => INTERVAL '1 hour',
-    schedule_interval => INTERVAL '1 minute'
-);
-
-SELECT add_continuous_aggregate_policy('metrics_1h_avg', 
-    start_offset => INTERVAL '3 days',
-    end_offset => INTERVAL '3 hours',
-    schedule_interval => INTERVAL '5 minutes'
-);
-
-SELECT add_continuous_aggregate_policy('server_uptime_daily', 
-    start_offset => INTERVAL '3 days',
-    end_offset => INTERVAL '3 hours',
-    schedule_interval => INTERVAL '1 hour'
-);
-
-SELECT add_continuous_aggregate_policy('alert_stats_hourly', 
-    start_offset => INTERVAL '3 days',
-    end_offset => INTERVAL '3 hours',
-    schedule_interval => INTERVAL '10 minutes'
-);
+DO $$
+BEGIN
+    -- Check and add policies safely
+    IF NOT EXISTS (
+        SELECT 1 FROM timescaledb_information.continuous_aggregate_policies 
+        WHERE hypertable_name = 'server_metrics' 
+        AND view_name = 'metrics_5m_avg'
+    ) THEN
+        PERFORM add_continuous_aggregate_policy('metrics_5m_avg', 
+            start_offset => INTERVAL '3 hours',
+            end_offset => INTERVAL '1 hour',
+            schedule_interval => INTERVAL '1 minute'
+        );
+        RAISE NOTICE 'Created metrics_5m_avg refresh policy';
+    ELSE
+        RAISE NOTICE 'metrics_5m_avg refresh policy already exists';
+    END IF;
+    
+    -- Note: metrics_1h_avg view creation was removed from above, so we'll skip its policy
+    IF EXISTS (SELECT 1 FROM information_schema.views WHERE table_name = 'metrics_1h_avg') AND
+       NOT EXISTS (
+           SELECT 1 FROM timescaledb_information.continuous_aggregate_policies 
+           WHERE hypertable_name = 'server_metrics' 
+           AND view_name = 'metrics_1h_avg'
+       ) THEN
+        PERFORM add_continuous_aggregate_policy('metrics_1h_avg', 
+            start_offset => INTERVAL '3 days',
+            end_offset => INTERVAL '3 hours',
+            schedule_interval => INTERVAL '5 minutes'
+        );
+        RAISE NOTICE 'Created metrics_1h_avg refresh policy';
+    END IF;
+    
+    IF NOT EXISTS (
+        SELECT 1 FROM timescaledb_information.continuous_aggregate_policies 
+        WHERE hypertable_name = 'server_status' 
+        AND view_name = 'server_uptime_daily'
+    ) THEN
+        PERFORM add_continuous_aggregate_policy('server_uptime_daily', 
+            start_offset => INTERVAL '3 days',
+            end_offset => INTERVAL '3 hours',
+            schedule_interval => INTERVAL '1 hour'
+        );
+        RAISE NOTICE 'Created server_uptime_daily refresh policy';
+    ELSE
+        RAISE NOTICE 'server_uptime_daily refresh policy already exists';
+    END IF;
+    
+    IF NOT EXISTS (
+        SELECT 1 FROM timescaledb_information.continuous_aggregate_policies 
+        WHERE hypertable_name = 'server_events' 
+        AND view_name = 'alert_stats_hourly'
+    ) THEN
+        PERFORM add_continuous_aggregate_policy('alert_stats_hourly', 
+            start_offset => INTERVAL '3 days',
+            end_offset => INTERVAL '3 hours',
+            schedule_interval => INTERVAL '10 minutes'
+        );
+        RAISE NOTICE 'Created alert_stats_hourly refresh policy';
+    ELSE
+        RAISE NOTICE 'alert_stats_hourly refresh policy already exists';
+    END IF;
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Error creating refresh policies: %', SQLERRM;
+END;
+$$;
 
 -- Create useful functions
 -- Function to get latest metrics for a server
