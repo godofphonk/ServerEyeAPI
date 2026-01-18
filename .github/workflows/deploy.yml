@@ -397,11 +397,25 @@ jobs:
           # CRITICAL: Ensure TimescaleDB schema is always present
           echo "=== Ensuring TimescaleDB schema ==="
           if [ -f "./deployments/timescaledb-init.sql" ]; then
+            # First, ensure TimescaleDB extension is installed
+            echo "Installing TimescaleDB extension..."
+            docker-compose exec -T timescaledb psql -U postgres -d servereye -c "CREATE EXTENSION IF NOT EXISTS timescaledb;" || echo "TimescaleDB extension installation"
+            
             # Check if server_metrics table exists
             TABLE_EXISTS=$(docker-compose exec -T timescaledb psql -U postgres -d servereye -t -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'server_metrics' AND table_schema = 'public');" | head -1 || echo "f")
             if [ "$TABLE_EXISTS" != "t" ]; then
               echo "TimescaleDB schema missing, applying initialization..."
               docker-compose exec -T timescaledb psql -U postgres -d servereye -f /docker-entrypoint-initdb.d/timescaledb-init.sql || echo "TimescaleDB init completed"
+              # Verify schema was applied
+              sleep 5
+              TABLE_EXISTS_AFTER=$(docker-compose exec -T timescaledb psql -U postgres -d servereye -t -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'server_metrics' AND table_schema = 'public');" | head -1 || echo "f")
+              if [ "$TABLE_EXISTS_AFTER" = "t" ]; then
+                echo "✅ TimescaleDB schema applied successfully!"
+              else
+                echo "❌ TimescaleDB schema application failed!"
+                docker-compose exec -T timescaledb psql -U postgres -d servereye -c "\dt" || echo "Cannot list tables"
+                exit 1
+              fi
             else
               echo "✅ TimescaleDB schema already exists"
             fi
