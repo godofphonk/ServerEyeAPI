@@ -328,7 +328,7 @@ SELECT add_compression_policy('server_status', INTERVAL '6 hours', if_not_exists
 -- Refresh 5-minute aggregates every minute
 SELECT add_continuous_aggregate_policy('metrics_5m_avg', 
     start_offset => INTERVAL '1 hour',
-    end_offset => INTERVAL '1 minute',
+    end_offset => INTERVAL '1 hour',
     schedule_interval => INTERVAL '1 minute',
     if_not_exists => TRUE
 );
@@ -336,7 +336,7 @@ SELECT add_continuous_aggregate_policy('metrics_5m_avg',
 -- Refresh 1-hour aggregates every 5 minutes
 SELECT add_continuous_aggregate_policy('metrics_1h_avg', 
     start_offset => INTERVAL '1 day',
-    end_offset => INTERVAL '5 minutes',
+    end_offset => INTERVAL '1 hour',
     schedule_interval => INTERVAL '5 minutes',
     if_not_exists => TRUE
 );
