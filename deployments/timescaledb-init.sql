@@ -292,7 +292,7 @@ FROM server_events
 WHERE level IN ('warn', 'error', 'critical')
 GROUP BY hour, server_id;
 
--- Add compression policies for better storage efficiency
+-- Create useful functions
 ALTER TABLE server_metrics SET (
     timescaledb.compress,
     timescaledb.compress_segmentby = 'server_id',
@@ -325,34 +325,87 @@ SELECT add_compression_policy('server_metrics', INTERVAL '1 day', if_not_exists 
 SELECT add_compression_policy('server_status', INTERVAL '6 hours', if_not_exists => TRUE);
 
 -- Add refresh policies for continuous aggregates
--- Remove existing policies first to avoid conflicts
-SELECT remove_continuous_aggregate_policy('metrics_5m_avg', if_exists => TRUE);
-SELECT remove_continuous_aggregate_policy('metrics_1h_avg', if_exists => TRUE);
-SELECT remove_continuous_aggregate_policy('server_uptime_daily', if_exists => TRUE);
-SELECT remove_continuous_aggregate_policy('alert_stats_hourly', if_exists => TRUE);
+-- FORCE DROP existing policies first to avoid conflicts
+DO $$
+BEGIN
+    -- Drop existing continuous aggregates
+    DROP MATERIALIZED VIEW IF EXISTS metrics_1h_avg CASCADE;
+    DROP MATERIALIZED VIEW IF EXISTS metrics_5m_avg CASCADE;
+    DROP MATERIALIZED VIEW IF EXISTS server_uptime_daily CASCADE;
+    DROP MATERIALIZED VIEW IF EXISTS alert_stats_hourly CASCADE;
+    
+    -- Drop existing policies
+    PERFORM remove_continuous_aggregate_policy('metrics_5m_avg', if_exists => TRUE);
+    PERFORM remove_continuous_aggregate_policy('metrics_1h_avg', if_exists => TRUE);
+    PERFORM remove_continuous_aggregate_policy('server_uptime_daily', if_exists => TRUE);
+    PERFORM remove_continuous_aggregate_policy('alert_stats_hourly', if_exists => TRUE);
+END;
+$$;
 
--- Refresh 5-minute aggregates every minute
+-- Recreate continuous aggregates
+CREATE MATERIALIZED VIEW metrics_5m_avg WITH (timescaledb.continuous) AS
+SELECT 
+    time_bucket('5 minutes', time) AS bucket,
+    server_id,
+    AVG(cpu_usage) as avg_cpu,
+    AVG(memory_usage) as avg_memory,
+    AVG(disk_usage) as avg_disk,
+    AVG(network_usage) as avg_network,
+    AVG(cpu_temperature) as avg_temp
+FROM server_metrics
+GROUP BY bucket, server_id;
+
+CREATE MATERIALIZED VIEW metrics_1h_avg WITH (timescaledb.continuous) AS
+SELECT 
+    time_bucket('1 hour', time) AS bucket,
+    server_id,
+    AVG(cpu_usage) as avg_cpu,
+    AVG(memory_usage) as avg_memory,
+    AVG(disk_usage) as avg_disk,
+    AVG(network_usage) as avg_network,
+    AVG(cpu_temperature) as avg_temp
+FROM server_metrics
+GROUP BY bucket, server_id;
+
+CREATE MATERIALIZED VIEW server_uptime_daily WITH (timescaledb.continuous) AS
+SELECT 
+    time_bucket('1 day', time) AS bucket,
+    server_id,
+    (COUNT(CASE WHEN online THEN 1 END) * 100.0 / COUNT(*)) as uptime_percent
+FROM server_status
+GROUP BY bucket, server_id;
+
+CREATE MATERIALIZED VIEW alert_stats_hourly WITH (timescaledb.continuous) AS
+SELECT 
+    time_bucket('1 hour', time) AS bucket,
+    server_id,
+    COUNT(*) as alert_count,
+    COUNT(CASE WHEN level = 'critical' THEN 1 END) as critical_count,
+    COUNT(CASE WHEN level = 'error' THEN 1 END) as error_count,
+    COUNT(CASE WHEN level = 'warn' THEN 1 END) as warning_count
+FROM server_events
+WHERE level IN ('warn', 'error', 'critical')
+GROUP BY bucket, server_id;
+
+-- Add refresh policies with conservative windows
 SELECT add_continuous_aggregate_policy('metrics_5m_avg', 
     start_offset => INTERVAL '3 hours',
     end_offset => INTERVAL '1 hour',
     schedule_interval => INTERVAL '1 minute'
 );
 
--- Refresh 1-hour aggregates every 5 minutes
 SELECT add_continuous_aggregate_policy('metrics_1h_avg', 
     start_offset => INTERVAL '3 days',
     end_offset => INTERVAL '3 hours',
     schedule_interval => INTERVAL '5 minutes'
 );
 
--- Refresh uptime summary every hour
 SELECT add_continuous_aggregate_policy('server_uptime_daily', 
     start_offset => INTERVAL '3 days',
     end_offset => INTERVAL '3 hours',
     schedule_interval => INTERVAL '1 hour'
 );
 
--- Refresh alert stats every 10 minutes
 SELECT add_continuous_aggregate_policy('alert_stats_hourly', 
     start_offset => INTERVAL '3 days',
     end_offset => INTERVAL '3 hours',
