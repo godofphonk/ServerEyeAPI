@@ -215,9 +215,9 @@ services:
     environment:
       - HOST=0.0.0.0
       - PORT=8080
-      - DATABASE_URL=postgres://postgres:7H9E1xbO2AN2Y1JY@postgres:5432/servereye?sslmode=disable
-      - KEYS_DATABASE_URL=postgres://postgres:7H9E1xbO2AN2Y1JY@postgres:5432/servereye?sslmode=disable
-      - TIMESCALEDB_URL=postgres://postgres:7H9E1xbO2AN2Y1JY@timescaledb:5432/servereye?sslmode=disable
+      - DATABASE_URL=postgres://postgres@postgres:5432/servereye?sslmode=disable
+      - KEYS_DATABASE_URL=postgres://postgres@postgres:5432/servereye?sslmode=disable
+      - TIMESCALEDB_URL=postgres://postgres@timescaledb:5432/servereye?sslmode=disable
       - JWT_SECRET=${JWT_SECRET}
       - WEBHOOK_SECRET=${WEBHOOK_SECRET}
       - WEB_URL=${WEB_URL:-'https://api.servereye.dev'}
@@ -245,7 +245,6 @@ services:
     environment:
       POSTGRES_DB: servereye
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 7H9E1xbO2AN2Y1JY
     volumes:
       - servereye_postgres_data:/var/lib/postgresql/data
       - /opt/servereye/deployments:/migrations:ro
@@ -264,7 +263,6 @@ services:
     environment:
       POSTGRES_DB: servereye
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 7H9E1xbO2AN2Y1JY
     volumes:
       - servereye_timescaledb_data:/var/lib/postgresql/data
       - /opt/servereye/deployments:/docker-entrypoint-initdb.d:ro
