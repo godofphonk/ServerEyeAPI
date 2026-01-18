@@ -255,18 +255,22 @@ jobs:
           
           # Force copy latest files to working directory
           echo "=== Force copying latest deployment files ==="
-          # Remove existing deployments directory and copy fresh
+          # Save original deployments
+          cp -r /opt/servereye/deployments /opt/servereye/deployments-original
           rm -rf ./deployments
           mkdir -p ./deployments
-          cp -r /opt/servereye/deployments/* ./deployments/ 2>/dev/null || echo "Copy failed, trying individual files"
+          cp -r /opt/servereye/deployments-original/* ./deployments/ 2>/dev/null || echo "Copy failed, trying individual files"
           
           # If copy failed, try copying files individually
           if [ ! -f "./deployments/timescaledb-init.sql" ]; then
             echo "=== Copying files individually ==="
-            find /opt/servereye/deployments -name "*.sql" -type f -exec cp {} ./deployments/ \;
-            find /opt/servereye/deployments -name "*.yml" -type f -exec cp {} ./deployments/ \;
-            find /opt/servereye/deployments -name "*.sh" -type f -exec cp {} ./deployments/ \;
+            find /opt/servereye/deployments-original -name "*.sql" -type f -exec cp {} ./deployments/ \;
+            find /opt/servereye/deployments-original -name "*.yml" -type f -exec cp {} ./deployments/ \;
+            find /opt/servereye/deployments-original -name "*.sh" -type f -exec cp {} ./deployments/ \;
           fi
+          
+          # Cleanup backup
+          rm -rf /opt/servereye/deployments-original
           
           # Verify file hash to ensure we have latest version
           echo "=== Verifying file versions ==="
