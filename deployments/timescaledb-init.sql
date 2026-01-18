@@ -333,34 +333,30 @@ SELECT remove_continuous_aggregate_policy('alert_stats_hourly', if_exists => TRU
 
 -- Refresh 5-minute aggregates every minute
 SELECT add_continuous_aggregate_policy('metrics_5m_avg', 
-    start_offset => INTERVAL '2 hours',
+    start_offset => INTERVAL '3 hours',
     end_offset => INTERVAL '1 hour',
-    schedule_interval => INTERVAL '1 minute',
-    if_not_exists => TRUE
+    schedule_interval => INTERVAL '1 minute'
 );
 
 -- Refresh 1-hour aggregates every 5 minutes
 SELECT add_continuous_aggregate_policy('metrics_1h_avg', 
-    start_offset => INTERVAL '2 days',
-    end_offset => INTERVAL '2 hours',
-    schedule_interval => INTERVAL '5 minutes',
-    if_not_exists => TRUE
+    start_offset => INTERVAL '3 days',
+    end_offset => INTERVAL '3 hours',
+    schedule_interval => INTERVAL '5 minutes'
 );
 
 -- Refresh uptime summary every hour
 SELECT add_continuous_aggregate_policy('server_uptime_daily', 
-    start_offset => INTERVAL '2 days',
-    end_offset => INTERVAL '2 hours',
-    schedule_interval => INTERVAL '1 hour',
-    if_not_exists => TRUE
+    start_offset => INTERVAL '3 days',
+    end_offset => INTERVAL '3 hours',
+    schedule_interval => INTERVAL '1 hour'
 );
 
 -- Refresh alert stats every 10 minutes
 SELECT add_continuous_aggregate_policy('alert_stats_hourly', 
-    start_offset => INTERVAL '2 days',
-    end_offset => INTERVAL '2 hours',
-    schedule_interval => INTERVAL '10 minutes',
-    if_not_exists => TRUE
+    start_offset => INTERVAL '3 days',
+    end_offset => INTERVAL '3 hours',
+    schedule_interval => INTERVAL '10 minutes'
 );
 
 -- Create useful functions
