@@ -351,7 +351,8 @@ jobs:
               volumes:
                 - servereye_timescaledb_data:/var/lib/postgresql/data
                 - /opt/servereye/deployments:/docker-entrypoint-initdb.d:ro
-                - /opt/servereye/deployments:/migrations
+                - /opt/servereye/deployments:/migrations:ro
+                - /opt/servereye/deployments/timescaledb-init.sql:/migrations/timescaledb-init.sql:ro
               networks:
                 - servereye-network
               healthcheck:
