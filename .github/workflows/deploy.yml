@@ -255,14 +255,18 @@ jobs:
           
           # Force copy latest files to working directory
           echo "=== Force copying latest deployment files ==="
-          mkdir -p ./deployments
-          rm -rf ./deployments/*
-          cp -r /opt/servereye/deployments/* ./deployments/ 2>/dev/null || echo "Copy failed, trying individual files"
+          # Remove existing deployments directory and copy fresh
+          rm -rf ./deployments
+          cp -r /opt/servereye/deployments ./deployments 2>/dev/null || echo "Copy failed, trying individual files"
           
           # If copy failed, try copying files individually
           if [ ! -f "./deployments/timescaledb-init.sql" ]; then
             echo "=== Copying files individually ==="
-            find /opt/servereye -name "*.sql" -type f -exec cp {} ./deployments/ \;
+            mkdir -p ./deployments
+            find /opt/servereye/deployments -name "*.sql" -type f -exec cp {} ./deployments/ \;
+            # Also copy other deployment files
+            find /opt/servereye/deployments -name "*.yml" -type f -exec cp {} ./deployments/ \;
+            find /opt/servereye/deployments -name "*.sh" -type f -exec cp {} ./deployments/ \;
           fi
           
           # Verify file hash to ensure we have latest version
