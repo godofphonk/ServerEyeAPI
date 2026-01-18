@@ -203,6 +203,9 @@ jobs:
           
           # Clone or update repository
           echo "=== Updating repository ==="
+          # Fix git safe directory issue
+          git config --global --add safe.directory /opt/servereye
+          
           if [ -d "/opt/servereye/.git" ]; then
             echo "Repository exists, pulling latest changes..."
             git fetch origin production
@@ -223,6 +226,32 @@ jobs:
             echo "❌ timescaledb-init.sql not found in repository after update!"
             echo "Repository structure:"
             find /opt/servereye -name "*.sql" -type f 2>/dev/null || echo "No SQL files found"
+            exit 1
+          fi
+          
+          # Force copy latest files to working directory
+          echo "=== Force copying latest deployment files ==="
+          rm -rf ./deployments/*
+          cp -r /opt/servereye/deployments/* ./deployments/
+          
+          # Verify file hash to ensure we have latest version
+          echo "=== Verifying file versions ==="
+          CURRENT_HASH=$(sha256sum ./deployments/timescaledb-init.sql | cut -d' ' -f1)
+          echo "Current timescaledb-init.sql hash: $CURRENT_HASH"
+          
+          # Check if file contains the fixes
+          if grep -q "metric_time TIMESTAMPTZ" ./deployments/timescaledb-init.sql; then
+            echo "✅ File contains metric_time fix"
+          else
+            echo "❌ File does not contain metric_time fix - forcing update"
+            # Force copy again
+            cp /opt/servereye/deployments/timescaledb-init.sql ./deployments/timescaledb-init.sql
+          fi
+          
+          if grep -q "end_offset => INTERVAL '1 hour'" ./deployments/timescaledb-init.sql; then
+            echo "✅ File contains continuous aggregate fix"
+          else
+            echo "❌ File does not contain continuous aggregate fix"
             exit 1
           fi
           
