@@ -352,7 +352,7 @@ SELECT add_continuous_aggregate_policy('server_uptime_daily',
 -- Refresh alert stats every 10 minutes
 SELECT add_continuous_aggregate_policy('alert_stats_hourly', 
     start_offset => INTERVAL '1 day',
-    end_offset => INTERVAL '10 minutes',
+    end_offset => INTERVAL '1 hour',
     schedule_interval => INTERVAL '10 minutes',
     if_not_exists => TRUE
 );
@@ -361,7 +361,7 @@ SELECT add_continuous_aggregate_policy('alert_stats_hourly',
 -- Function to get latest metrics for a server
 CREATE OR REPLACE FUNCTION get_latest_metrics(p_server_id TEXT)
 RETURNS TABLE (
-    time TIMESTAMPTZ,
+    metric_time TIMESTAMPTZ,
     cpu_usage DOUBLE PRECISION,
     memory_usage DOUBLE PRECISION,
     disk_usage DOUBLE PRECISION,
@@ -372,7 +372,7 @@ RETURNS TABLE (
 BEGIN
     RETURN QUERY
     SELECT 
-        time,
+        time AS metric_time,
         cpu_usage,
         memory_usage,
         disk_usage,
