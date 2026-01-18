@@ -328,17 +328,20 @@ SELECT add_compression_policy('server_status', INTERVAL '6 hours', if_not_exists
 -- FORCE DROP existing policies first to avoid conflicts
 DO $$
 BEGIN
-    -- Drop existing continuous aggregates
-    DROP MATERIALIZED VIEW IF EXISTS metrics_1h_avg CASCADE;
-    DROP MATERIALIZED VIEW IF EXISTS metrics_5m_avg CASCADE;
-    DROP MATERIALIZED VIEW IF EXISTS server_uptime_daily CASCADE;
-    DROP MATERIALIZED VIEW IF EXISTS alert_stats_hourly CASCADE;
+    -- Drop existing continuous aggregates if they exist
+    PERFORM drop_view('metrics_5m_avg', cascade);
+    PERFORM drop_view('metrics_1h_avg', cascade);
+    PERFORM drop_view('server_uptime_daily', cascade);
+    PERFORM drop_view('alert_stats_hourly', cascade);
     
-    -- Drop existing policies
+    -- Drop existing policies if they exist
     PERFORM remove_continuous_aggregate_policy('metrics_5m_avg', if_exists => TRUE);
     PERFORM remove_continuous_aggregate_policy('metrics_1h_avg', if_exists => TRUE);
     PERFORM remove_continuous_aggregate_policy('server_uptime_daily', if_exists => TRUE);
     PERFORM remove_continuous_aggregate_policy('alert_stats_hourly', if_exists => TRUE);
+EXCEPTION
+    WHEN OTHERS THEN
+        NULL; -- Ignore any errors during cleanup
 END;
 $$;
 
