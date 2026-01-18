@@ -245,10 +245,10 @@ services:
     environment:
       POSTGRES_DB: servereye
       POSTGRES_USER: postgres
+      POSTGRES_HOST_AUTH_METHOD: trust
     volumes:
       - servereye_postgres_data:/var/lib/postgresql/data
       - /opt/servereye/deployments:/migrations:ro
-      - /opt/servereye/deployments/pg_hba.conf:/var/lib/postgresql/data/pg_hba.conf:ro
     networks:
       - servereye-network
     healthcheck:
@@ -264,12 +264,12 @@ services:
     environment:
       POSTGRES_DB: servereye
       POSTGRES_USER: postgres
+      POSTGRES_HOST_AUTH_METHOD: trust
     volumes:
       - servereye_timescaledb_data:/var/lib/postgresql/data
       - /opt/servereye/deployments:/docker-entrypoint-initdb.d:ro
       - /opt/servereye/deployments:/migrations:ro
       - /opt/servereye/deployments/timescaledb-init.sql:/docker-entrypoint-initdb.d/timescaledb-init.sql:ro
-      - /opt/servereye/deployments/pg_hba.conf:/var/lib/postgresql/data/pg_hba.conf:ro
     networks:
       - servereye-network
     healthcheck:
