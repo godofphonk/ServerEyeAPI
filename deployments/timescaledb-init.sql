@@ -220,77 +220,7 @@ CREATE INDEX IF NOT EXISTS idx_dlq_server_id ON dead_letter_queue (server_id);
 CREATE INDEX IF NOT EXISTS idx_dlq_topic ON dead_letter_queue (topic);
 CREATE INDEX IF NOT EXISTS idx_dlq_next_retry ON dead_letter_queue (next_retry_at) WHERE attempts < 5;
 
--- Create continuous aggregates for fast analytics
--- 1-hour averages
-CREATE MATERIALIZED VIEW IF NOT EXISTS metrics_1h_avg
-WITH (timescaledb.continuous) AS
-SELECT 
-    time_bucket('1 hour', time) AS hour,
-    server_id,
-    AVG(cpu_usage) as avg_cpu,
-    MAX(cpu_usage) as max_cpu,
-    MIN(cpu_usage) as min_cpu,
-    AVG(memory_usage) as avg_memory,
-    MAX(memory_usage) as max_memory,
-    MIN(memory_usage) as min_memory,
-    AVG(disk_usage) as avg_disk,
-    MAX(disk_usage) as max_disk,
-    MIN(disk_usage) as min_disk,
-    AVG(network_usage) as avg_network,
-    MAX(network_usage) as max_network,
-    AVG(highest_temperature) as avg_temperature,
-    MAX(highest_temperature) as max_temperature,
-    COUNT(*) as sample_count
-FROM server_metrics
-GROUP BY hour, server_id;
-
--- 5-minute averages for real-time monitoring
-CREATE MATERIALIZED VIEW IF NOT EXISTS metrics_5m_avg
-WITH (timescaledb.continuous) AS
-SELECT 
-    time_bucket('5 minutes', time) AS five_min,
-    server_id,
-    AVG(cpu_usage) as avg_cpu,
-    MAX(cpu_usage) as max_cpu,
-    AVG(memory_usage) as avg_memory,
-    MAX(memory_usage) as max_memory,
-    AVG(disk_usage) as avg_disk,
-    MAX(disk_usage) as max_disk,
-    AVG(network_usage) as avg_network,
-    MAX(network_usage) as max_network,
-    AVG(highest_temperature) as avg_temperature,
-    MAX(highest_temperature) as max_temperature,
-    COUNT(*) as sample_count
-FROM server_metrics
-WHERE time >= NOW() - INTERVAL '7 days'
-GROUP BY five_min, server_id;
-
--- Server uptime summary
-CREATE MATERIALIZED VIEW IF NOT EXISTS server_uptime_daily
-WITH (timescaledb.continuous) AS
-SELECT 
-    time_bucket('1 day', time) AS day,
-    server_id,
-    hostname,
-    AVG(CASE WHEN online THEN 1 ELSE 0 END) * 100 as uptime_percentage,
-    COUNT(*) as status_checks,
-    AVG(response_time_ms) as avg_response_time
-FROM server_status
-GROUP BY day, server_id, hostname;
-
--- Alert statistics
-CREATE MATERIALIZED VIEW IF NOT EXISTS alert_stats_hourly
-WITH (timescaledb.continuous) AS
-SELECT 
-    time_bucket('1 hour', time) AS hour,
-    server_id,
-    COUNT(*) as alert_count,
-    COUNT(CASE WHEN level = 'critical' THEN 1 END) as critical_count,
-    COUNT(CASE WHEN level = 'error' THEN 1 END) as error_count,
-    COUNT(CASE WHEN level = 'warn' THEN 1 END) as warning_count
-FROM server_events
-WHERE level IN ('warn', 'error', 'critical')
-GROUP BY hour, server_id;
+-- Skip continuous aggregates creation here - will be created after cleanup
 
 -- Create useful functions
 ALTER TABLE server_metrics SET (
@@ -345,22 +275,10 @@ EXCEPTION
 END;
 $$;
 
--- Recreate continuous aggregates
+-- Create continuous aggregates after cleanup
 CREATE MATERIALIZED VIEW metrics_5m_avg WITH (timescaledb.continuous) AS
 SELECT 
     time_bucket('5 minutes', time) AS bucket,
-    server_id,
-    AVG(cpu_usage) as avg_cpu,
-    AVG(memory_usage) as avg_memory,
-    AVG(disk_usage) as avg_disk,
-    AVG(network_usage) as avg_network,
-    AVG(cpu_temperature) as avg_temp
-FROM server_metrics
-GROUP BY bucket, server_id;
-
-CREATE MATERIALIZED VIEW metrics_1h_avg WITH (timescaledb.continuous) AS
-SELECT 
-    time_bucket('1 hour', time) AS bucket,
     server_id,
     AVG(cpu_usage) as avg_cpu,
     AVG(memory_usage) as avg_memory,
@@ -374,9 +292,12 @@ CREATE MATERIALIZED VIEW server_uptime_daily WITH (timescaledb.continuous) AS
 SELECT 
     time_bucket('1 day', time) AS bucket,
     server_id,
-    (COUNT(CASE WHEN online THEN 1 END) * 100.0 / COUNT(*)) as uptime_percent
+    hostname,
+    AVG(CASE WHEN online THEN 1 ELSE 0 END) * 100 as uptime_percentage,
+    COUNT(*) as status_checks,
+    AVG(response_time_ms) as avg_response_time
 FROM server_status
-GROUP BY bucket, server_id;
+GROUP BY bucket, server_id, hostname;
 
 CREATE MATERIALIZED VIEW alert_stats_hourly WITH (timescaledb.continuous) AS
 SELECT 
