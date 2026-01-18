@@ -19,7 +19,7 @@ cd "$TEST_DIR"
 
 # Clone repository
 echo "Cloning repository..."
-git clone https://github.com/godofphonk/ServerEyeAPI.git .
+git clone --branch production https://github.com/godofphonk/ServerEyeAPI.git .
 
 # Simulate server environment
 echo "=== Simulating server environment ==="
