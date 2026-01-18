@@ -203,6 +203,36 @@ jobs:
           
           # Stop services gracefully (preserve data)
           echo "=== Stopping services ==="
+          
+          # CRITICAL: Verify volumes exist before stopping containers
+          echo "=== Verifying data volumes exist ==="
+          if ! docker volume inspect servereye_timescaledb_data >/dev/null 2>&1; then
+            echo "❌ TimescaleDB volume NOT FOUND - CANNOT PROCEED!"
+            echo "Available volumes:"
+            docker volume ls
+            exit 1
+          fi
+          if ! docker volume inspect servereye_postgres_data >/dev/null 2>&1; then
+            echo "❌ PostgreSQL volume NOT FOUND - CANNOT PROCEED!"
+            echo "Available volumes:"
+            docker volume ls
+            exit 1
+          fi
+          echo "✅ All data volumes exist - safe to proceed"
+          
+          # Create additional backup before stopping
+          echo "=== Creating emergency backup ==="
+          mkdir -p /opt/servereye/emergency-backups
+          docker run --rm -v servereye_timescaledb_data:/data -v /opt/servereye/emergency-backups:/backup alpine tar czf /backup/emergency_timescaledb_$(date +%Y%m%d_%H%M%S).tar.gz -C /data .
+          echo "✅ Emergency TimescaleDB backup created"
+          
+          # Stop only API service first (keep databases running)
+          echo "=== Stopping API service only ==="
+          docker-compose stop servereye-api || true
+          docker-compose rm -f servereye-api || true
+          
+          # Stop databases only after API is stopped
+          echo "=== Stopping database services ==="
           docker-compose down --remove-orphans || true
           docker stop $(docker ps -aq) || true
           docker rm $(docker ps -aq) || true
@@ -333,6 +363,20 @@ jobs:
           echo "=== Waiting for databases to be ready ==="
           sleep 20
           
+          # CRITICAL: Verify volumes are properly mounted
+          echo "=== Verifying volumes are mounted ==="
+          if ! docker-compose exec -T postgres test -d /var/lib/postgresql/data; then
+            echo "❌ PostgreSQL volume NOT MOUNTED properly!"
+            docker-compose down
+            exit 1
+          fi
+          if ! docker-compose exec -T timescaledb test -d /var/lib/postgresql/data; then
+            echo "❌ TimescaleDB volume NOT MOUNTED properly!"
+            docker-compose down
+            exit 1
+          fi
+          echo "✅ All volumes mounted correctly"
+          
           # Check database health
           echo "=== Checking database health ==="
           timeout 60 bash -c 'until docker-compose exec -T postgres pg_isready -U postgres; do sleep 2; done'
@@ -410,6 +454,22 @@ jobs:
             docker logs servereye-api --tail 30
             exit 1
           fi
+          
+          # CRITICAL: Verify TimescaleDB data persistence
+          echo "=== Verifying TimescaleDB data persistence ==="
+          sleep 5
+          # Check if server_metrics table exists and has data
+          TABLE_EXISTS=$(docker-compose exec -T timescaledb psql -U postgres -d servereye -t -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'server_metrics' AND table_schema = 'public');" | head -1 || echo "f")
+          if [ "$TABLE_EXISTS" != "t" ]; then
+            echo "❌ server_metrics table NOT FOUND - DATA LOST!"
+            docker-compose exec -T timescaledb psql -U postgres -d servereye -c "\dt" || echo "Cannot list tables"
+            exit 1
+          fi
+          echo "✅ server_metrics table exists - Schema preserved!"
+          
+          # Check for recent data
+          RECENT_COUNT=$(docker-compose exec -T timescaledb psql -U postgres -d servereye -t -c "SELECT COUNT(*) FROM server_metrics WHERE time > NOW() - INTERVAL '1 hour';" | head -1 || echo "0")
+          echo "✅ Recent metrics count (last hour): $RECENT_COUNT"
           
           # Final cleanup
           docker image prune -f
