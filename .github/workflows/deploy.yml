@@ -226,13 +226,22 @@ jobs:
             echo "❌ timescaledb-init.sql not found in repository after update!"
             echo "Repository structure:"
             find /opt/servereye -name "*.sql" -type f 2>/dev/null || echo "No SQL files found"
+            echo "Available directories:"
+            ls -la /opt/servereye/ || echo "Cannot list servereye directory"
             exit 1
           fi
           
           # Force copy latest files to working directory
           echo "=== Force copying latest deployment files ==="
+          mkdir -p ./deployments
           rm -rf ./deployments/*
-          cp -r /opt/servereye/deployments/* ./deployments/
+          cp -r /opt/servereye/deployments/* ./deployments/ 2>/dev/null || echo "Copy failed, trying individual files"
+          
+          # If copy failed, try copying files individually
+          if [ ! -f "./deployments/timescaledb-init.sql" ]; then
+            echo "=== Copying files individually ==="
+            find /opt/servereye -name "*.sql" -type f -exec cp {} ./deployments/ \;
+          fi
           
           # Verify file hash to ensure we have latest version
           echo "=== Verifying file versions ==="
