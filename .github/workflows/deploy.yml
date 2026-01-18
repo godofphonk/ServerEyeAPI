@@ -208,9 +208,23 @@ jobs:
           
           if [ -d "/opt/servereye/.git" ]; then
             echo "Repository exists, pulling latest changes..."
+            # Save deployments directory before clean
+            if [ -d "/opt/servereye/deployments" ]; then
+              echo "Saving deployments directory..."
+              cp -r /opt/servereye/deployments /tmp/deployments-backup
+            fi
+            
             git fetch origin production
             git reset --hard origin/production
             git clean -fd
+            
+            # Restore deployments directory if it was removed
+            if [ ! -d "/opt/servereye/deployments" ] && [ -d "/tmp/deployments-backup" ]; then
+              echo "Restoring deployments directory..."
+              mv /tmp/deployments-backup /opt/servereye/deployments
+            elif [ -d "/tmp/deployments-backup" ]; then
+              rm -rf /tmp/deployments-backup
+            fi
           else
             echo "Cloning fresh repository..."
             rm -rf /opt/servereye/*
