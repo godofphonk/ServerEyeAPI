@@ -236,12 +236,20 @@ jobs:
           
           # Verify repository has required files
           echo "=== Verifying repository contents ==="
+          echo "Current directory contents:"
+          ls -la /opt/servereye/
+          echo "Looking for SQL files:"
+          find /opt/servereye -name "*.sql" -type f 2>/dev/null || echo "No SQL files found anywhere"
+          
           if [ ! -f "/opt/servereye/deployments/timescaledb-init.sql" ]; then
             echo "❌ timescaledb-init.sql not found in repository after update!"
-            echo "Repository structure:"
-            find /opt/servereye -name "*.sql" -type f 2>/dev/null || echo "No SQL files found"
-            echo "Available directories:"
-            ls -la /opt/servereye/ || echo "Cannot list servereye directory"
+            echo "Deployments directory exists check:"
+            if [ -d "/opt/servereye/deployments" ]; then
+              echo "Deployments directory exists, contents:"
+              ls -la /opt/servereye/deployments/
+            else
+              echo "Deployments directory does NOT exist"
+            fi
             exit 1
           fi
           
