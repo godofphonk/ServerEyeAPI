@@ -201,14 +201,54 @@ jobs:
           
           cd /opt/servereye
           
+          # Sync deployments files from repository
+          echo "=== Syncing deployments files ==="
+          mkdir -p ./deployments
+          
+          # Copy all deployment files from repository
+          if [ -d "/opt/servereye/deployments" ]; then
+            cp -r /opt/servereye/deployments/* ./deployments/ 2>/dev/null || true
+            echo "✅ Deployment files synced from repository"
+          else
+            echo "⚠️ Repository deployments directory not found"
+          fi
+          
           # Validate required files exist on server
+          echo "=== Checking timescaledb-init.sql ==="
+          
+          # Check if it's a directory (wrong) and remove it
+          if [ -d "./deployments/timescaledb-init.sql" ]; then
+            echo "⚠️ timescaledb-init.sql exists as directory, removing..."
+            rm -rf "./deployments/timescaledb-init.sql"
+          fi
+          
+          # Check if file exists
           if [ ! -f "./deployments/timescaledb-init.sql" ]; then
             echo "❌ timescaledb-init.sql not found on server!"
             echo "Available files in deployments:"
             ls -la ./deployments/ || echo "Deployments directory not found"
+            echo "Creating deployments directory if missing..."
+            mkdir -p ./deployments
+            
+            # Copy from repository if available
+            echo "Attempting to copy timescaledb-init.sql from repository..."
+            if [ -f "/opt/servereye/deployments/timescaledb-init.sql" ]; then
+              cp /opt/servereye/deployments/timescaledb-init.sql ./deployments/
+              echo "✅ timescaledb-init.sql copied from repository"
+            else
+              echo "❌ timescaledb-init.sql not found in repository either!"
+              exit 1
+            fi
+          fi
+          
+          # Verify it's a file and readable
+          if [ ! -f "./deployments/timescaledb-init.sql" ] || [ ! -r "./deployments/timescaledb-init.sql" ]; then
+            echo "❌ timescaledb-init.sql exists but is not a readable file!"
+            ls -la ./deployments/timescaledb-init.sql
             exit 1
           fi
-          echo "✅ timescaledb-init.sql found on server"
+          
+          echo "✅ timescaledb-init.sql found and validated on server"
           
           # Ensure curl is available for health checks
           if ! command -v curl &> /dev/null; then
