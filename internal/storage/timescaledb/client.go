@@ -91,7 +91,7 @@ func NewClient(databaseURL string, logger *logrus.Logger, config *ClientConfig) 
 		return nil, fmt.Errorf("failed to connect to TimescaleDB: %w", err)
 	}
 
-	logger.Info("Successfully connected to TimescaleDB")
+	logger.Info("TimescaleDB client connected successfully")
 	return client, nil
 }
 

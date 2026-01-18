@@ -296,7 +296,7 @@ jobs:
                 retries: 3
 
             timescaledb:
-              image: timescale/timescaledb:latest-pg15
+              image: timescale/timescaledb:2.15.0-pg15
               container_name: servereye-timescaledb
               restart: unless-stopped
               environment:
@@ -338,16 +338,38 @@ jobs:
           timeout 60 bash -c 'until docker-compose exec -T postgres pg_isready -U postgres; do sleep 2; done'
           timeout 60 bash -c 'until docker-compose exec -T timescaledb pg_isready -U postgres; do sleep 2; done'
           
+          # Verify TimescaleDB extension
+          echo "=== Verifying TimescaleDB extension ==="
+          docker-compose exec -T timescaledb psql -U postgres -d servereye -c "SELECT extversion FROM pg_extension WHERE extname = 'timescaledb';" || echo "TimescaleDB extension verification"
+          
           # Apply migrations if needed
           echo "=== Applying migrations ==="
           if [ -f "./deployments/migrate.sh" ]; then
             chmod +x ./deployments/migrate.sh
-            docker-compose exec -T postgres /bin/bash -c "cd /migrations && ./migrate.sh" || echo "Migration completed or not needed"
+            docker-compose exec -T postgres /bin/bash -c "cd /migrations && ./migrate.sh" || echo "PostgreSQL migration completed or not needed"
+          fi
+          if [ -f "./deployments/timescaledb-init.sql" ]; then
+            echo "TimescaleDB initialization already handled by init script"
           fi
           
           # Start main application
           echo "=== Starting main application ==="
           docker-compose up -d servereye-api
+          
+          # Wait for API to be ready
+          echo "=== Waiting for API to start ==="
+          sleep 15
+          
+          # Verify API can connect to TimescaleDB
+          echo "=== Verifying API TimescaleDB connectivity ==="
+          sleep 10
+          if docker logs servereye-api 2>&1 | grep -q "TimescaleDB client connected successfully"; then
+            echo "✅ API connected to TimescaleDB successfully!"
+          else
+            echo "❌ API TimescaleDB connection failed!"
+            docker logs servereye-api --tail 30
+            exit 1
+          fi
           
           # Wait for services
           echo "=== Waiting for services to start ==="
