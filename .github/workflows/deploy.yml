@@ -331,7 +331,7 @@ jobs:
                 POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
               volumes:
                 - servereye_postgres_data:/var/lib/postgresql/data
-                - ./deployments:/migrations:ro
+                - /opt/servereye/deployments:/migrations:ro
               networks:
                 - servereye-network
               healthcheck:
@@ -350,8 +350,8 @@ jobs:
                 POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
               volumes:
                 - servereye_timescaledb_data:/var/lib/postgresql/data
-                - ./deployments:/docker-entrypoint-initdb.d:ro
-                - ./deployments:/migrations
+                - /opt/servereye/deployments:/docker-entrypoint-initdb.d:ro
+                - /opt/servereye/deployments:/migrations
               networks:
                 - servereye-network
               healthcheck:
