@@ -342,63 +342,71 @@ DO $$
 BEGIN
     -- Check and add policies safely
     IF NOT EXISTS (
-        SELECT 1 FROM timescaledb_information.continuous_aggregate_policies 
-        WHERE hypertable_name = 'server_metrics' 
-        AND view_name = 'metrics_5m_avg'
+        SELECT 1 FROM information_schema.views 
+        WHERE table_name = 'continuous_aggregate_policies' 
+        AND table_schema = 'timescaledb_information'
     ) THEN
-        PERFORM add_continuous_aggregate_policy('metrics_5m_avg', 
-            start_offset => INTERVAL '3 hours',
-            end_offset => INTERVAL '1 hour',
-            schedule_interval => INTERVAL '1 minute'
-        );
-        RAISE NOTICE 'Created metrics_5m_avg refresh policy';
+        RAISE NOTICE 'timescaledb_information.continuous_aggregate_policies not available, skipping policy checks';
     ELSE
-        RAISE NOTICE 'metrics_5m_avg refresh policy already exists';
-    END IF;
-    
-    -- Note: metrics_1h_avg view creation was removed from above, so we'll skip its policy
-    IF EXISTS (SELECT 1 FROM information_schema.views WHERE table_name = 'metrics_1h_avg') AND
-       NOT EXISTS (
-           SELECT 1 FROM timescaledb_information.continuous_aggregate_policies 
-           WHERE hypertable_name = 'server_metrics' 
-           AND view_name = 'metrics_1h_avg'
-       ) THEN
-        PERFORM add_continuous_aggregate_policy('metrics_1h_avg', 
-            start_offset => INTERVAL '3 days',
-            end_offset => INTERVAL '3 hours',
-            schedule_interval => INTERVAL '5 minutes'
-        );
-        RAISE NOTICE 'Created metrics_1h_avg refresh policy';
-    END IF;
-    
-    IF NOT EXISTS (
-        SELECT 1 FROM timescaledb_information.continuous_aggregate_policies 
-        WHERE hypertable_name = 'server_status' 
-        AND view_name = 'server_uptime_daily'
-    ) THEN
-        PERFORM add_continuous_aggregate_policy('server_uptime_daily', 
-            start_offset => INTERVAL '3 days',
-            end_offset => INTERVAL '3 hours',
-            schedule_interval => INTERVAL '1 hour'
-        );
-        RAISE NOTICE 'Created server_uptime_daily refresh policy';
-    ELSE
-        RAISE NOTICE 'server_uptime_daily refresh policy already exists';
-    END IF;
-    
-    IF NOT EXISTS (
-        SELECT 1 FROM timescaledb_information.continuous_aggregate_policies 
-        WHERE hypertable_name = 'server_events' 
-        AND view_name = 'alert_stats_hourly'
-    ) THEN
-        PERFORM add_continuous_aggregate_policy('alert_stats_hourly', 
-            start_offset => INTERVAL '3 days',
-            end_offset => INTERVAL '3 hours',
-            schedule_interval => INTERVAL '10 minutes'
-        );
-        RAISE NOTICE 'Created alert_stats_hourly refresh policy';
-    ELSE
-        RAISE NOTICE 'alert_stats_hourly refresh policy already exists';
+        IF NOT EXISTS (
+            SELECT 1 FROM timescaledb_information.continuous_aggregate_policies 
+            WHERE hypertable_name = 'server_metrics' 
+            AND view_name = 'metrics_5m_avg'
+        ) THEN
+            PERFORM add_continuous_aggregate_policy('metrics_5m_avg', 
+                start_offset => INTERVAL '3 hours',
+                end_offset => INTERVAL '1 hour',
+                schedule_interval => INTERVAL '1 minute'
+            );
+            RAISE NOTICE 'Created metrics_5m_avg refresh policy';
+        ELSE
+            RAISE NOTICE 'metrics_5m_avg refresh policy already exists';
+        END IF;
+        
+        -- Note: metrics_1h_avg view creation was removed from above, so we'll skip its policy
+        IF EXISTS (SELECT 1 FROM information_schema.views WHERE table_name = 'metrics_1h_avg') AND
+           NOT EXISTS (
+               SELECT 1 FROM timescaledb_information.continuous_aggregate_policies 
+               WHERE hypertable_name = 'server_metrics' 
+               AND view_name = 'metrics_1h_avg'
+           ) THEN
+            PERFORM add_continuous_aggregate_policy('metrics_1h_avg', 
+                start_offset => INTERVAL '3 days',
+                end_offset => INTERVAL '3 hours',
+                schedule_interval => INTERVAL '5 minutes'
+            );
+            RAISE NOTICE 'Created metrics_1h_avg refresh policy';
+        END IF;
+        
+        IF NOT EXISTS (
+            SELECT 1 FROM timescaledb_information.continuous_aggregate_policies 
+            WHERE hypertable_name = 'server_status' 
+            AND view_name = 'server_uptime_daily'
+        ) THEN
+            PERFORM add_continuous_aggregate_policy('server_uptime_daily', 
+                start_offset => INTERVAL '3 days',
+                end_offset => INTERVAL '3 hours',
+                schedule_interval => INTERVAL '1 hour'
+            );
+            RAISE NOTICE 'Created server_uptime_daily refresh policy';
+        ELSE
+            RAISE NOTICE 'server_uptime_daily refresh policy already exists';
+        END IF;
+        
+        IF NOT EXISTS (
+            SELECT 1 FROM timescaledb_information.continuous_aggregate_policies 
+            WHERE hypertable_name = 'server_events' 
+            AND view_name = 'alert_stats_hourly'
+        ) THEN
+            PERFORM add_continuous_aggregate_policy('alert_stats_hourly', 
+                start_offset => INTERVAL '3 days',
+                end_offset => INTERVAL '3 hours',
+                schedule_interval => INTERVAL '10 minutes'
+            );
+            RAISE NOTICE 'Created alert_stats_hourly refresh policy';
+        ELSE
+            RAISE NOTICE 'alert_stats_hourly refresh policy already exists';
+        END IF;
     END IF;
 EXCEPTION
     WHEN OTHERS THEN
