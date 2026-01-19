@@ -402,17 +402,19 @@ if [ "$TABLE_EXISTS" != "t" ]; then
   
   # Verify schema was applied
   sleep 5
-  TABLE_EXISTS_AFTER=$(docker-compose exec -T timescaledb psql -U postgres -d servereye -t -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'server_metrics' AND table_schema = 'public');" | head -1 || echo "f")
+  TABLE_EXISTS_AFTER=$(docker-compose exec -T timescaledb psql -U postgres -d servereye -t -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'server_metrics' AND table_schema = 'public');" | tr -d ' ' | head -1 || echo "f")
+  echo "DEBUG: TABLE_EXISTS_AFTER = '$TABLE_EXISTS_AFTER'"
   if [ "$TABLE_EXISTS_AFTER" = "t" ]; then
     echo "✅ TimescaleDB schema applied successfully!"
     # Also check for continuous aggregates
-    AGGREGATES_COUNT=$(docker-compose exec -T timescaledb psql -U postgres -d servereye -t -c "SELECT COUNT(*) FROM information_schema.views WHERE table_name IN ('metrics_5m_avg', 'server_uptime_daily', 'alert_stats_hourly');" | head -1 || echo "0")
+    AGGREGATES_COUNT=$(docker-compose exec -T timescaledb psql -U postgres -d servereye -t -c "SELECT COUNT(*) FROM information_schema.views WHERE table_name IN ('metrics_5m_avg', 'server_uptime_daily', 'alert_stats_hourly');" | tr -d ' ' | head -1 || echo "0")
     echo "✅ Found $AGGREGATES_COUNT continuous aggregates"
   else
     echo "❌ TimescaleDB schema application failed!"
     docker-compose exec -T timescaledb psql -U postgres -d servereye -c "\dt" || echo "Cannot list tables"
     # Check if at least basic tables exist
-    BASIC_TABLES=$(docker-compose exec -T timescaledb psql -U postgres -d servereye -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_name IN ('server_metrics', 'server_status', 'server_commands', 'server_events') AND table_schema = 'public';" | head -1 || echo "0")
+    BASIC_TABLES=$(docker-compose exec -T timescaledb psql -U postgres -d servereye -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_name IN ('server_metrics', 'server_status', 'server_commands', 'server_events') AND table_schema = 'public';" | tr -d ' ' | head -1 || echo "0")
+    echo "DEBUG: BASIC_TABLES = '$BASIC_TABLES'"
     if [ "$BASIC_TABLES" -gt 0 ]; then
       echo "⚠️ Basic tables exist ($BASIC_TABLES), continuing with deployment..."
     else
