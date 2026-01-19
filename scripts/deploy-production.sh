@@ -325,8 +325,8 @@ echo "Current timescaledb pg_hba.conf:"
 docker-compose exec -T timescaledb cat /var/lib/postgresql/data/pg_hba.conf | tail -5 || echo "Cannot read timescaledb pg_hba.conf"
 
 # Replace scram-sha-256 rule with trust rule (more aggressive approach)
-docker-compose exec -T postgres bash -c 'sed -i "s/host all all scram-sha-256/host all postgres 0.0.0.0\/0 trust/g" /var/lib/postgresql/data/pg_hba.conf' || echo "Failed to update postgres pg_hba.conf"
-docker-compose exec -T timescaledb bash -c 'sed -i "s/host all all scram-sha-256/host all postgres 0.0.0.0\/0 trust/g" /var/lib/postgresql/data/pg_hba.conf' || echo "Failed to update timescaledb pg_hba.conf"
+docker-compose exec -T postgres bash -c 'sed -i "/^host all all scram-sha-256$/d" /var/lib/postgresql/data/pg_hba.conf' || echo "Failed to remove scram-sha-256 rule from postgres"
+docker-compose exec -T timescaledb bash -c 'sed -i "/^host all all scram-sha-256$/d" /var/lib/postgresql/data/pg_hba.conf' || echo "Failed to remove scram-sha-256 rule from timescaledb"
 
 # Verify changes were applied
 echo "Updated postgres pg_hba.conf:"
