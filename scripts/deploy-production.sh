@@ -324,11 +324,11 @@ docker-compose exec -T postgres cat /var/lib/postgresql/data/pg_hba.conf | tail 
 echo "Current timescaledb pg_hba.conf:"
 docker-compose exec -T timescaledb cat /var/lib/postgresql/data/pg_hba.conf | tail -5 || echo "Cannot read timescaledb pg_hba.conf"
 
-# Add trust rule to both databases
-docker-compose exec -T postgres bash -c 'echo "host all postgres 0.0.0.0/0 trust" >> /var/lib/postgresql/data/pg_hba.conf' || echo "Failed to update postgres pg_hba.conf"
-docker-compose exec -T timescaledb bash -c 'echo "host all postgres 0.0.0.0/0 trust" >> /var/lib/postgresql/data/pg_hba.conf' || echo "Failed to update timescaledb pg_hba.conf"
+# Replace scram-sha-256 rule with trust rule (more aggressive approach)
+docker-compose exec -T postgres bash -c 'sed -i "s/host all all scram-sha-256/host all postgres 0.0.0.0\/0 trust/g" /var/lib/postgresql/data/pg_hba.conf' || echo "Failed to update postgres pg_hba.conf"
+docker-compose exec -T timescaledb bash -c 'sed -i "s/host all all scram-sha-256/host all postgres 0.0.0.0\/0 trust/g" /var/lib/postgresql/data/pg_hba.conf' || echo "Failed to update timescaledb pg_hba.conf"
 
-# Verify the changes were applied
+# Verify changes were applied
 echo "Updated postgres pg_hba.conf:"
 docker-compose exec -T postgres cat /var/lib/postgresql/data/pg_hba.conf | tail -3 || echo "Cannot verify postgres pg_hba.conf"
 echo "Updated timescaledb pg_hba.conf:"
