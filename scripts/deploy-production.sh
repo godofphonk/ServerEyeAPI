@@ -496,7 +496,8 @@ fi
 echo "=== Verifying TimescaleDB data persistence ==="
 sleep 5
 # Check if server_metrics table exists and has data
-TABLE_EXISTS=$(docker-compose exec -T timescaledb psql -U postgres -d servereye -t -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'server_metrics' AND table_schema = 'public');" | head -1 || echo "f")
+TABLE_EXISTS=$(docker-compose exec -T timescaledb psql -U postgres -d servereye -t -c "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'server_metrics' AND table_schema = 'public');" | tr -d ' ' | head -1 || echo "f")
+echo "DEBUG: Final TABLE_EXISTS = '$TABLE_EXISTS'"
 if [ "$TABLE_EXISTS" != "t" ]; then
   echo "❌ server_metrics table NOT FOUND - DATA LOST!"
   docker-compose exec -T timescaledb psql -U postgres -d servereye -c "\dt" || echo "Cannot list tables"
@@ -505,7 +506,7 @@ fi
 echo "✅ server_metrics table exists - Schema preserved!"
 
 # Check for recent data
-RECENT_COUNT=$(docker-compose exec -T timescaledb psql -U postgres -d servereye -t -c "SELECT COUNT(*) FROM server_metrics WHERE time > NOW() - INTERVAL '1 hour';" | head -1 || echo "0")
+RECENT_COUNT=$(docker-compose exec -T timescaledb psql -U postgres -d servereye -t -c "SELECT COUNT(*) FROM server_metrics WHERE time > NOW() - INTERVAL '1 hour';" | tr -d ' ' | head -1 || echo "0")
 echo "✅ Recent metrics count (last hour): $RECENT_COUNT"
 
 # Final cleanup
