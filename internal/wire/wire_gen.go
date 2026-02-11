@@ -77,6 +77,6 @@ func NewTimescaleDBStorageAdapter(
 	timescaleDB *timescaledb.Client,
 	logger *logrus.Logger,
 	cfg *config.Config,
-) storage.Storage {
+) *storage.TimescaleDBStorageAdapter {
 	return storage.NewTimescaleDBStorageAdapter(keyRepo, serverRepo, timescaleDB, logger, cfg)
 }
