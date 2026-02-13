@@ -18,15 +18,15 @@ COMMANDS_SERVER="http://localhost:8084"
 # Check if test servers are running, start them if needed
 if ! curl -s $METRICS_SERVER/health > /dev/null 2>&1; then
     echo -e "${YELLOW}Starting metrics test server...${NC}"
-    cd test_servers && go build -o test_metrics test_metrics_endpoints.go && ./test_metrics &
-    cd ..
+    cd test_servers/metrics_server && go run main.go &
+    cd ../..
     sleep 2
 fi
 
 if ! curl -s $COMMANDS_SERVER/health > /dev/null 2>&1; then
     echo -e "${YELLOW}Starting commands test server...${NC}"
-    cd test_servers && go build -o test_commands test_commands.go && ./test_commands &
-    cd ..
+    cd test_servers/commands_server && go run main.go &
+    cd ../..
     sleep 2
 fi
 

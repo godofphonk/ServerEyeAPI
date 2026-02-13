@@ -2,27 +2,31 @@
 
 This directory contains test servers for demonstrating the ServerEyeAPI multi-tier metrics system.
 
-## Files
+## Structure
 
-- `test_metrics_endpoints.go` - Test server for metrics API endpoints (port 8083)
-- `test_commands.go` - Test server for management commands (port 8084)
+```
+test_servers/
+├── metrics_server/
+│   └── main.go          - Metrics API endpoints (port 8083)
+├── commands_server/
+│   └── main.go          - Management commands (port 8084)
+└── README.md
+```
 
 ## Usage
 
 ### Run Metrics Test Server
 
 ```bash
-cd test_servers
-go build -o test_metrics test_metrics_endpoints.go
-./test_metrics
+cd test_servers/metrics_server
+go run main.go
 ```
 
 ### Run Commands Test Server
 
 ```bash
-cd test_servers
-go build -o test_commands test_commands.go
-./test_commands
+cd test_servers/commands_server
+go run main.go
 ```
 
 ### Run Demo
