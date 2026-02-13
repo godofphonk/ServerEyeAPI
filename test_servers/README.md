@@ -4,7 +4,7 @@ This directory contains test servers for demonstrating the ServerEyeAPI multi-ti
 
 ## Structure
 
-```
+```text
 test_servers/
 ├── metrics_server/
 │   └── main.go          - Metrics API endpoints (port 8083)
