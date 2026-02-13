@@ -259,6 +259,171 @@ Removes notification source using server key.
 
 ---
 
+## Tiered Metrics Endpoints
+
+### Overview
+The ServerEyeAPI provides multi-tier metrics storage with automatic granularity selection based on time ranges.
+
+### Granularity Strategy
+- **Last hour**: 1-minute intervals
+- **Last 3 hours**: 5-minute intervals
+- **Last 24 hours**: 10-minute intervals
+- **Last 30 days**: 1-hour intervals
+
+### Get Metrics with Auto-Granularity
+Automatically selects the best granularity based on time range.
+
+**Endpoint:** `GET /api/servers/{server_id}/metrics/tiered`
+
+**Query Parameters:**
+- `start` (string, required): Start time (RFC3339 format)
+- `end` (string, required): End time (RFC3339 format)
+
+**Example:**
+```bash
+curl "http://localhost:8080/api/servers/test-server-001/metrics/tiered?start=2026-02-13T15:00:00Z&end=2026-02-13T16:00:00Z"
+```
+
+### Get Real-Time Metrics
+Get the most recent metrics with 1-minute granularity.
+
+**Endpoint:** `GET /api/servers/{server_id}/metrics/realtime`
+
+**Query Parameters:**
+- `duration` (string, optional): Duration (default: "1h", max: "1h")
+
+**Example:**
+```bash
+curl "http://localhost:8080/api/servers/test-server-001/metrics/realtime?duration=30m"
+```
+
+### Get Dashboard Metrics
+Optimized endpoint for dashboard displays.
+
+**Endpoint:** `GET /api/servers/{server_id}/metrics/dashboard`
+
+**Example:**
+```bash
+curl "http://localhost:8080/api/servers/test-server-001/metrics/dashboard"
+```
+
+### Get Historical Metrics
+Get historical metrics with specified granularity.
+
+**Endpoint:** `GET /api/servers/{server_id}/metrics/historical`
+
+**Query Parameters:**
+- `start` (string, required): Start time (RFC3339 format)
+- `end` (string, required): End time (RFC3339 format)
+- `granularity` (string, optional): "1m", "5m", "10m", "1h"
+
+**Example:**
+```bash
+curl "http://localhost:8080/api/servers/test-server-001/metrics/historical?start=2026-02-12T00:00:00Z&end=2026-02-13T00:00:00Z&granularity=1h"
+```
+
+### Compare Metrics Between Periods
+Compare metrics between two time periods.
+
+**Endpoint:** `GET /api/servers/{server_id}/metrics/comparison`
+
+**Query Parameters:**
+- `period1_start` (string, required): First period start time
+- `period1_end` (string, required): First period end time
+- `period2_start` (string, required): Second period start time
+- `period2_end` (string, required): Second period end time
+
+**Example:**
+```bash
+curl "http://localhost:8080/api/servers/test-server-001/metrics/comparison?period1_start=2026-02-12T00:00:00Z&period1_end=2026-02-12T12:00:00Z&period2_start=2026-02-12T12:00:00Z&period2_end=2026-02-13T00:00:00Z"
+```
+
+### Get Metrics Heatmap
+Get metrics data for heatmap visualization.
+
+**Endpoint:** `GET /api/servers/{server_id}/metrics/heatmap`
+
+**Query Parameters:**
+- `start` (string, required): Start time (RFC3339 format)
+- `end` (string, required): End time (RFC3339 format)
+
+**Example:**
+```bash
+curl "http://localhost:8080/api/servers/test-server-001/metrics/heatmap?start=2026-02-13T00:00:00Z&end=2026-02-13T23:59:59Z"
+```
+
+### Get Metrics Summary
+Get storage statistics across all granularity levels.
+
+**Endpoint:** `GET /api/metrics/summary`
+
+**Example:**
+```bash
+curl "http://localhost:8080/api/metrics/summary"
+```
+
+For detailed documentation, see [Tiered Metrics API Documentation](docs/api/tiered-metrics-endpoints.md).
+
+---
+
+## Metrics Management Commands
+
+The ServerEyeAPI provides commands for managing the multi-tier metrics system.
+
+### Available Commands
+
+1. **Refresh Aggregates** - Update continuous aggregates with latest data
+2. **Rebuild Aggregates** - Rebuild aggregates from scratch
+3. **Cleanup Old Metrics** - Remove old data based on retention policies
+4. **Compression Policy** - Apply compression to save storage
+5. **RetentionPolicy** - Configure automatic data deletion
+6. **Metrics Statistics** - Get storage and performance statistics
+7. **Analyze Performance** - Analyze query performance
+8. **Export/Import Metrics** - Backup and restore metrics data
+9. **Validate Metrics** - Check data integrity
+10. **Optimize Storage** - Optimize TimescaleDB performance
+
+### Example Usage
+
+```bash
+# Refresh all aggregates
+curl -X POST http://localhost:8080/api/servers/management/command \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{
+    "server_id": "management",
+    "type": "refresh_aggregates",
+    "payload": {"granularity": "all"}
+  }'
+
+# Get metrics statistics
+curl -X POST http://localhost:8080/api/servers/management/command \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{
+    "server_id": "management",
+    "type": "metrics_stats",
+    "payload": {}
+  }'
+
+# Cleanup old metrics (dry run)
+curl -X POST http://localhost:8080/api/servers/management/command \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{
+    "server_id": "management",
+    "type": "cleanup_old_metrics",
+    "payload": {
+      "older_than": "90 days",
+      "dry_run": true
+    }
+  }'
+```
+
+For detailed documentation, see [Metrics Management Commands](docs/metrics-commands.md).
+
+---
+
 ### 🔒 Server Management (Protected)
 
 #### List All Servers

@@ -33,8 +33,9 @@ import (
 
 // CommandsService handles command-related business logic
 type CommandsService struct {
-	keyRepo interfaces.GeneratedKeyRepository
-	logger  *logrus.Logger
+	keyRepo         interfaces.GeneratedKeyRepository
+	metricsCommands *MetricsCommandsService
+	logger          *logrus.Logger
 }
 
 // NewCommandsService creates a new commands service
@@ -43,6 +44,11 @@ func NewCommandsService(keyRepo interfaces.GeneratedKeyRepository, logger *logru
 		keyRepo: keyRepo,
 		logger:  logger,
 	}
+}
+
+// SetMetricsCommands sets the metrics commands service
+func (s *CommandsService) SetMetricsCommands(metricsCommands *MetricsCommandsService) {
+	s.metricsCommands = metricsCommands
 }
 
 // Command represents a server command
@@ -97,6 +103,86 @@ func (s *CommandsService) SendCommand(ctx context.Context, req *SendCommandReque
 		return nil, fmt.Errorf("invalid command type: %w", err)
 	}
 
+	// Check if this is a metrics command
+	if s.isMetricsCommand(req.Type) {
+		return s.handleMetricsCommand(ctx, req)
+	}
+
+	// Handle regular server command
+	return s.handleServerCommand(ctx, req)
+}
+
+// isMetricsCommand checks if command type is metrics-related
+func (s *CommandsService) isMetricsCommand(commandType string) bool {
+	metricsCommands := []string{
+		CmdTypeRefreshAggregates,
+		CmdTypeRebuildAggregates,
+		CmdTypeCleanupOldMetrics,
+		CmdTypeCompressionPolicy,
+		CmdTypeRetentionPolicy,
+		CmdTypeMetricsStats,
+		CmdTypeAnalyzePerformance,
+		CmdTypeExportMetrics,
+		CmdTypeImportMetrics,
+		CmdTypeValidateMetrics,
+		CmdTypeOptimizeStorage,
+	}
+
+	for _, cmd := range metricsCommands {
+		if commandType == cmd {
+			return true
+		}
+	}
+	return false
+}
+
+// handleMetricsCommand processes metrics-related commands
+func (s *CommandsService) handleMetricsCommand(ctx context.Context, req *SendCommandRequest) (*SendCommandResponse, error) {
+	if s.metricsCommands == nil {
+		return nil, fmt.Errorf("metrics commands service not initialized")
+	}
+
+	// Create metrics command
+	cmd := &MetricsCommand{
+		ID:        fmt.Sprintf("metrics_cmd_%d", time.Now().UnixNano()),
+		ServerID:  req.ServerID,
+		Type:      req.Type,
+		Payload:   req.Payload,
+		Status:    "pending",
+		CreatedAt: time.Now(),
+	}
+
+	// Execute metrics command
+	result, err := s.metricsCommands.ExecuteMetricsCommand(ctx, cmd)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute metrics command: %w", err)
+	}
+
+	// Update command with result
+	cmd.Result = result
+	cmd.ExecutedAt = &result.Time
+	if result.Success {
+		cmd.Status = "completed"
+	} else {
+		cmd.Status = "failed"
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"command_id": cmd.ID,
+		"server_id":  req.ServerID,
+		"type":       req.Type,
+		"status":     cmd.Status,
+	}).Info("Metrics command executed")
+
+	return &SendCommandResponse{
+		CommandID: cmd.ID,
+		Status:    cmd.Status,
+		Message:   result.Output,
+	}, nil
+}
+
+// handleServerCommand processes regular server commands
+func (s *CommandsService) handleServerCommand(ctx context.Context, req *SendCommandRequest) (*SendCommandResponse, error) {
 	// Create command
 	command := &Command{
 		ID:        fmt.Sprintf("cmd_%s", uuid.New().String()[:8]),
@@ -211,6 +297,18 @@ func (s *CommandsService) validateCommandType(commandType string) error {
 		"script",
 		"info",
 		"ping",
+		// Metrics management commands
+		CmdTypeRefreshAggregates,
+		CmdTypeRebuildAggregates,
+		CmdTypeCleanupOldMetrics,
+		CmdTypeCompressionPolicy,
+		CmdTypeRetentionPolicy,
+		CmdTypeMetricsStats,
+		CmdTypeAnalyzePerformance,
+		CmdTypeExportMetrics,
+		CmdTypeImportMetrics,
+		CmdTypeValidateMetrics,
+		CmdTypeOptimizeStorage,
 	}
 
 	for _, validType := range validTypes {

@@ -57,7 +57,9 @@ var ProviderSet = wire.NewSet(
 	// Service layer
 	services.NewServerService,
 	services.NewMetricsService,
+	services.NewTieredMetricsService,
 	services.NewCommandsService,
+	services.NewMetricsCommandsService,
 	services.NewAuthService,
 
 	// WebSocket
@@ -67,6 +69,7 @@ var ProviderSet = wire.NewSet(
 	handlers.NewAuthHandler,
 	handlers.NewHealthHandler,
 	handlers.NewMetricsHandler,
+	handlers.NewTieredMetricsHandler,
 	handlers.NewServersHandler,
 	handlers.NewServerSourcesHandler,
 	handlers.NewCommandsHandler,

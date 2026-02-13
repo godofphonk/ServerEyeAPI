@@ -91,12 +91,18 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 	authService := services.NewAuthService(keyRepo, serverRepo, logger)
 	serverService := services.NewServerService(serverRepo, keyRepo, logger)
 	metricsService := services.NewMetricsService(keyRepo, storageImpl, logger)
+	tieredMetricsService := services.NewTieredMetricsService(timescaleDBClient, logger)
 	commandsService := services.NewCommandsService(keyRepo, logger)
+	metricsCommandsService := services.NewMetricsCommandsService(timescaleDBClient, logger)
+
+	// Link services
+	commandsService.SetMetricsCommands(metricsCommandsService)
 
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authService, logger)
 	healthHandler := handlers.NewHealthHandler(storageImpl, logger)
 	metricsHandler := handlers.NewMetricsHandler(metricsService, logger)
+	tieredMetricsHandler := handlers.NewTieredMetricsHandler(tieredMetricsService, logger)
 	serversHandler := handlers.NewServersHandler(storageImpl, logger)
 	serverSourcesHandler := handlers.NewServerSourcesHandler(serverService, logger)
 	commandsHandler := handlers.NewCommandsHandler(commandsService, logger)
@@ -106,6 +112,7 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 		authHandler,
 		healthHandler,
 		metricsHandler,
+		tieredMetricsHandler,
 		serversHandler,
 		serverSourcesHandler,
 		commandsHandler,
