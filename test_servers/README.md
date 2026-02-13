@@ -10,6 +10,7 @@ This directory contains test servers for demonstrating the ServerEyeAPI multi-ti
 ## Usage
 
 ### Run Metrics Test Server
+
 ```bash
 cd test_servers
 go build -o test_metrics test_metrics_endpoints.go
@@ -17,6 +18,7 @@ go build -o test_metrics test_metrics_endpoints.go
 ```
 
 ### Run Commands Test Server
+
 ```bash
 cd test_servers
 go build -o test_commands test_commands.go
@@ -24,7 +26,9 @@ go build -o test_commands test_commands.go
 ```
 
 ### Run Demo
+
 From the root directory:
+
 ```bash
 ./demo_system.sh
 ```
