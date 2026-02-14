@@ -70,17 +70,23 @@ else
     print_success "Coverage threshold met (${COVERAGE}%)"
 fi
 
-# Step 6: Linting (if golangci-lint is available)
-if command -v golangci-lint &> /dev/null; then
-    print_status "Running linter..."
-    if ! golangci-lint run --timeout=5m --disable=errcheck,unused,staticcheck --max-issues-per-linter=0 --max-same-issues=0; then
-        print_error "Linting failed"
-        exit 1
-    fi
-    print_success "Linting passed"
-else
-    print_warning "golangci-lint not installed, skipping linting"
+# Step 6: Code quality checks
+print_status "Running code quality checks..."
+
+# Check formatting
+if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then
+    print_error "Code is not formatted properly"
+    gofmt -s -l .
+    exit 1
 fi
+print_success "Code is properly formatted"
+
+# Run go vet
+if ! go vet ./...; then
+    print_error "go vet failed"
+    exit 1
+fi
+print_success "go vet passed"
 
 # Step 7: Security scan (if gosec is available)
 if command -v gosec &> /dev/null; then
