@@ -68,9 +68,15 @@ jobs:
         name: codecov-umbrella
         
     - name: Run security scan
-      uses: securecodewarrior/github-action-add-sarif@v1
+      uses: securecodewarrior/github-action-gosec@master
       with:
-        sarif-file: 'gosec-report.sarif'
+        args: '-no-fail -fmt sarif -out results.sarif ./...'
+      continue-on-error: true
+      
+    - name: Upload SARIF file
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: results.sarif
       continue-on-error: true
       
     - name: Check for vulnerabilities
@@ -244,7 +250,7 @@ jobs:
                 - TIMESCALEDB_URL=postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@timescaledb:5432/servereye?sslmode=disable
                 - JWT_SECRET=${{ secrets.JWT_SECRET }}
                 - WEBHOOK_SECRET=${{ secrets.WEBHOOK_SECRET }}
-                - WEB_URL=${{ vars.WEB_URL || 'https://api.servereye.dev' }}
+                - WEB_URL: ${{ vars.WEB_URL || 'https://api.servereye.dev' }}
                 # TimescaleDB configuration
                 - TIMESCALEDB_MAX_CONNECTIONS=50
                 - TIMESCALEDB_CONN_TIMEOUT=30s

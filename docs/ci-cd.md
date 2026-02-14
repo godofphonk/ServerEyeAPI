@@ -9,6 +9,7 @@ This document describes the CI/CD pipeline for ServerEyeAPI, which automates tes
 The CI/CD pipeline is defined in `.github/workflows/ci.yml` and consists of the following jobs:
 
 ### 1. Test Job
+
 - **Triggers**: Push to master/production, Pull Requests
 - **Actions**:
   - Downloads Go dependencies
@@ -18,12 +19,14 @@ The CI/CD pipeline is defined in `.github/workflows/ci.yml` and consists of the 
   - Checks for vulnerabilities with govulncheck
 
 ### 2. Lint Job
+
 - **Triggers**: Push to master/production, Pull Requests
 - **Actions**:
   - Runs golangci-lint for code quality
   - Checks code formatting with gofmt
 
 ### 3. Build Job
+
 - **Triggers**: Only on push to production branch
 - **Actions**:
   - Builds Docker image with multi-stage build
@@ -32,6 +35,7 @@ The CI/CD pipeline is defined in `.github/workflows/ci.yml` and consists of the 
   - Tags images with version, branch, and commit SHA
 
 ### 4. Deploy Job
+
 - **Triggers**: Only on push to production branch
 - **Environment**: production
 - **Actions**:
@@ -43,6 +47,7 @@ The CI/CD pipeline is defined in `.github/workflows/ci.yml` and consists of the 
   - Cleans up old Docker images
 
 ### 5. Post-deployment Tests
+
 - **Triggers**: After successful deployment
 - **Actions**:
   - Tests health endpoint
@@ -52,6 +57,7 @@ The CI/CD pipeline is defined in `.github/workflows/ci.yml` and consists of the 
 ## Environment Variables
 
 ### Required Secrets
+
 Configure these in GitHub repository settings:
 
 - `PROD_HOST`: Production server hostname
@@ -62,31 +68,37 @@ Configure these in GitHub repository settings:
 - `WEBHOOK_SECRET`: Webhook signing secret
 
 ### Optional Variables
+
 - `WEB_URL`: Base URL for the service (default: https://api.servereye.dev)
 
 ## Docker Image Management
 
 ### Image Tags
+
 - `production`: Latest production build
 - `latest`: Latest build from default branch
 - `{branch}-{commit}`: Specific commit build
 - `pr-{number}`: Pull request build
 
 ### Registry
+
 Images are stored in GitHub Container Registry:
-```
+
+```text
 ghcr.io/godofphonk/servereyeapi
 ```
 
 ## Deployment Process
 
 ### Pre-deployment
+
 1. All tests must pass
 2. Code must be properly formatted
 3. Security scans must pass
 4. Docker image must build successfully
 
 ### Deployment Steps
+
 1. Create backup of current deployment
 2. Pull new Docker image
 3. Update docker-compose configuration
@@ -97,6 +109,7 @@ ghcr.io/godofphonk/servereyeapi
 8. Clean up old resources
 
 ### Post-deployment
+
 1. Run health endpoint tests
 2. Verify metrics endpoints
 3. Monitor service logs
@@ -107,11 +120,13 @@ ghcr.io/godofphonk/servereyeapi
 The pipeline includes specific verification for the multi-tier metrics implementation:
 
 ### File Checks
+
 - `internal/services/tiered_metrics.go` - Service layer
 - `internal/services/metrics_commands.go` - Command handlers
 - `internal/storage/timescaledb/multi_tier_metrics.go` - Storage layer
 
 ### Implementation Checks
+
 - `TieredMetricsService` implementation
 - `MetricsCommandsService` implementation
 - Proper integration with dependency injection
@@ -119,6 +134,7 @@ The pipeline includes specific verification for the multi-tier metrics implement
 ## Local Development
 
 ### Running Tests
+
 ```bash
 make test              # Run all tests
 make test-coverage     # Run with coverage
@@ -126,6 +142,7 @@ make test-all          # Run tests with coverage
 ```
 
 ### Building
+
 ```bash
 make build             # Build the application
 make docker-build      # Build Docker image
@@ -133,6 +150,7 @@ make release           # Build release binary
 ```
 
 ### Code Quality
+
 ```bash
 make fmt               # Format code
 make lint              # Run linter
@@ -144,21 +162,24 @@ make vuln-check        # Vulnerability check
 
 ### Common Issues
 
-1. **Build Failures**
-   - Check Go version compatibility (requires 1.21+)
-   - Verify all dependencies are downloaded
-   - Check Wire generation: `go generate ./internal/wire`
+#### 1. Build Failures
 
-2. **Test Failures**
-   - Ensure database is available for integration tests
-   - Check environment variables are set
-   - Verify test data setup
+- Check Go version compatibility (requires 1.21+)
+- Verify all dependencies are downloaded
+- Check Wire generation: `go generate ./internal/wire`
 
-3. **Deployment Failures**
-   - Check SSH key permissions
-   - Verify production server connectivity
-   - Check Docker daemon status on production
-   - Review service logs
+#### 2. Test Failures
+
+- Ensure database is available for integration tests
+- Check environment variables are set
+- Verify test data setup
+
+#### 3. Deployment Failures
+
+- Check SSH key permissions
+- Verify production server connectivity
+- Check Docker daemon status on production
+- Review service logs
 
 ### Debug Commands
 
@@ -180,27 +201,33 @@ curl http://localhost:8080/health
 
 If deployment fails:
 
-1. **Automatic rollback**: The pipeline includes health checks that prevent failed deployments
-2. **Manual rollback**:
-   ```bash
-   # Stop current deployment
-   docker-compose -f docker-compose.prod.yml down
-   
-   # Restore from backup
-   sudo cp -r /opt/servereye.backup.TIMESTAMP /opt/servereye
-   
-   # Start previous version
-   docker-compose -f docker-compose.prod.yml up -d
-   ```
+### 1. Automatic rollback
+
+The pipeline includes health checks that prevent failed deployments
+
+### 2. Manual rollback
+
+```bash
+# Stop current deployment
+docker-compose -f docker-compose.prod.yml down
+
+# Restore from backup
+sudo cp -r /opt/servereye.backup.TIMESTAMP /opt/servereye
+
+# Start previous version
+docker-compose -f docker-compose.prod.yml up -d
+```
 
 ## Monitoring and Alerts
 
 ### Health Checks
+
 - Application health: `/health`
 - Database connectivity: Built into application
 - Service dependencies: Docker health checks
 
 ### Logs
+
 - Application logs: `/app/logs/`
 - Docker logs: `docker-compose logs`
 - System logs: Available via SSH
