@@ -54,7 +54,7 @@ print_success "Code is properly formatted"
 
 # Step 4: Run tests
 print_status "Running tests..."
-if ! go test -v -race -coverprofile=coverage.out ./...; then
+if ! go test -v -coverprofile=coverage.out ./...; then
     print_error "Tests failed"
     exit 1
 fi

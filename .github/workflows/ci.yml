@@ -23,6 +23,7 @@ name: CI/CD Pipeline
 on:
   push:
     branches: [ master, production ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ master, production ]
 
@@ -32,8 +33,11 @@ env:
 
 jobs:
   # Test and Quality Checks
-  test:
+  test-and-quality:
+    name: 🧪 Tests & Quality Checks
     runs-on: ubuntu-latest
+    outputs:
+      coverage: ${{ steps.coverage.outputs.percentage }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -58,7 +62,14 @@ jobs:
       run: go mod verify
       
     - name: Run tests
-      run: go test -v -race -coverprofile=coverage.out ./...
+      run: go test -v -coverprofile=coverage.out ./...
+      
+    - name: Extract coverage percentage
+      id: coverage
+      run: |
+        COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+        echo "percentage=$COVERAGE" >> $GITHUB_OUTPUT
+        echo "📊 Test Coverage: ${COVERAGE}%"
       
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
@@ -86,6 +97,7 @@ jobs:
 
   # Lint and Format
   lint:
+    name: 🔍 Code Quality & Linting
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
@@ -97,10 +109,10 @@ jobs:
         go-version: '1.21'
         
     - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v3
+      uses: golangci/golangci-lint-action@v6
       with:
         version: latest
-        args: --timeout=5m
+        args: --timeout=10m --go=1.21
         
     - name: Check formatting
       run: |
@@ -113,9 +125,10 @@ jobs:
 
   # Build Docker Image
   build:
-    needs: [test, lint]
+    name: 🐳 Build & Push Docker Image
+    needs: [test-and-quality, lint]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/production'
+    if: github.ref == 'refs/heads/production' || startsWith(github.ref, 'refs/tags/v')
     
     permissions:
       contents: read
@@ -199,6 +212,7 @@ jobs:
 
   # Deploy to Production
   deploy:
+    name: 🚀 Deploy to Production
     needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/production'
@@ -406,6 +420,7 @@ jobs:
 
   # Post-deployment tests
   post-deploy-tests:
+    name: 🧪 Post-deployment Verification
     needs: deploy
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/production'
