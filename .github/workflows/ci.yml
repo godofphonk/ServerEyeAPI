@@ -34,7 +34,7 @@ env:
 jobs:
   # Test and Quality Checks
   test-and-quality:
-    name: 🧪 Tests & Quality Checks
+    name: Tests and Quality Checks
     runs-on: ubuntu-latest
     outputs:
       coverage: ${{ steps.coverage.outputs.percentage }}
@@ -45,7 +45,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.21'
+        go-version: '1.25'
         
     - name: Cache Go modules
       uses: actions/cache@v3
@@ -97,7 +97,7 @@ jobs:
 
   # Lint and Format
   lint:
-    name: 🔍 Code Quality & Linting
+    name: Code Quality and Linting
     runs-on: ubuntu-latest
     steps:
     - name: Checkout repository
@@ -106,13 +106,13 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.21'
+        go-version: '1.25'
         
     - name: Run golangci-lint
       uses: golangci/golangci-lint-action@v6
       with:
         version: latest
-        args: --timeout=10m --go=1.21
+        args: --timeout=10m --go=1.25
         
     - name: Check formatting
       run: |
@@ -125,7 +125,7 @@ jobs:
 
   # Build Docker Image
   build:
-    name: 🐳 Build & Push Docker Image
+    name: Build and Push Docker Image
     needs: [test-and-quality, lint]
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/production' || startsWith(github.ref, 'refs/tags/v')
@@ -212,7 +212,7 @@ jobs:
 
   # Deploy to Production
   deploy:
-    name: 🚀 Deploy to Production
+    name: Deploy to Production
     needs: build
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/production'
@@ -420,7 +420,7 @@ jobs:
 
   # Post-deployment tests
   post-deploy-tests:
-    name: 🧪 Post-deployment Verification
+    name: Post-deployment Verification
     needs: deploy
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/production'
