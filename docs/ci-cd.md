@@ -69,7 +69,7 @@ Configure these in GitHub repository settings:
 
 ### Optional Variables
 
-- `WEB_URL`: Base URL for the service (default: https://api.servereye.dev)
+- `WEB_URL`: Base URL for the service (default: <https://api.servereye.dev>)
 
 ## Docker Image Management
 
