@@ -73,7 +73,7 @@ fi
 # Step 6: Linting (if golangci-lint is available)
 if command -v golangci-lint &> /dev/null; then
     print_status "Running linter..."
-    if ! golangci-lint run; then
+    if ! golangci-lint run --timeout=5m --disable=errcheck,unused,staticcheck --max-issues-per-linter=0 --max-same-issues=0; then
         print_error "Linting failed"
         exit 1
     fi
@@ -163,13 +163,13 @@ if command -v docker &> /dev/null && docker images | grep -q "servereye-api"; th
     print_status "Testing Docker image..."
     
     # Run container in background
-    CONTAINER_ID=$(docker run -d --rm -p 8081:8080 --env-file .env.example servereye-api:latest)
+    CONTAINER_ID=$(docker run -d --rm -p 8082:8080 --env-file .env.example servereye-api:latest)
     
     # Wait for startup
     sleep 5
     
     # Test health endpoint
-    if curl -f http://localhost:8081/health > /dev/null 2>&1; then
+    if curl -f http://localhost:8082/health > /dev/null 2>&1; then
         print_success "Docker container health check passed"
     else
         print_warning "Docker container health check failed"

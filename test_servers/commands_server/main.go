@@ -12,7 +12,7 @@ import (
 // Command types
 const (
 	CmdTypeRefreshAggregates = "refresh_aggregates"
-	CmdTypeMetricsStats     = "metrics_stats"
+	CmdTypeMetricsStats      = "metrics_stats"
 	CmdTypeCleanupOldMetrics = "cleanup_old_metrics"
 )
 
@@ -24,9 +24,9 @@ type CommandRequest struct {
 }
 
 type CommandResponse struct {
-	CommandID string `json:"command_id"`
-	Status    string `json:"status"`
-	Message   string `json:"message"`
+	CommandID string         `json:"command_id"`
+	Status    string         `json:"status"`
+	Message   string         `json:"message"`
 	Result    *CommandResult `json:"result,omitempty"`
 }
 
@@ -44,7 +44,7 @@ func handleRefreshAggregates(req *CommandRequest) *CommandResult {
 	if granularity == "" {
 		granularity = "all"
 	}
-	
+
 	return &CommandResult{
 		Success: true,
 		Output:  fmt.Sprintf("Refreshed %s aggregate successfully", granularity),
@@ -61,9 +61,9 @@ func handleMetricsStats(req *CommandRequest) *CommandResult {
 		Success: true,
 		Output:  "Retrieved metrics statistics",
 		Data: map[string]interface{}{
-			"total_records": 467000,
+			"total_records":  467000,
 			"unique_servers": 25,
-			"storage_size": "544 MB",
+			"storage_size":   "544 MB",
 		},
 		Time: time.Now(),
 	}
@@ -74,29 +74,29 @@ func handleCleanupOldMetrics(req *CommandRequest) *CommandResult {
 	if olderThan == "" {
 		olderThan = "90 days"
 	}
-	
+
 	dryRun, _ := req.Payload["dry_run"].(bool)
-	
+
 	if dryRun {
 		return &CommandResult{
 			Success: true,
 			Output:  fmt.Sprintf("DRY RUN: Would delete metrics older than %s", olderThan),
 			Data: map[string]interface{}{
-				"older_than": olderThan,
-				"dry_run": true,
+				"older_than":     olderThan,
+				"dry_run":        true,
 				"estimated_rows": 125000,
 			},
 			Time: time.Now(),
 		}
 	}
-	
+
 	return &CommandResult{
 		Success: true,
 		Output:  fmt.Sprintf("Deleted %d metrics older than %s", 125000, olderThan),
 		Data: map[string]interface{}{
-			"older_than": olderThan,
+			"older_than":   olderThan,
 			"deleted_rows": 125000,
-			"deleted_at": time.Now(),
+			"deleted_at":   time.Now(),
 		},
 		Time: time.Now(),
 	}
@@ -109,21 +109,21 @@ func handleCommand(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
-	
+
 	// Validate request
 	if req.ServerID == "" {
 		http.Error(w, "server_id is required", http.StatusBadRequest)
 		return
 	}
-	
+
 	if req.Type == "" {
 		http.Error(w, "command type is required", http.StatusBadRequest)
 		return
 	}
-	
+
 	// Generate command ID
 	commandID := fmt.Sprintf("cmd_%d", time.Now().UnixNano())
-	
+
 	// Execute command based on type
 	var result *CommandResult
 	switch req.Type {
@@ -141,13 +141,13 @@ func handleCommand(w http.ResponseWriter, r *http.Request) {
 			Time:    time.Now(),
 		}
 	}
-	
+
 	// Determine status
 	status := "completed"
 	if !result.Success {
 		status = "failed"
 	}
-	
+
 	// Send response
 	response := CommandResponse{
 		CommandID: commandID,
@@ -155,23 +155,23 @@ func handleCommand(w http.ResponseWriter, r *http.Request) {
 		Message:   result.Output,
 		Result:    result,
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
 
 func main() {
 	router := mux.NewRouter()
-	
+
 	// Command endpoint
 	router.HandleFunc("/api/servers/{server_id}/command", handleCommand).Methods("POST")
-	
+
 	// Health endpoint
 	router.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		fmt.Fprintf(w, `{"status":"ok","time":"%s"}`, time.Now().Format(time.RFC3339))
 	}).Methods("GET")
-	
+
 	fmt.Println("🚀 Starting ServerEye API Commands Test Server on :8084")
 	fmt.Println("📋 Available endpoints:")
 	fmt.Println("  POST /api/servers/{server_id}/command - Execute metrics management command")
@@ -181,7 +181,7 @@ func main() {
 	fmt.Println(`  curl -X POST http://localhost:8084/api/servers/management/command \`)
 	fmt.Println(`    -H "Content-Type: application/json" \`)
 	fmt.Println(`    -d '{"type":"metrics_stats","payload":{}}'`)
-	
+
 	if err := http.ListenAndServe(":8084", router); err != nil {
 		panic(err)
 	}

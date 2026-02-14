@@ -99,7 +99,7 @@ func (h *TieredMetricsHandler) GetRealTimeMetrics(w http.ResponseWriter, r *http
 	if durationStr == "" {
 		durationStr = "1h"
 	}
-	
+
 	duration, err := time.ParseDuration(durationStr)
 	if err != nil {
 		h.writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid duration format"})
