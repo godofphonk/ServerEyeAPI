@@ -51,11 +51,11 @@ RUN go clean -cache -modcache && \
 ARG BUILD_DATE
 ARG VERSION
 ARG COMMIT_SHA
-RUN rm -rf /app/servereye-api && \
+RUN rm -rf /app/servereye && \
     rm -rf /app/internal/websocket/*.o && \
     rm -rf /app/internal/websocket/*.a && \
     go clean -cache && \
-    CGO_ENABLED=0 GOOS=linux go build -a -ldflags="-w -s -X main.BuildDate=${BUILD_DATE} -X main.Version=${VERSION} -X main.CommitSHA=${COMMIT_SHA}" -o /app/servereye-api ./cmd/api
+    CGO_ENABLED=0 GOOS=linux go build -a -ldflags="-w -s -X main.BuildDate=${BUILD_DATE} -X main.Version=${VERSION} -X main.CommitSHA=${COMMIT_SHA}" -o /app/servereye ./cmd/api
 
 # Final stage
 FROM alpine:latest
@@ -71,7 +71,7 @@ RUN addgroup -g 1001 -S servereye && \
 WORKDIR /app
 
 # Copy binary from builder
-COPY --from=builder /app/servereye-api .
+COPY --from=builder /app/servereye .
 
 # Copy source code for verification
 COPY --from=builder /app/internal ./internal
@@ -93,4 +93,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
 # Run the application
-CMD ["./servereye-api"]
+CMD ["./servereye"]

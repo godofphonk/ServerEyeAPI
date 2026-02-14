@@ -43,7 +43,7 @@ var ProviderSet = wire.NewSet(
 
 	NewPostgresClient,
 	NewTimescaleDBClient,
-	NewTimescaleDBStorageAdapter, postgres.NewGeneratedKeyRepository, postgres.NewServerRepository, services.NewServerService, services.NewMetricsService, services.NewCommandsService, services.NewAuthService, websocket.NewServer, handlers.NewAuthHandler, handlers.NewHealthHandler, handlers.NewMetricsHandler, handlers.NewServersHandler, handlers.NewServerSourcesHandler, handlers.NewCommandsHandler, api.New,
+	NewTimescaleDBStorageAdapter, postgres.NewGeneratedKeyRepository, postgres.NewServerRepository, services.NewServerService, services.NewMetricsService, services.NewTieredMetricsService, services.NewCommandsService, services.NewMetricsCommandsService, services.NewAuthService, websocket.NewServer, handlers.NewAuthHandler, handlers.NewHealthHandler, handlers.NewMetricsHandler, handlers.NewTieredMetricsHandler, handlers.NewServersHandler, handlers.NewServerSourcesHandler, handlers.NewCommandsHandler, api.New,
 )
 
 // NewLogger creates a new logger instance
@@ -77,6 +77,6 @@ func NewTimescaleDBStorageAdapter(
 	timescaleDB *timescaledb.Client,
 	logger *logrus.Logger,
 	cfg *config.Config,
-) storage.Storage {
+) *storage.TimescaleDBStorageAdapter {
 	return storage.NewTimescaleDBStorageAdapter(keyRepo, serverRepo, timescaleDB, logger, cfg)
 }
