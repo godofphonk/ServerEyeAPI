@@ -13,17 +13,18 @@ The CI/CD pipeline is defined in `.github/workflows/ci.yml` and consists of the 
 - **Triggers**: Push to master/production, Pull Requests
 - **Actions**:
   - Downloads Go dependencies
-  - Runs unit tests with race detection
+  - Runs unit tests with coverage reporting
   - Uploads coverage reports to Codecov
   - Performs security scanning with gosec
   - Checks for vulnerabilities with govulncheck
 
-### 2. Lint Job
+### 2. Code Quality Job
 
 - **Triggers**: Push to master/production, Pull Requests
 - **Actions**:
-  - Runs golangci-lint for code quality
+  - Runs go vet for static analysis
   - Checks code formatting with gofmt
+  - No external linters (built-in Go tools only)
 
 ### 3. Build Job
 
