@@ -362,10 +362,10 @@ Deactivates an API key.
 
 ---
 
-## Tiered Metrics Endpoints
+## Metrics Endpoint
 
 ### Overview
-The ServerEyeAPI provides multi-tier metrics storage with automatic granularity selection based on time ranges.
+The ServerEyeAPI provides a unified metrics endpoint with automatic granularity selection based on time ranges.
 
 ### Granularity Strategy
 - **Last hour**: 1-minute intervals
@@ -374,102 +374,76 @@ The ServerEyeAPI provides multi-tier metrics storage with automatic granularity 
 - **Last 30 days**: 1-hour intervals
 
 ### Get Metrics with Auto-Granularity
-Automatically selects the best granularity based on time range.
+Unified endpoint for all metrics queries. Automatically selects the best granularity based on time range.
 
 **Endpoint:** `GET /api/servers/{server_id}/metrics/tiered`
 
-**Headers:**
-- `X-API-Key: <your_api_key>` (Required for backend integration)
-
 **Query Parameters:**
 - `start` (string, required): Start time (RFC3339 format)
 - `end` (string, required): End time (RFC3339 format)
 
-**Example:**
-```bash
-curl -H "X-API-Key: sk_csharp_backend_development_key_change_in_production" \
-     "http://localhost:8080/api/servers/test-server-001/metrics/tiered?start=2026-02-13T15:00:00Z&end=2026-02-13T16:00:00Z"
+**Response:**
+```json
+{
+  "server_id": "srv_71453434",
+  "start_time": "2026-02-15T19:00:00Z",
+  "end_time": "2026-02-15T20:00:00Z",
+  "granularity": "1m",
+  "data_points": [
+    {
+      "timestamp": "2026-02-15T19:18:00Z",
+      "cpu_avg": 18.53,
+      "cpu_max": 18.54,
+      "cpu_min": 18.52,
+      "memory_avg": 71.31,
+      "memory_max": 71.85,
+      "memory_min": 70.84,
+      "disk_avg": 66,
+      "disk_max": 66,
+      "network_avg": 0.37,
+      "network_max": 2.12,
+      "temp_avg": 48.08,
+      "temp_max": 60.25,
+      "load_avg": 3.12,
+      "load_max": 3.75,
+      "sample_count": 50
+    }
+  ],
+  "total_points": 26
+}
 ```
 
-### Get Real-Time Metrics
-Get the most recent metrics with 1-minute granularity.
+### Usage Examples
 
-**Endpoint:** `GET /api/servers/{server_id}/metrics/realtime`
-
-**Query Parameters:**
-- `duration` (string, optional): Duration (default: "1h", max: "1h")
-
-**Example:**
+**Dashboard (5 minutes):**
 ```bash
-curl "http://localhost:8080/api/servers/test-server-001/metrics/realtime?duration=30m"
+curl "http://localhost:8080/api/servers/srv_71453434/metrics/tiered?start=2026-02-15T19:00:00Z&end=2026-02-15T19:05:00Z"
 ```
 
-### Get Dashboard Metrics
-Optimized endpoint for dashboard displays.
-
-**Endpoint:** `GET /api/servers/{server_id}/metrics/dashboard`
-
-**Example:**
+**Realtime (1 hour):**
 ```bash
-curl "http://localhost:8080/api/servers/test-server-001/metrics/dashboard"
+curl "http://localhost:8080/api/servers/srv_71453434/metrics/tiered?start=2026-02-15T18:00:00Z&end=2026-02-15T19:00:00Z"
 ```
 
-### Get Historical Metrics
-Get historical metrics with specified granularity.
-
-**Endpoint:** `GET /api/servers/{server_id}/metrics/historical`
-
-**Query Parameters:**
-- `start` (string, required): Start time (RFC3339 format)
-- `end` (string, required): End time (RFC3339 format)
-- `granularity` (string, optional): "1m", "5m", "10m", "1h"
-
-**Example:**
+**Historical (6 hours):**
 ```bash
-curl "http://localhost:8080/api/servers/test-server-001/metrics/historical?start=2026-02-12T00:00:00Z&end=2026-02-13T00:00:00Z&granularity=1h"
+curl "http://localhost:8080/api/servers/srv_71453434/metrics/tiered?start=2026-02-15T13:00:00Z&end=2026-02-15T19:00:00Z"
 ```
 
-### Compare Metrics Between Periods
-Compare metrics between two time periods.
-
-**Endpoint:** `GET /api/servers/{server_id}/metrics/comparison`
-
-**Query Parameters:**
-- `period1_start` (string, required): First period start time
-- `period1_end` (string, required): First period end time
-- `period2_start` (string, required): Second period start time
-- `period2_end` (string, required): Second period end time
-
-**Example:**
+**Historical (24 hours):**
 ```bash
-curl "http://localhost:8080/api/servers/test-server-001/metrics/comparison?period1_start=2026-02-12T00:00:00Z&period1_end=2026-02-12T12:00:00Z&period2_start=2026-02-12T12:00:00Z&period2_end=2026-02-13T00:00:00Z"
+curl "http://localhost:8080/api/servers/srv_71453434/metrics/tiered?start=2026-02-14T19:00:00Z&end=2026-02-15T19:00:00Z"
 ```
 
-### Get Metrics Heatmap
-Get metrics data for heatmap visualization.
-
-**Endpoint:** `GET /api/servers/{server_id}/metrics/heatmap`
-
-**Query Parameters:**
-- `start` (string, required): Start time (RFC3339 format)
-- `end` (string, required): End time (RFC3339 format)
-
-**Example:**
+**Historical (7 days):**
 ```bash
-curl "http://localhost:8080/api/servers/test-server-001/metrics/heatmap?start=2026-02-13T00:00:00Z&end=2026-02-13T23:59:59Z"
+curl "http://localhost:8080/api/servers/srv_71453434/metrics/tiered?start=2026-02-08T19:00:00Z&end=2026-02-15T19:00:00Z"
 ```
 
-### Get Metrics Summary
-Get storage statistics across all granularity levels.
-
-**Endpoint:** `GET /api/metrics/summary`
-
-**Example:**
+**Historical (30 days):**
 ```bash
-curl "http://localhost:8080/api/metrics/summary"
+curl "http://localhost:8080/api/servers/srv_71453434/metrics/tiered?start=2026-01-16T19:00:00Z&end=2026-02-15T19:00:00Z"
 ```
-
-For detailed documentation, see [Tiered Metrics API Documentation](docs/api/tiered-metrics-endpoints.md).
 
 ---
 

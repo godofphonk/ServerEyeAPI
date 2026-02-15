@@ -53,9 +53,6 @@ func SetupRoutes(
 	// WebSocket route
 	router.HandleFunc("/ws", wsServer.HandleConnection).Methods("GET")
 
-	// Single metrics endpoint (public for testing)
-	router.HandleFunc("/api/servers/{server_id}/metrics", metricsHandler.GetServerMetrics).Methods("GET")
-
 	// Metrics endpoint by key (public for TG bot)
 	router.HandleFunc("/api/servers/by-key/{server_key}/metrics", metricsHandler.GetServerMetricsByKey).Methods("GET")
 
@@ -75,14 +72,8 @@ func SetupRoutes(
 	router.HandleFunc("/api/admin/keys/{keyId}", apiKeyHandler.GetAPIKey).Methods("GET")
 	router.HandleFunc("/api/admin/keys/{keyId}", apiKeyHandler.RevokeAPIKey).Methods("DELETE")
 
-	// Tiered metrics endpoints (public for now - TODO: Add API Key middleware)
+	// Unified metrics endpoint (public)
 	router.HandleFunc("/api/servers/{server_id}/metrics/tiered", tieredMetricsHandler.GetMetrics).Methods("GET")
-	router.HandleFunc("/api/servers/{server_id}/metrics/realtime", tieredMetricsHandler.GetRealTimeMetrics).Methods("GET")
-	router.HandleFunc("/api/servers/{server_id}/metrics/historical", tieredMetricsHandler.GetHistoricalMetrics).Methods("GET")
-	router.HandleFunc("/api/servers/{server_id}/metrics/dashboard", tieredMetricsHandler.GetDashboardMetrics).Methods("GET")
-	router.HandleFunc("/api/servers/{server_id}/metrics/comparison", tieredMetricsHandler.GetMetricsComparison).Methods("GET")
-	router.HandleFunc("/api/servers/{server_id}/metrics/heatmap", tieredMetricsHandler.GetMetricsHeatmap).Methods("GET")
-	router.HandleFunc("/api/metrics/summary", tieredMetricsHandler.GetMetricsSummary).Methods("GET")
 
 	// API endpoints for Telegram bot and web dashboard (with auth)
 	api := router.PathPrefix("/api").Subrouter()
