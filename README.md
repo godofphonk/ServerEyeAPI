@@ -2,11 +2,9 @@
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/godofphonk/ServerEyeAPI)](https://goreportcard.com/report/github.com/godofphonk/ServerEyeAPI)
 
-
-
 ## Base URL
 
-```
+```text
 https://api.servereye.dev
 ```
 
@@ -15,26 +13,30 @@ https://api.servereye.dev
 ServerEyeAPI supports multiple authentication methods:
 
 ### 1. Server Key Authentication
+
 For server agents and basic endpoints using server-specific keys.
 
-### 2. API Key Authentication  
+### 2. API Key Authentication
+
 For service-to-service communication (recommended for backend integration).
 
 **Headers:**
-```
+
+```text
 X-API-Key: sk_your_api_key_here
 ```
 
 **Default C# Backend API Key:**
-```
+
+```text
 sk_csharp_backend_development_key_change_in_production
 ```
 
 ### 3. Bearer Token Authentication
+
 For protected admin endpoints (marked with 🔒).
 
 Protected endpoints are marked with 🔒 in the documentation.
-
 
 ## Endpoints
 
@@ -46,6 +48,7 @@ Registers a new server and generates authentication credentials.
 **Endpoint:** `POST /RegisterKey`
 
 **Request Body:**
+
 ```json
 {
   "hostname": "server-01",
@@ -55,6 +58,7 @@ Registers a new server and generates authentication credentials.
 ```
 
 **Response (201 Created):**
+
 ```json
 {
   "server_id": "srv_123456789",
@@ -63,17 +67,18 @@ Registers a new server and generates authentication credentials.
 }
 ```
 
-
 ---
 
 ### 🔓 Health Check
 
 #### System Health
+
 Checks the health status of the API server and its dependencies.
 
 **Endpoint:** `GET /health`
 
 **Response (200 OK):**
+
 ```json
 {
   "status": "healthy",
@@ -89,14 +94,17 @@ Checks the health status of the API server and its dependencies.
 ### 🔓 Metrics (Public)
 
 #### Get Server Metrics by ID
+
 Retrieves current metrics and status for a specific server.
 
 **Endpoint:** `GET /api/servers/{server_id}/metrics` **KEY FOR TEST - "key_954492a7"**
 
 **Path Parameters:**
+
 - `server_id` (string, required): Unique server identifier
 
 **Response (200 OK):**
+
 ```json
 {
   "server_id": "srv_123456789",
@@ -119,6 +127,7 @@ Retrieves current metrics and status for a specific server.
 ```
 
 **Error Responses:**
+
 - `400 Bad Request` - Missing server_id
 - `404 Not Found` - Server not found
 - `500 Internal Server Error` - Failed to retrieve metrics
