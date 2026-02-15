@@ -54,6 +54,10 @@ var ProviderSet = wire.NewSet(
 	postgresRepo.NewGeneratedKeyRepository,
 	postgresRepo.NewServerRepository,
 
+	// API Keys
+	storage.NewAPIKeyStorage,
+	handlers.NewAPIKeyHandler,
+
 	// Service layer
 	services.NewServerService,
 	services.NewMetricsService,
