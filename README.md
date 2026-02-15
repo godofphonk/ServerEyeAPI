@@ -12,7 +12,28 @@ https://api.servereye.dev
 
 ## Authentication
 
-Most API endpoints require authentication via Bearer token. Protected endpoints are marked with 🔒 in the documentation.
+ServerEyeAPI supports multiple authentication methods:
+
+### 1. Server Key Authentication
+For server agents and basic endpoints using server-specific keys.
+
+### 2. API Key Authentication  
+For service-to-service communication (recommended for backend integration).
+
+**Headers:**
+```
+X-API-Key: sk_your_api_key_here
+```
+
+**Default C# Backend API Key:**
+```
+sk_csharp_backend_development_key_change_in_production
+```
+
+### 3. Bearer Token Authentication
+For protected admin endpoints (marked with 🔒).
+
+Protected endpoints are marked with 🔒 in the documentation.
 
 
 ## Endpoints
@@ -259,6 +280,79 @@ Removes notification source using server key.
 
 ---
 
+### 🔐 API Key Management
+
+#### Create API Key
+Creates a new API key for service authentication.
+
+**Endpoint:** `POST /api/admin/keys`
+
+**Headers:**
+- `X-API-Key: <admin_api_key>`
+
+**Request Body:**
+```json
+{
+  "service_id": "csharp-backend",
+  "service_name": "C# Web Backend",
+  "permissions": ["metrics:read", "servers:read", "servers:validate"],
+  "expires_days": 365
+}
+```
+
+**Response (201 Created):**
+```json
+{
+  "api_key": "sk_VhausxMPKH40oH66je21EWErL3JmTH8S",
+  "key_id": "key_j6mdji4Kjm_UiIGn26XQVg",
+  "service_id": "csharp-backend",
+  "service_name": "C# Web Backend",
+  "permissions": ["metrics:read", "servers:read", "servers:validate"],
+  "created_at": "2026-02-15T16:51:37.881571749Z"
+}
+```
+
+#### List API Keys
+Retrieves all API keys.
+
+**Endpoint:** `GET /api/admin/keys`
+
+**Headers:**
+- `X-API-Key: <admin_api_key>`
+
+**Response (200 OK):**
+```json
+[
+  {
+    "key_id": "key_j6mdji4Kjm_UiIGn26XQVg",
+    "service_id": "csharp-backend",
+    "service_name": "C# Web Backend",
+    "permissions": ["metrics:read", "servers:read"],
+    "created_at": "2026-02-15T16:51:37.882303Z",
+    "is_active": true,
+    "last_used_at": "2026-02-15T16:52:00Z"
+  }
+]
+```
+
+#### Get API Key Details
+Retrieves details for a specific API key.
+
+**Endpoint:** `GET /api/admin/keys/{keyId}`
+
+**Headers:**
+- `X-API-Key: <admin_api_key>`
+
+#### Revoke API Key
+Deactivates an API key.
+
+**Endpoint:** `DELETE /api/admin/keys/{keyId}`
+
+**Headers:**
+- `X-API-Key: <admin_api_key>`
+
+---
+
 ## Tiered Metrics Endpoints
 
 ### Overview
@@ -275,13 +369,17 @@ Automatically selects the best granularity based on time range.
 
 **Endpoint:** `GET /api/servers/{server_id}/metrics/tiered`
 
+**Headers:**
+- `X-API-Key: <your_api_key>` (Required for backend integration)
+
 **Query Parameters:**
 - `start` (string, required): Start time (RFC3339 format)
 - `end` (string, required): End time (RFC3339 format)
 
 **Example:**
 ```bash
-curl "http://localhost:8080/api/servers/test-server-001/metrics/tiered?start=2026-02-13T15:00:00Z&end=2026-02-13T16:00:00Z"
+curl -H "X-API-Key: sk_csharp_backend_development_key_change_in_production" \
+     "http://localhost:8080/api/servers/test-server-001/metrics/tiered?start=2026-02-13T15:00:00Z&end=2026-02-13T16:00:00Z"
 ```
 
 ### Get Real-Time Metrics
