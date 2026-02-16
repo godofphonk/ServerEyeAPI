@@ -382,7 +382,7 @@ Unified endpoint for all metrics queries. Automatically selects the best granula
 - `start` (string, required): Start time (RFC3339 format)
 - `end` (string, required): End time (RFC3339 format)
 
-**Response:**
+**Response (with data):**
 ```json
 {
   "server_id": "srv_71453434",
@@ -412,6 +412,28 @@ Unified endpoint for all metrics queries. Automatically selects the best granula
   "total_points": 26
 }
 ```
+
+**Response (showing available data when requested period is empty):**
+```json
+{
+  "server_id": "srv_71453434",
+  "start_time": "2026-02-14T19:00:00Z",
+  "end_time": "2026-02-15T19:00:00Z",
+  "granularity": "1m",
+  "data_points": [
+    {
+      "timestamp": "2026-02-15T18:18:00Z",
+      "cpu_avg": 18.53,
+      "memory_avg": 71.31,
+      "..."
+    }
+  ],
+  "total_points": 26,
+  "message": "Showing available data (requested period had no data)"
+}
+```
+
+**Note:** If the requested time period has no data (e.g., server was recently installed), the API will automatically return the latest available metrics with a `message` field explaining the situation. This ensures the frontend always has data to display.
 
 ### Usage Examples
 
