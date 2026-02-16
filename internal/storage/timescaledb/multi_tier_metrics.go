@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/sirupsen/logrus"
 )
 
 // MetricsGranularity defines the granularity level for metrics
@@ -61,9 +62,23 @@ type TieredMetricsPoint struct {
 
 // GetTieredMetrics retrieves metrics with appropriate granularity based on time range
 func (c *Client) GetTieredMetrics(ctx context.Context, req *TieredMetricsRequest) (*TieredMetricsResponse, error) {
+	start := time.Now()
+	defer func() {
+		c.logger.WithFields(logrus.Fields{
+			"duration_ms": time.Since(start).Milliseconds(),
+			"server_id":   req.ServerID,
+		}).Info("[PERF] GetTieredMetrics completed")
+	}()
+
 	if ctx == nil {
 		ctx = context.Background()
 	}
+
+	c.logger.WithFields(logrus.Fields{
+		"server_id": req.ServerID,
+		"start":     req.StartTime,
+		"end":       req.EndTime,
+	}).Info("[PERF] Starting metrics query")
 
 	// Determine granularity based on time range if not specified
 	granularity := req.Granularity
@@ -77,6 +92,37 @@ func (c *Client) GetTieredMetrics(ctx context.Context, req *TieredMetricsRequest
 		return nil, fmt.Errorf("unsupported granularity: %s", granularity)
 	}
 
+	// Early return: Quick check if data exists
+	checkStart := time.Now()
+	var count int64
+	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE server_id = $1 AND bucket BETWEEN $2 AND $3", viewName)
+	err := c.pool.QueryRow(ctx, countQuery, req.ServerID, req.StartTime, req.EndTime).Scan(&count)
+	if err != nil {
+		c.logger.WithError(err).Error("[PERF] Error checking data count")
+		return nil, fmt.Errorf("failed to check data count: %w", err)
+	}
+
+	c.logger.WithFields(logrus.Fields{
+		"count":       count,
+		"check_ms":    time.Since(checkStart).Milliseconds(),
+		"server_id":   req.ServerID,
+		"granularity": granularity,
+	}).Info("[PERF] Data count check completed")
+
+	if count == 0 {
+		c.logger.WithField("server_id", req.ServerID).Info("[PERF] No data found - returning empty response fast")
+		return &TieredMetricsResponse{
+			ServerID:    req.ServerID,
+			StartTime:   req.StartTime,
+			EndTime:     req.EndTime,
+			Granularity: granularity,
+			DataPoints:  []TieredMetricsPoint{},
+			TotalPoints: 0,
+			Message:     "No data found in specified range",
+		}, nil
+	}
+
+	queryStart := time.Now()
 	query := fmt.Sprintf(`
 		SELECT 
 			bucket,
@@ -89,9 +135,14 @@ func (c *Client) GetTieredMetrics(ctx context.Context, req *TieredMetricsRequest
 			sample_count
 		FROM %s
 		WHERE server_id = $1 AND bucket BETWEEN $2 AND $3
-		ORDER BY bucket`, viewName)
+		ORDER BY bucket
+		LIMIT 10000`, viewName)
 
 	rows, err := c.pool.Query(ctx, query, req.ServerID, req.StartTime, req.EndTime)
+	c.logger.WithFields(logrus.Fields{
+		"query_ms":  time.Since(queryStart).Milliseconds(),
+		"server_id": req.ServerID,
+	}).Info("[PERF] Query execution completed")
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tiered metrics: %w", err)
 	}
@@ -168,26 +219,14 @@ func (c *Client) GetTieredMetrics(ctx context.Context, req *TieredMetricsRequest
 		dataPoints = append(dataPoints, point)
 	}
 
-	response := &TieredMetricsResponse{
+	return &TieredMetricsResponse{
 		ServerID:    req.ServerID,
 		StartTime:   req.StartTime,
 		EndTime:     req.EndTime,
 		Granularity: granularity,
 		DataPoints:  dataPoints,
 		TotalPoints: int64(len(dataPoints)),
-	}
-
-	// If no data in requested period, try to get available data
-	if len(dataPoints) == 0 {
-		availableData, err := c.getAvailableMetrics(ctx, req.ServerID, viewName)
-		if err == nil && len(availableData) > 0 {
-			response.DataPoints = availableData
-			response.TotalPoints = int64(len(availableData))
-			response.Message = "Showing available data (requested period had no data)"
-		}
-	}
-
-	return response, nil
+	}, nil
 }
 
 // GetMetricsByGranularity uses the optimized function to get metrics
@@ -484,100 +523,4 @@ func (c *Client) getViewName(granularity MetricsGranularity) string {
 	default:
 		return ""
 	}
-}
-
-// getAvailableMetrics retrieves the latest available metrics when requested period has no data
-func (c *Client) getAvailableMetrics(ctx context.Context, serverID string, viewName string) ([]TieredMetricsPoint, error) {
-	query := fmt.Sprintf(`
-		SELECT 
-			bucket,
-			avg_cpu, max_cpu, min_cpu,
-			avg_memory, max_memory, min_memory,
-			avg_disk, max_disk,
-			avg_network, max_network,
-			avg_cpu_temp, max_cpu_temp,
-			avg_load_1m, max_load_1m,
-			sample_count
-		FROM %s
-		WHERE server_id = $1
-		ORDER BY bucket DESC
-		LIMIT 100`, viewName)
-
-	rows, err := c.pool.Query(ctx, query, serverID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query available metrics: %w", err)
-	}
-	defer rows.Close()
-
-	var dataPoints []TieredMetricsPoint
-	for rows.Next() {
-		var point TieredMetricsPoint
-		var cpuAvg, cpuMax, cpuMin sql.NullFloat64
-		var memAvg, memMax, memMin sql.NullFloat64
-		var diskAvg, diskMax sql.NullFloat64
-		var netAvg, netMax sql.NullFloat64
-		var tempAvg, tempMax sql.NullFloat64
-		var loadAvg, loadMax sql.NullFloat64
-
-		err := rows.Scan(
-			&point.Timestamp,
-			&cpuAvg, &cpuMax, &cpuMin,
-			&memAvg, &memMax, &memMin,
-			&diskAvg, &diskMax,
-			&netAvg, &netMax,
-			&tempAvg, &tempMax,
-			&loadAvg, &loadMax,
-			&point.SampleCount,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan available metrics row: %w", err)
-		}
-
-		if cpuAvg.Valid {
-			point.CPUAvg = cpuAvg.Float64
-		}
-		if cpuMax.Valid {
-			point.CPUMax = cpuMax.Float64
-		}
-		if cpuMin.Valid {
-			point.CPUMin = cpuMin.Float64
-		}
-		if memAvg.Valid {
-			point.MemoryAvg = memAvg.Float64
-		}
-		if memMax.Valid {
-			point.MemoryMax = memMax.Float64
-		}
-		if memMin.Valid {
-			point.MemoryMin = memMin.Float64
-		}
-		if diskAvg.Valid {
-			point.DiskAvg = diskAvg.Float64
-		}
-		if diskMax.Valid {
-			point.DiskMax = diskMax.Float64
-		}
-		if netAvg.Valid {
-			point.NetworkAvg = netAvg.Float64
-		}
-		if netMax.Valid {
-			point.NetworkMax = netMax.Float64
-		}
-		if tempAvg.Valid {
-			point.TempAvg = tempAvg.Float64
-		}
-		if tempMax.Valid {
-			point.TempMax = tempMax.Float64
-		}
-		if loadAvg.Valid {
-			point.LoadAvg = loadAvg.Float64
-		}
-		if loadMax.Valid {
-			point.LoadMax = loadMax.Float64
-		}
-
-		dataPoints = append(dataPoints, point)
-	}
-
-	return dataPoints, nil
 }
