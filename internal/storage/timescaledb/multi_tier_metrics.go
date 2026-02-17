@@ -66,9 +66,6 @@ type TieredMetricsPoint struct {
 	NetworkMax  float64   `json:"network_max,omitempty"`
 	TempAvg     float64   `json:"temp_avg,omitempty"`
 	TempMax     float64   `json:"temp_max,omitempty"`
-	GPUTempAvg  float64   `json:"gpu_temp_avg,omitempty"`
-	GPUTempMax  float64   `json:"gpu_temp_max,omitempty"`
-	GPUTempMin  float64   `json:"gpu_temp_min,omitempty"`
 	LoadAvg     float64   `json:"load_avg,omitempty"`
 	LoadMax     float64   `json:"load_max,omitempty"`
 	SampleCount int64     `json:"sample_count"`
