@@ -3,6 +3,7 @@ package timescaledb
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -29,6 +30,40 @@ type TieredMetricsRequest struct {
 	Metrics     []string           `json:"metrics,omitempty"` // Specific metrics to retrieve
 }
 
+// NetworkInterface represents a network interface
+type NetworkInterface struct {
+	Name        string  `json:"name"`
+	Status      string  `json:"status"`
+	RxBytes     int64   `json:"rx_bytes"`
+	TxBytes     int64   `json:"tx_bytes"`
+	RxPackets   int64   `json:"rx_packets"`
+	TxPackets   int64   `json:"tx_packets"`
+	RxSpeedMbps float64 `json:"rx_speed_mbps"`
+	TxSpeedMbps float64 `json:"tx_speed_mbps"`
+}
+
+// NetworkDetails contains detailed network information
+type NetworkDetails struct {
+	Interfaces  []NetworkInterface `json:"interfaces"`
+	TotalRxMbps float64            `json:"total_rx_mbps"`
+	TotalTxMbps float64            `json:"total_tx_mbps"`
+}
+
+// DiskUsage represents disk usage information
+type DiskUsage struct {
+	Path        string  `json:"path"`
+	FreeGB      float64 `json:"free_gb"`
+	UsedGB      float64 `json:"used_gb"`
+	TotalGB     float64 `json:"total_gb"`
+	Filesystem  string  `json:"filesystem"`
+	UsedPercent int     `json:"used_percent"`
+}
+
+// DiskDetails contains detailed disk information
+type DiskDetails struct {
+	Disks []DiskUsage `json:"disks"`
+}
+
 // TemperatureDetails contains detailed temperature information
 type TemperatureDetails struct {
 	CPUTemperature      float64            `json:"cpu_temperature"`
@@ -48,6 +83,8 @@ type TieredMetricsResponse struct {
 	DataPoints         []TieredMetricsPoint `json:"data_points"`
 	TotalPoints        int64                `json:"total_points"`
 	Message            string               `json:"message,omitempty"`
+	NetworkDetails     *NetworkDetails      `json:"network_details,omitempty"`
+	DiskDetails        *DiskDetails         `json:"disk_details,omitempty"`
 	TemperatureDetails *TemperatureDetails  `json:"temperature_details,omitempty"`
 }
 
@@ -230,10 +267,20 @@ func (c *Client) GetTieredMetrics(ctx context.Context, req *TieredMetricsRequest
 		dataPoints = append(dataPoints, point)
 	}
 
-	// Get temperature details from the latest metrics
+	// Get detailed information from the latest metrics
 	tempDetails, err := c.getTemperatureDetails(ctx, req.ServerID)
 	if err != nil {
 		c.logger.WithError(err).Warn("[PERF] Failed to get temperature details")
+	}
+
+	networkDetails, err := c.getNetworkDetails(ctx, req.ServerID)
+	if err != nil {
+		c.logger.WithError(err).Warn("[PERF] Failed to get network details")
+	}
+
+	diskDetails, err := c.getDiskDetails(ctx, req.ServerID)
+	if err != nil {
+		c.logger.WithError(err).Warn("[PERF] Failed to get disk details")
 	}
 
 	return &TieredMetricsResponse{
@@ -243,6 +290,8 @@ func (c *Client) GetTieredMetrics(ctx context.Context, req *TieredMetricsRequest
 		Granularity:        granularity,
 		DataPoints:         dataPoints,
 		TotalPoints:        int64(len(dataPoints)),
+		NetworkDetails:     networkDetails,
+		DiskDetails:        diskDetails,
 		TemperatureDetails: tempDetails,
 	}, nil
 }
@@ -601,4 +650,68 @@ func (c *Client) getTemperatureDetails(ctx context.Context, serverID string) (*T
 	}
 
 	return details, nil
+}
+
+// getNetworkDetails retrieves the latest network details from the raw metrics table
+func (c *Client) getNetworkDetails(ctx context.Context, serverID string) (*NetworkDetails, error) {
+	query := `
+		SELECT network_details
+		FROM server_metrics 
+		WHERE server_id = $1 AND network_details IS NOT NULL
+		ORDER BY time DESC 
+		LIMIT 1`
+
+	var networkDetails sql.NullString
+	err := c.pool.QueryRow(ctx, query, serverID).Scan(&networkDetails)
+	if err != nil {
+		if err.Error() == "no rows in result set" {
+			return nil, nil // No data available
+		}
+		return nil, fmt.Errorf("failed to query network details: %w", err)
+	}
+
+	if !networkDetails.Valid || networkDetails.String == "" {
+		return nil, nil
+	}
+
+	// Parse JSON network details
+	details := &NetworkDetails{}
+	err = json.Unmarshal([]byte(networkDetails.String), details)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse network details JSON: %w", err)
+	}
+
+	return details, nil
+}
+
+// getDiskDetails retrieves the latest disk details from the raw metrics table
+func (c *Client) getDiskDetails(ctx context.Context, serverID string) (*DiskDetails, error) {
+	query := `
+		SELECT disk_details
+		FROM server_metrics 
+		WHERE server_id = $1 AND disk_details IS NOT NULL
+		ORDER BY time DESC 
+		LIMIT 1`
+
+	var diskDetails sql.NullString
+	err := c.pool.QueryRow(ctx, query, serverID).Scan(&diskDetails)
+	if err != nil {
+		if err.Error() == "no rows in result set" {
+			return nil, nil // No data available
+		}
+		return nil, fmt.Errorf("failed to query disk details: %w", err)
+	}
+
+	if !diskDetails.Valid || diskDetails.String == "" {
+		return nil, nil
+	}
+
+	// Parse JSON disk details - it's an array
+	var diskArray []DiskUsage
+	err = json.Unmarshal([]byte(diskDetails.String), &diskArray)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse disk details JSON: %w", err)
+	}
+
+	return &DiskDetails{Disks: diskArray}, nil
 }
