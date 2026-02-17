@@ -29,15 +29,26 @@ type TieredMetricsRequest struct {
 	Metrics     []string           `json:"metrics,omitempty"` // Specific metrics to retrieve
 }
 
+// TemperatureDetails contains detailed temperature information
+type TemperatureDetails struct {
+	CPUTemperature      float64            `json:"cpu_temperature"`
+	GPUTemperature      float64            `json:"gpu_temperature"`
+	SystemTemperature   float64            `json:"system_temperature"`
+	StorageTemperatures map[string]float64 `json:"storage_temperatures"`
+	HighestTemperature  float64            `json:"highest_temperature"`
+	TemperatureUnit     string             `json:"temperature_unit"`
+}
+
 // TieredMetricsResponse contains tiered metrics with appropriate granularity
 type TieredMetricsResponse struct {
-	ServerID    string               `json:"server_id"`
-	StartTime   time.Time            `json:"start_time"`
-	EndTime     time.Time            `json:"end_time"`
-	Granularity MetricsGranularity   `json:"granularity"`
-	DataPoints  []TieredMetricsPoint `json:"data_points"`
-	TotalPoints int64                `json:"total_points"`
-	Message     string               `json:"message,omitempty"`
+	ServerID           string               `json:"server_id"`
+	StartTime          time.Time            `json:"start_time"`
+	EndTime            time.Time            `json:"end_time"`
+	Granularity        MetricsGranularity   `json:"granularity"`
+	DataPoints         []TieredMetricsPoint `json:"data_points"`
+	TotalPoints        int64                `json:"total_points"`
+	Message            string               `json:"message,omitempty"`
+	TemperatureDetails *TemperatureDetails  `json:"temperature_details,omitempty"`
 }
 
 // TieredMetricsPoint represents a single data point in tiered metrics
@@ -55,6 +66,9 @@ type TieredMetricsPoint struct {
 	NetworkMax  float64   `json:"network_max,omitempty"`
 	TempAvg     float64   `json:"temp_avg,omitempty"`
 	TempMax     float64   `json:"temp_max,omitempty"`
+	GPUTempAvg  float64   `json:"gpu_temp_avg,omitempty"`
+	GPUTempMax  float64   `json:"gpu_temp_max,omitempty"`
+	GPUTempMin  float64   `json:"gpu_temp_min,omitempty"`
 	LoadAvg     float64   `json:"load_avg,omitempty"`
 	LoadMax     float64   `json:"load_max,omitempty"`
 	SampleCount int64     `json:"sample_count"`
@@ -219,13 +233,20 @@ func (c *Client) GetTieredMetrics(ctx context.Context, req *TieredMetricsRequest
 		dataPoints = append(dataPoints, point)
 	}
 
+	// Get temperature details from the latest metrics
+	tempDetails, err := c.getTemperatureDetails(ctx, req.ServerID)
+	if err != nil {
+		c.logger.WithError(err).Warn("[PERF] Failed to get temperature details")
+	}
+
 	return &TieredMetricsResponse{
-		ServerID:    req.ServerID,
-		StartTime:   req.StartTime,
-		EndTime:     req.EndTime,
-		Granularity: granularity,
-		DataPoints:  dataPoints,
-		TotalPoints: int64(len(dataPoints)),
+		ServerID:           req.ServerID,
+		StartTime:          req.StartTime,
+		EndTime:            req.EndTime,
+		Granularity:        granularity,
+		DataPoints:         dataPoints,
+		TotalPoints:        int64(len(dataPoints)),
+		TemperatureDetails: tempDetails,
 	}, nil
 }
 
@@ -523,4 +544,64 @@ func (c *Client) getViewName(granularity MetricsGranularity) string {
 	default:
 		return ""
 	}
+}
+
+// getTemperatureDetails retrieves the latest temperature details from the raw metrics table
+func (c *Client) getTemperatureDetails(ctx context.Context, serverID string) (*TemperatureDetails, error) {
+	query := `
+		SELECT 
+			cpu_temperature,
+			gpu_temperature,
+			system_temperature,
+			highest_temperature,
+			temperature_unit,
+			disk_details
+		FROM server_metrics 
+		WHERE server_id = $1 
+		ORDER BY time DESC 
+		LIMIT 1`
+
+	var cpuTemp, gpuTemp, systemTemp, highestTemp sql.NullFloat64
+	var tempUnit sql.NullString
+	var diskDetails sql.NullString
+
+	err := c.pool.QueryRow(ctx, query, serverID).Scan(
+		&cpuTemp, &gpuTemp, &systemTemp, &highestTemp,
+		&tempUnit, &diskDetails,
+	)
+	if err != nil {
+		if err.Error() == "no rows in result set" {
+			return nil, nil // No data available
+		}
+		return nil, fmt.Errorf("failed to query temperature details: %w", err)
+	}
+
+	details := &TemperatureDetails{
+		TemperatureUnit: "celsius", // Default unit
+	}
+
+	if cpuTemp.Valid {
+		details.CPUTemperature = cpuTemp.Float64
+	}
+	if gpuTemp.Valid {
+		details.GPUTemperature = gpuTemp.Float64
+	}
+	if systemTemp.Valid {
+		details.SystemTemperature = systemTemp.Float64
+	}
+	if highestTemp.Valid {
+		details.HighestTemperature = highestTemp.Float64
+	}
+	if tempUnit.Valid {
+		details.TemperatureUnit = tempUnit.String
+	}
+
+	// Parse storage temperatures from disk_details if available
+	if diskDetails.Valid && diskDetails.String != "" {
+		// Try to parse JSON disk details for storage temperatures
+		// This is a placeholder - actual implementation would depend on disk_details format
+		details.StorageTemperatures = make(map[string]float64)
+	}
+
+	return details, nil
 }
