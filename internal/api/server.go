@@ -87,6 +87,9 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 	// Initialize WebSocket server
 	wsServer := websocket.NewServer(storageImpl, logger, cfg)
 
+	// Initialize API Key storage
+	apiKeyStorage := storage.NewAPIKeyStorage(pgClient.DB(), logger)
+
 	// Initialize services with repositories
 	authService := services.NewAuthService(keyRepo, serverRepo, logger)
 	serverService := services.NewServerService(serverRepo, keyRepo, logger)
@@ -106,6 +109,10 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 	serversHandler := handlers.NewServersHandler(storageImpl, logger)
 	serverSourcesHandler := handlers.NewServerSourcesHandler(serverService, logger)
 	commandsHandler := handlers.NewCommandsHandler(commandsService, logger)
+	apiKeyHandler := handlers.NewAPIKeyHandler(apiKeyStorage, logger)
+
+	// Initialize API Key middleware (TODO: Fix and enable)
+	// apiKeyMiddleware := keyMiddleware.NewAPIKeyAuthMiddleware(apiKeyStorage, logger)
 
 	// Setup routes
 	router := SetupRoutes(
@@ -116,6 +123,8 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 		serversHandler,
 		serverSourcesHandler,
 		commandsHandler,
+		apiKeyHandler,
+		nil, // TODO: apiKeyMiddleware
 		wsServer,
 		storageImpl,
 		logger,
