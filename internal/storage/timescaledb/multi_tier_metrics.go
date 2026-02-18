@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/sirupsen/logrus"
 )
 
@@ -417,7 +416,7 @@ func (c *Client) GetCurrentSystemStatus(ctx context.Context, serverID string) (*
 	)
 
 	if err != nil {
-		if err == pgx.ErrNoRows {
+		if err.Error() == "no rows in result set" {
 			return nil, fmt.Errorf("no recent data found for server %s", serverID)
 		}
 		return nil, fmt.Errorf("failed to get current status: %w", err)
