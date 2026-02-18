@@ -44,7 +44,7 @@ func (m *APIKeyAuthMiddleware) Authenticate(next http.Handler) http.Handler {
 		key, err := m.storage.ValidateAPIKey(r.Context(), apiKey)
 		if err != nil {
 			m.logger.WithError(err).Warn("Invalid API key")
-			
+
 			// Log failed attempt
 			m.storage.LogAPIKeyUsage(
 				r.Context(),
@@ -55,7 +55,7 @@ func (m *APIKeyAuthMiddleware) Authenticate(next http.Handler) http.Handler {
 				false,
 				"Invalid API key",
 			)
-			
+
 			http.Error(w, `{"error":"Invalid API key"}`, http.StatusUnauthorized)
 			return
 		}
@@ -116,7 +116,7 @@ func (m *APIKeyAuthMiddleware) RequirePermission(permission string) func(http.Ha
 					"permission": permission,
 					"endpoint":   r.URL.Path,
 				}).Warn("Permission denied")
-				
+
 				http.Error(w, `{"error":"Permission denied"}`, http.StatusForbidden)
 				return
 			}
