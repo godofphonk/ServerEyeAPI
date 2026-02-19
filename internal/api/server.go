@@ -36,16 +36,14 @@ import (
 	postgresRepo "github.com/godofphonk/ServerEyeAPI/internal/storage/repositories/postgres"
 	"github.com/godofphonk/ServerEyeAPI/internal/storage/timescaledb"
 	"github.com/godofphonk/ServerEyeAPI/internal/version"
-	"github.com/godofphonk/ServerEyeAPI/internal/websocket"
 	"github.com/sirupsen/logrus"
 )
 
 // Server represents the HTTP server
 type Server struct {
-	server   *http.Server
-	logger   *logrus.Logger
-	wsServer *websocket.Server
-	storage  storage.Storage
+	server  *http.Server
+	logger  *logrus.Logger
+	storage storage.Storage
 }
 
 // New creates a new server instance
@@ -96,9 +94,6 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 	// Create storage adapter with TimescaleDB
 	storageImpl = storage.NewTimescaleDBStorageAdapter(keyRepo, serverRepo, timescaleDBClient, logger, cfg)
 
-	// Initialize WebSocket server
-	wsServer := websocket.NewServer(storageImpl, logger, cfg)
-
 	// Initialize API Key storage
 	apiKeyStorage := storage.NewAPIKeyStorage(pgClient.DB(), logger)
 
@@ -123,6 +118,7 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 	commandsHandler := handlers.NewCommandsHandler(commandsService, logger)
 	apiKeyHandler := handlers.NewAPIKeyHandler(apiKeyStorage, logger)
 	staticInfoHandler := handlers.NewStaticInfoHandler(staticDataStorage, logger)
+	metricsPushHandler := handlers.NewMetricsPushHandler(storageImpl, logger)
 
 	// Initialize API Key middleware (TODO: Fix and enable)
 	// apiKeyMiddleware := keyMiddleware.NewAPIKeyAuthMiddleware(apiKeyStorage, logger)
@@ -138,8 +134,8 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 		commandsHandler,
 		apiKeyHandler,
 		staticInfoHandler,
+		metricsPushHandler,
 		nil, // TODO: apiKeyMiddleware
-		wsServer,
 		storageImpl,
 		logger,
 	)
@@ -161,10 +157,9 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 	}
 
 	return &Server{
-		server:   server,
-		logger:   logger,
-		wsServer: wsServer,
-		storage:  storageImpl,
+		server:  server,
+		logger:  logger,
+		storage: storageImpl,
 	}, nil
 }
 
@@ -187,21 +182,11 @@ func (s *Server) Shutdown(ctx context.Context) error {
 		s.logger.WithError(err).Error("Failed to shutdown HTTP server")
 	}
 
-	// 2. Close WebSocket connections
-	if err := s.wsServer.Close(); err != nil {
-		s.logger.WithError(err).Error("Failed to close WebSocket server")
-	}
-
-	// 3. Close storage last
+	// 2. Close storage
 	if err := s.storage.Close(); err != nil {
 		s.logger.WithError(err).Error("Failed to close storage")
 	}
 
 	s.logger.Info("Server shutdown complete")
 	return nil
-}
-
-// GetWebSocketServer returns the WebSocket server instance
-func (s *Server) GetWebSocketServer() *websocket.Server {
-	return s.wsServer
 }

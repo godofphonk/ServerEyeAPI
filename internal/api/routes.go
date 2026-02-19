@@ -24,7 +24,6 @@ import (
 	"github.com/godofphonk/ServerEyeAPI/internal/api/middleware"
 	"github.com/godofphonk/ServerEyeAPI/internal/handlers"
 	"github.com/godofphonk/ServerEyeAPI/internal/storage"
-	"github.com/godofphonk/ServerEyeAPI/internal/websocket"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 )
@@ -40,8 +39,8 @@ func SetupRoutes(
 	commandsHandler *handlers.CommandsHandler,
 	apiKeyHandler *handlers.APIKeyHandler,
 	staticInfoHandler *handlers.StaticInfoHandler,
+	metricsPushHandler *handlers.MetricsPushHandler,
 	apiKeyMiddleware interface{},
-	wsServer *websocket.Server,
 	storageImpl storage.Storage,
 	logger *logrus.Logger,
 ) *mux.Router {
@@ -51,8 +50,11 @@ func SetupRoutes(
 	router.HandleFunc("/RegisterKey", authHandler.RegisterKey).Methods("POST")
 	router.HandleFunc("/health", healthHandler.Health).Methods("GET")
 
-	// WebSocket route
-	router.HandleFunc("/ws", wsServer.HandleConnection).Methods("GET")
+	// HTTP endpoints for agent metrics push (replacing WebSocket)
+	router.HandleFunc("/api/servers/by-key/{server_key}/metrics", metricsPushHandler.PushMetrics).Methods("POST")
+	router.HandleFunc("/api/servers/by-key/{server_key}/heartbeat", metricsPushHandler.PushHeartbeat).Methods("POST")
+	router.HandleFunc("/api/servers/{server_id}/metrics", metricsPushHandler.PushMetricsByID).Methods("POST")
+	router.HandleFunc("/api/servers/{server_id}/heartbeat", metricsPushHandler.PushHeartbeatByID).Methods("POST")
 
 	// Metrics endpoint by key (public for TG bot)
 	router.HandleFunc("/api/servers/by-key/{server_key}/metrics", metricsHandler.GetServerMetricsByKey).Methods("GET")

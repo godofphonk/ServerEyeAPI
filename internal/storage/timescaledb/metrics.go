@@ -37,6 +37,14 @@ func (c *Client) StoreMetric(ctx context.Context, serverID string, metrics *mode
 		ctx = context.Background()
 	}
 
+	c.logger.WithFields(logrus.Fields{
+		"server_id": serverID,
+		"timestamp": metrics.Time,
+		"is_zero":   metrics.Time.IsZero(),
+		"cpu":       metrics.CPU,
+		"memory":    metrics.Memory,
+	}).Info("TimescaleDB: Storing metrics with timestamp")
+
 	query := `
 	INSERT INTO server_metrics (
 		time, server_id, cpu_usage, memory_usage, disk_usage, network_usage,
@@ -51,6 +59,14 @@ func (c *Client) StoreMetric(ctx context.Context, serverID string, metrics *mode
 	) VALUES (
 		$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38
 	)`
+
+	// Convert empty BootTime to NULL
+	var bootTime interface{}
+	if metrics.SystemDetails.BootTime == "" {
+		bootTime = nil
+	} else {
+		bootTime = metrics.SystemDetails.BootTime
+	}
 
 	_, err := c.pool.Exec(ctx, query,
 		metrics.Time,
@@ -87,7 +103,7 @@ func (c *Client) StoreMetric(ctx context.Context, serverID string, metrics *mode
 		metrics.SystemDetails.Architecture,
 		metrics.SystemDetails.UptimeSeconds,
 		metrics.SystemDetails.UptimeHuman,
-		metrics.SystemDetails.BootTime,
+		bootTime,
 		metrics.SystemDetails.ProcessesTotal,
 		metrics.SystemDetails.ProcessesRunning,
 		metrics.SystemDetails.ProcessesSleeping,

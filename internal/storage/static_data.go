@@ -53,19 +53,17 @@ type ServerInfo struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
-// HardwareInfo represents hardware specifications
+// HardwareInfo represents server hardware specifications
 type HardwareInfo struct {
 	ServerID        string    `json:"server_id"`
 	CPUModel        string    `json:"cpu_model"`
 	CPUCores        int       `json:"cpu_cores"`
 	CPUThreads      int       `json:"cpu_threads"`
-	CPUFrequencyMHz int       `json:"cpu_frequency_mhz"`
+	CPUFrequencyMHz float64   `json:"cpu_frequency_mhz"`
 	GPUModel        string    `json:"gpu_model"`
 	GPUDriver       string    `json:"gpu_driver"`
 	GPUMemoryGB     int       `json:"gpu_memory_gb"`
-	TotalMemoryGB   int       `json:"total_memory_gb"`
-	Motherboard     string    `json:"motherboard"`
-	BIOSVersion     string    `json:"bios_version"`
+	TotalMemoryGB   float64   `json:"total_memory_gb"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 }
@@ -221,8 +219,8 @@ func (s *PostgresStaticDataStorage) UpsertHardwareInfo(ctx context.Context, info
 	query := `
 		INSERT INTO static_data.hardware_info (
 			server_id, cpu_model, cpu_cores, cpu_threads, cpu_frequency_mhz,
-			gpu_model, gpu_driver, gpu_memory_gb, total_memory_gb, motherboard, bios_version
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			gpu_model, gpu_driver, gpu_memory_gb, total_memory_gb
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		ON CONFLICT (server_id) DO UPDATE SET
 			cpu_model = EXCLUDED.cpu_model,
 			cpu_cores = EXCLUDED.cpu_cores,
@@ -232,15 +230,12 @@ func (s *PostgresStaticDataStorage) UpsertHardwareInfo(ctx context.Context, info
 			gpu_driver = EXCLUDED.gpu_driver,
 			gpu_memory_gb = EXCLUDED.gpu_memory_gb,
 			total_memory_gb = EXCLUDED.total_memory_gb,
-			motherboard = EXCLUDED.motherboard,
-			bios_version = EXCLUDED.bios_version,
 			updated_at = NOW()
 		RETURNING created_at, updated_at`
 
 	err := s.db.QueryRowContext(ctx, query,
 		info.ServerID, info.CPUModel, info.CPUCores, info.CPUThreads, info.CPUFrequencyMHz,
 		info.GPUModel, info.GPUDriver, info.GPUMemoryGB, info.TotalMemoryGB,
-		info.Motherboard, info.BIOSVersion,
 	).Scan(&info.CreatedAt, &info.UpdatedAt)
 
 	if err != nil {
@@ -248,23 +243,22 @@ func (s *PostgresStaticDataStorage) UpsertHardwareInfo(ctx context.Context, info
 	}
 	return nil
 }
-
-// GetHardwareInfo retrieves hardware information
 func (s *PostgresStaticDataStorage) GetHardwareInfo(ctx context.Context, serverID string) (*HardwareInfo, error) {
 	query := `
 		SELECT server_id, cpu_model, cpu_cores, cpu_threads, cpu_frequency_mhz,
-			   gpu_model, gpu_driver, gpu_memory_gb, total_memory_gb, motherboard, bios_version,
+			   gpu_model, gpu_driver, gpu_memory_gb, total_memory_gb,
 			   created_at, updated_at
 		FROM static_data.hardware_info
 		WHERE server_id = $1`
 
 	info := &HardwareInfo{}
-	var cpuModel, gpuModel, gpuDriver, motherboard, biosVersion sql.NullString
-	var cpuCores, cpuThreads, cpuFreq, gpuMemory, totalMemory sql.NullInt64
+	var cpuModel, gpuModel, gpuDriver sql.NullString
+	var cpuCores, cpuThreads, gpuMemoryGB sql.NullInt64
+	var cpuFreq, totalMemory sql.NullFloat64
 
 	err := s.db.QueryRowContext(ctx, query, serverID).Scan(
 		&info.ServerID, &cpuModel, &cpuCores, &cpuThreads, &cpuFreq,
-		&gpuModel, &gpuDriver, &gpuMemory, &totalMemory, &motherboard, &biosVersion,
+		&gpuModel, &gpuDriver, &gpuMemoryGB, &totalMemory,
 		&info.CreatedAt, &info.UpdatedAt,
 	)
 
@@ -278,6 +272,12 @@ func (s *PostgresStaticDataStorage) GetHardwareInfo(ctx context.Context, serverI
 	if cpuModel.Valid {
 		info.CPUModel = cpuModel.String
 	}
+	if gpuModel.Valid {
+		info.GPUModel = gpuModel.String
+	}
+	if gpuDriver.Valid {
+		info.GPUDriver = gpuDriver.String
+	}
 	if cpuCores.Valid {
 		info.CPUCores = int(cpuCores.Int64)
 	}
@@ -285,25 +285,13 @@ func (s *PostgresStaticDataStorage) GetHardwareInfo(ctx context.Context, serverI
 		info.CPUThreads = int(cpuThreads.Int64)
 	}
 	if cpuFreq.Valid {
-		info.CPUFrequencyMHz = int(cpuFreq.Int64)
+		info.CPUFrequencyMHz = cpuFreq.Float64
 	}
-	if gpuModel.Valid {
-		info.GPUModel = gpuModel.String
-	}
-	if gpuDriver.Valid {
-		info.GPUDriver = gpuDriver.String
-	}
-	if gpuMemory.Valid {
-		info.GPUMemoryGB = int(gpuMemory.Int64)
+	if gpuMemoryGB.Valid {
+		info.GPUMemoryGB = int(gpuMemoryGB.Int64)
 	}
 	if totalMemory.Valid {
-		info.TotalMemoryGB = int(totalMemory.Int64)
-	}
-	if motherboard.Valid {
-		info.Motherboard = motherboard.String
-	}
-	if biosVersion.Valid {
-		info.BIOSVersion = biosVersion.String
+		info.TotalMemoryGB = totalMemory.Float64
 	}
 
 	return info, nil
