@@ -40,6 +40,7 @@ type Config struct {
 	DatabaseURL     string `env:"DATABASE_URL"`
 	KeysDatabaseURL string `env:"KEYS_DATABASE_URL"`
 	TimescaleDBURL  string `env:"TIMESCALEDB_URL"` // TimescaleDB URL for time-series data
+	StaticDataURL   string `env:"STATIC_DATA_URL"` // PostgreSQL URL for static server data
 
 	// Metrics
 	MetricsTopic string `env:"METRICS_TOPIC" envDefault:"metrics"`

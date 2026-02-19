@@ -196,7 +196,82 @@ curl "http://localhost:8080/api/servers/srv_d1dc36d8/metrics/tiered?start=2026-0
 
 ---
 
-### 🔐 API Key Management
+### � Static Server Information
+
+**Endpoint:** `POST/PUT /api/servers/{server_id}/static-info`
+
+Update static/persistent server information (hardware, system details).
+
+**Request:**
+
+```json
+{
+  "server_info": {
+    "hostname": "gospodin-A620M-Pro-RS",
+    "os": "Ubuntu",
+    "os_version": "25.10",
+    "kernel": "6.17.0-14-generic",
+    "architecture": "x86_64"
+  },
+  "hardware_info": {
+    "cpu_model": "AMD Ryzen 5 5600X",
+    "cpu_cores": 6,
+    "cpu_threads": 12,
+    "cpu_frequency_mhz": 3700,
+    "gpu_model": "NVIDIA GeForce RTX 3080",
+    "gpu_driver": "550.120",
+    "gpu_memory_gb": 10,
+    "total_memory_gb": 32,
+    "motherboard": "ASRock A620M Pro RS",
+    "bios_version": "1.20"
+  },
+  "network_interfaces": [
+    {
+      "interface_name": "eth0",
+      "mac_address": "00:11:22:33:44:55",
+      "interface_type": "ethernet",
+      "speed_mbps": 1000,
+      "vendor": "Realtek",
+      "driver": "r8169",
+      "is_physical": true
+    }
+  ],
+  "disk_info": [
+    {
+      "device_name": "/dev/nvme0n1",
+      "model": "Samsung 980 PRO",
+      "serial_number": "S5GXNX0T123456",
+      "size_gb": 1000,
+      "disk_type": "nvme",
+      "interface_type": "nvme",
+      "filesystem": "ext4",
+      "mount_point": "/",
+      "is_system_disk": true
+    }
+  ]
+}
+```
+
+**Response:**
+
+```json
+{
+  "message": "Static information updated successfully",
+  "server_id": "srv_d1dc36d8"
+}
+```
+
+**Get Static Info:** `GET /api/servers/{server_id}/static-info`
+
+**Get Hardware Only:** `GET /api/servers/{server_id}/static-info/hardware`
+
+**Get Network Interfaces:** `GET /api/servers/{server_id}/static-info/network`
+
+**Get Disk Info:** `GET /api/servers/{server_id}/static-info/disks`
+
+---
+
+### �🔐 API Key Management
 
 **Create Key:** `POST /api/admin/keys`
 

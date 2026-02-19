@@ -39,6 +39,7 @@ func SetupRoutes(
 	serverSourcesHandler *handlers.ServerSourcesHandler,
 	commandsHandler *handlers.CommandsHandler,
 	apiKeyHandler *handlers.APIKeyHandler,
+	staticInfoHandler *handlers.StaticInfoHandler,
 	apiKeyMiddleware interface{},
 	wsServer *websocket.Server,
 	storageImpl storage.Storage,
@@ -74,6 +75,14 @@ func SetupRoutes(
 
 	// Unified metrics endpoint (public)
 	router.HandleFunc("/api/servers/{server_id}/metrics/tiered", tieredMetricsHandler.GetMetrics).Methods("GET")
+
+	// Static server information endpoints (public)
+	router.HandleFunc("/api/servers/{server_id}/static-info", staticInfoHandler.UpsertStaticInfo).Methods("POST", "PUT")
+	router.HandleFunc("/api/servers/{server_id}/static-info", staticInfoHandler.GetStaticInfo).Methods("GET")
+	router.HandleFunc("/api/servers/{server_id}/static-info/server", staticInfoHandler.GetServerInfo).Methods("GET")
+	router.HandleFunc("/api/servers/{server_id}/static-info/hardware", staticInfoHandler.GetHardwareInfo).Methods("GET")
+	router.HandleFunc("/api/servers/{server_id}/static-info/network", staticInfoHandler.GetNetworkInterfaces).Methods("GET")
+	router.HandleFunc("/api/servers/{server_id}/static-info/disks", staticInfoHandler.GetDiskInfo).Methods("GET")
 
 	// API endpoints for Telegram bot and web dashboard (with auth)
 	api := router.PathPrefix("/api").Subrouter()

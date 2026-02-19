@@ -81,6 +81,18 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 		}
 	}
 
+	// Initialize PostgreSQL for static data
+	var staticDataStorage storage.StaticDataStorage
+	if cfg.StaticDataURL != "" {
+		staticPgClient, err := postgresStorage.NewClient(cfg.StaticDataURL, logger)
+		if err != nil {
+			logger.WithError(err).Warn("Failed to connect to static data database")
+		} else {
+			staticDataStorage = storage.NewPostgresStaticDataStorage(staticPgClient.DB())
+			logger.Info("Connected to static data database")
+		}
+	}
+
 	// Create storage adapter with TimescaleDB
 	storageImpl = storage.NewTimescaleDBStorageAdapter(keyRepo, serverRepo, timescaleDBClient, logger, cfg)
 
@@ -110,6 +122,7 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 	serverSourcesHandler := handlers.NewServerSourcesHandler(serverService, logger)
 	commandsHandler := handlers.NewCommandsHandler(commandsService, logger)
 	apiKeyHandler := handlers.NewAPIKeyHandler(apiKeyStorage, logger)
+	staticInfoHandler := handlers.NewStaticInfoHandler(staticDataStorage, logger)
 
 	// Initialize API Key middleware (TODO: Fix and enable)
 	// apiKeyMiddleware := keyMiddleware.NewAPIKeyAuthMiddleware(apiKeyStorage, logger)
@@ -124,6 +137,7 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 		serverSourcesHandler,
 		commandsHandler,
 		apiKeyHandler,
+		staticInfoHandler,
 		nil, // TODO: apiKeyMiddleware
 		wsServer,
 		storageImpl,

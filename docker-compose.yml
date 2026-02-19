@@ -34,6 +34,7 @@ services:
       - DATABASE_URL=postgres://servereye:password@postgres:5432/servereye?sslmode=disable
       - KEYS_DATABASE_URL=postgres://servereye:password@postgres:5432/servereye?sslmode=disable
       - TIMESCALEDB_URL=postgres://servereye:password@timescaledb:5432/servereye?sslmode=disable
+      - STATIC_DATA_URL=postgres://servereye:password@postgres-static:5432/servereye?sslmode=disable
       - JWT_SECRET=your-super-secret-jwt-key-change-in-production
       - WEBHOOK_SECRET=your-webhook-secret-change-in-production
       - WEB_URL=http://localhost:3000
@@ -54,6 +55,8 @@ services:
       - servereye-network
     depends_on:
       postgres:
+        condition: service_healthy
+      postgres-static:
         condition: service_healthy
       timescaledb:
         condition: service_healthy
@@ -143,10 +146,40 @@ services:
           memory: 2G
           cpus: '1.0'
 
+  # PostgreSQL for static/persistent server data
+  postgres-static:
+    image: postgres:15-alpine
+    container_name: servereye-postgres-static
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: servereye
+      POSTGRES_USER: servereye
+      POSTGRES_PASSWORD: password
+    volumes:
+      - servereye_postgres_static_data:/var/lib/postgresql/data
+      - ./deployments/migration-005-static-data.sql:/docker-entrypoint-initdb.d/init-static-data.sql
+    networks:
+      - servereye-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U servereye"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.25'
+        reservations:
+          memory: 256M
+          cpus: '0.1'
+
 volumes:
   servereye_postgres_data:
     external: true
   servereye_timescaledb_data:
+    external: true
+  servereye_postgres_static_data:
     external: true
 
 networks:
