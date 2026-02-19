@@ -84,6 +84,14 @@ func SetupRoutes(
 	router.HandleFunc("/api/servers/{server_id}/static-info/network", staticInfoHandler.GetNetworkInterfaces).Methods("GET")
 	router.HandleFunc("/api/servers/{server_id}/static-info/disks", staticInfoHandler.GetDiskInfo).Methods("GET")
 
+	// Static server information endpoints by server key (for agents)
+	router.HandleFunc("/api/servers/by-key/{server_key}/static-info", staticInfoHandler.UpsertStaticInfoByKey).Methods("POST", "PUT")
+	router.HandleFunc("/api/servers/by-key/{server_key}/static-info", staticInfoHandler.GetStaticInfoByKey).Methods("GET")
+	router.HandleFunc("/api/servers/by-key/{server_key}/static-info/server", staticInfoHandler.GetServerInfoByKey).Methods("GET")
+	router.HandleFunc("/api/servers/by-key/{server_key}/static-info/hardware", staticInfoHandler.GetHardwareInfoByKey).Methods("GET")
+	router.HandleFunc("/api/servers/by-key/{server_key}/static-info/network", staticInfoHandler.GetNetworkInterfacesByKey).Methods("GET")
+	router.HandleFunc("/api/servers/by-key/{server_key}/static-info/disks", staticInfoHandler.GetDiskInfoByKey).Methods("GET")
+
 	// API endpoints for Telegram bot and web dashboard (with auth)
 	api := router.PathPrefix("/api").Subrouter()
 	api.Use(middleware.Auth(storageImpl, logger))

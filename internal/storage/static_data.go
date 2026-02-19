@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 // StaticDataStorage handles static/persistent server information
@@ -13,19 +15,27 @@ type StaticDataStorage interface {
 	// Server Info
 	UpsertServerInfo(ctx context.Context, info *ServerInfo) error
 	GetServerInfo(ctx context.Context, serverID string) (*ServerInfo, error)
-	
+
 	// Hardware Info
 	UpsertHardwareInfo(ctx context.Context, info *HardwareInfo) error
 	GetHardwareInfo(ctx context.Context, serverID string) (*HardwareInfo, error)
-	
+
+	// Motherboard Info
+	UpsertMotherboardInfo(ctx context.Context, info *MotherboardInfo) error
+	GetMotherboardInfo(ctx context.Context, serverID string) (*MotherboardInfo, error)
+
+	// Memory Modules
+	UpsertMemoryModules(ctx context.Context, serverID string, modules []MemoryModule) error
+	GetMemoryModules(ctx context.Context, serverID string) ([]MemoryModule, error)
+
 	// Network Interfaces
 	UpsertNetworkInterfaces(ctx context.Context, serverID string, interfaces []NetworkInterface) error
 	GetNetworkInterfaces(ctx context.Context, serverID string) ([]NetworkInterface, error)
-	
+
 	// Disk Info
 	UpsertDiskInfo(ctx context.Context, serverID string, disks []DiskInfo) error
 	GetDiskInfo(ctx context.Context, serverID string) ([]DiskInfo, error)
-	
+
 	// Combined operations
 	GetCompleteStaticInfo(ctx context.Context, serverID string) (*CompleteStaticInfo, error)
 	UpsertCompleteStaticInfo(ctx context.Context, serverID string, info *CompleteStaticInfo) error
@@ -92,12 +102,61 @@ type DiskInfo struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
+// MemoryModule represents individual memory module information
+type MemoryModule struct {
+	ID           int       `json:"id,omitempty"`
+	ServerID     string    `json:"server_id"`
+	SlotName     string    `json:"slot_name"`
+	SizeGB       int       `json:"size_gb"`
+	MemoryType   string    `json:"memory_type"` // DDR3, DDR4, DDR5
+	FrequencyMHz int       `json:"frequency_mhz"`
+	Manufacturer string    `json:"manufacturer"`
+	PartNumber   string    `json:"part_number"`
+	SpeedMTs     int       `json:"speed_mts"`  // For DDR5 (MT/s)
+	Voltage      float64   `json:"voltage"`    // Memory voltage
+	Timings      string    `json:"timings"`    // CAS timings
+	ECC          bool      `json:"ecc"`        // ECC memory
+	Registered   bool      `json:"registered"` // Registered memory
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// MotherboardInfo represents extended motherboard information
+type MotherboardInfo struct {
+	ServerID             string    `json:"server_id"`
+	Manufacturer         string    `json:"manufacturer"`
+	Model                string    `json:"model"`
+	Chipset              string    `json:"chipset"`
+	BIOSVersion          string    `json:"bios_version"`
+	BIOSDate             time.Time `json:"bios_date"`
+	BIOSVendor           string    `json:"bios_vendor"`
+	FormFactor           string    `json:"form_factor"` // ATX, Micro-ATX, Mini-ITX
+	MaxMemoryGB          int       `json:"max_memory_gb"`
+	MemorySlots          int       `json:"memory_slots"`
+	SupportedMemoryTypes []string  `json:"supported_memory_types"` // ['DDR4', 'DDR5']
+	OnboardVideo         bool      `json:"onboard_video"`
+	OnboardAudio         bool      `json:"onboard_audio"`
+	OnboardNetwork       bool      `json:"onboard_network"`
+	SATAPorts            int       `json:"sata_ports"`
+	SATASpeed            string    `json:"sata_speed"` // SATA 3.0, SATA 6.0
+	M2Slots              int       `json:"m2_slots"`
+	PCIeSlots            []string  `json:"pcie_slots"` // ['x16', 'x8', 'x4']
+	USBPortsTotal        int       `json:"usb_ports_total"`
+	USBPorts20           int       `json:"usb_ports_2_0"`
+	USBPorts30           int       `json:"usb_ports_3_0"`
+	USBPortsC            int       `json:"usb_ports_c"`
+	CreatedAt            time.Time `json:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at"`
+}
+
 // CompleteStaticInfo combines all static information for a server
 type CompleteStaticInfo struct {
-	ServerInfo        *ServerInfo         `json:"server_info"`
-	HardwareInfo      *HardwareInfo       `json:"hardware_info"`
-	NetworkInterfaces []NetworkInterface  `json:"network_interfaces"`
-	DiskInfo          []DiskInfo          `json:"disk_info"`
+	ServerInfo        *ServerInfo        `json:"server_info"`
+	HardwareInfo      *HardwareInfo      `json:"hardware_info"`
+	MotherboardInfo   *MotherboardInfo   `json:"motherboard_info"`
+	MemoryModules     []MemoryModule     `json:"memory_modules"`
+	NetworkInterfaces []NetworkInterface `json:"network_interfaces"`
+	DiskInfo          []DiskInfo         `json:"disk_info"`
 }
 
 // PostgresStaticDataStorage implements StaticDataStorage using PostgreSQL
@@ -434,6 +493,16 @@ func (s *PostgresStaticDataStorage) GetCompleteStaticInfo(ctx context.Context, s
 		return nil, err
 	}
 
+	motherboardInfo, err := s.GetMotherboardInfo(ctx, serverID)
+	if err != nil {
+		return nil, err
+	}
+
+	memoryModules, err := s.GetMemoryModules(ctx, serverID)
+	if err != nil {
+		return nil, err
+	}
+
 	networkInterfaces, err := s.GetNetworkInterfaces(ctx, serverID)
 	if err != nil {
 		return nil, err
@@ -447,6 +516,8 @@ func (s *PostgresStaticDataStorage) GetCompleteStaticInfo(ctx context.Context, s
 	return &CompleteStaticInfo{
 		ServerInfo:        serverInfo,
 		HardwareInfo:      hardwareInfo,
+		MotherboardInfo:   motherboardInfo,
+		MemoryModules:     memoryModules,
 		NetworkInterfaces: networkInterfaces,
 		DiskInfo:          diskInfo,
 	}, nil
@@ -468,6 +539,19 @@ func (s *PostgresStaticDataStorage) UpsertCompleteStaticInfo(ctx context.Context
 		}
 	}
 
+	if info.MotherboardInfo != nil {
+		info.MotherboardInfo.ServerID = serverID
+		if err := s.UpsertMotherboardInfo(ctx, info.MotherboardInfo); err != nil {
+			return err
+		}
+	}
+
+	if info.MemoryModules != nil {
+		if err := s.UpsertMemoryModules(ctx, serverID, info.MemoryModules); err != nil {
+			return err
+		}
+	}
+
 	if info.NetworkInterfaces != nil {
 		if err := s.UpsertNetworkInterfaces(ctx, serverID, info.NetworkInterfaces); err != nil {
 			return err
@@ -481,6 +565,229 @@ func (s *PostgresStaticDataStorage) UpsertCompleteStaticInfo(ctx context.Context
 	}
 
 	return nil
+}
+
+// UpsertMotherboardInfo inserts or updates motherboard information
+func (s *PostgresStaticDataStorage) UpsertMotherboardInfo(ctx context.Context, info *MotherboardInfo) error {
+	query := `
+		INSERT INTO static_data.motherboard_info (
+			server_id, manufacturer, model, chipset, bios_version, bios_date, bios_vendor,
+			form_factor, max_memory_gb, memory_slots, supported_memory_types,
+			onboard_video, onboard_audio, onboard_network, sata_ports, sata_speed,
+			m2_slots, pcie_slots, usb_ports_total, usb_ports_2_0, usb_ports_3_0, usb_ports_c
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+		ON CONFLICT (server_id) DO UPDATE SET
+			manufacturer = EXCLUDED.manufacturer,
+			model = EXCLUDED.model,
+			chipset = EXCLUDED.chipset,
+			bios_version = EXCLUDED.bios_version,
+			bios_date = EXCLUDED.bios_date,
+			bios_vendor = EXCLUDED.bios_vendor,
+			form_factor = EXCLUDED.form_factor,
+			max_memory_gb = EXCLUDED.max_memory_gb,
+			memory_slots = EXCLUDED.memory_slots,
+			supported_memory_types = EXCLUDED.supported_memory_types,
+			onboard_video = EXCLUDED.onboard_video,
+			onboard_audio = EXCLUDED.onboard_audio,
+			onboard_network = EXCLUDED.onboard_network,
+			sata_ports = EXCLUDED.sata_ports,
+			sata_speed = EXCLUDED.sata_speed,
+			m2_slots = EXCLUDED.m2_slots,
+			pcie_slots = EXCLUDED.pcie_slots,
+			usb_ports_total = EXCLUDED.usb_ports_total,
+			usb_ports_2_0 = EXCLUDED.usb_ports_2_0,
+			usb_ports_3_0 = EXCLUDED.usb_ports_3_0,
+			usb_ports_c = EXCLUDED.usb_ports_c,
+			updated_at = NOW()
+		RETURNING created_at, updated_at`
+
+	err := s.db.QueryRowContext(ctx, query,
+		info.ServerID, info.Manufacturer, info.Model, info.Chipset, info.BIOSVersion, info.BIOSDate, info.BIOSVendor,
+		info.FormFactor, info.MaxMemoryGB, info.MemorySlots, info.SupportedMemoryTypes,
+		info.OnboardVideo, info.OnboardAudio, info.OnboardNetwork, info.SATAPorts, info.SATASpeed,
+		info.M2Slots, info.PCIeSlots, info.USBPortsTotal, info.USBPorts20, info.USBPorts30, info.USBPortsC,
+	).Scan(&info.CreatedAt, &info.UpdatedAt)
+
+	if err != nil {
+		return fmt.Errorf("failed to upsert motherboard info: %w", err)
+	}
+	return nil
+}
+
+// GetMotherboardInfo retrieves motherboard information
+func (s *PostgresStaticDataStorage) GetMotherboardInfo(ctx context.Context, serverID string) (*MotherboardInfo, error) {
+	query := `
+		SELECT server_id, manufacturer, model, chipset, bios_version, bios_date, bios_vendor,
+			   form_factor, max_memory_gb, memory_slots, supported_memory_types,
+			   onboard_video, onboard_audio, onboard_network, sata_ports, sata_speed,
+			   m2_slots, pcie_slots, usb_ports_total, usb_ports_2_0, usb_ports_3_0, usb_ports_c,
+			   created_at, updated_at
+		FROM static_data.motherboard_info
+		WHERE server_id = $1`
+
+	info := &MotherboardInfo{}
+	var manufacturer, model, chipset, biosVersion, biosVendor, formFactor, sataSpeed sql.NullString
+	var maxMemory, memorySlots, sataPorts, m2Slots, usbTotal, usb20, usb30, usbc sql.NullInt64
+	var supportedMemoryTypes, pcieSlots pq.StringArray
+
+	err := s.db.QueryRowContext(ctx, query, serverID).Scan(
+		&info.ServerID, &manufacturer, &model, &chipset, &biosVersion, &info.BIOSDate, &biosVendor,
+		&formFactor, &maxMemory, &memorySlots, &supportedMemoryTypes,
+		&info.OnboardVideo, &info.OnboardAudio, &info.OnboardNetwork, &sataPorts, &sataSpeed,
+		&m2Slots, &pcieSlots, &usbTotal, &usb20, &usb30, &usbc,
+		&info.CreatedAt, &info.UpdatedAt,
+	)
+
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to get motherboard info: %w", err)
+	}
+
+	if manufacturer.Valid {
+		info.Manufacturer = manufacturer.String
+	}
+	if model.Valid {
+		info.Model = model.String
+	}
+	if chipset.Valid {
+		info.Chipset = chipset.String
+	}
+	if biosVersion.Valid {
+		info.BIOSVersion = biosVersion.String
+	}
+	if biosVendor.Valid {
+		info.BIOSVendor = biosVendor.String
+	}
+	if formFactor.Valid {
+		info.FormFactor = formFactor.String
+	}
+	if maxMemory.Valid {
+		info.MaxMemoryGB = int(maxMemory.Int64)
+	}
+	if memorySlots.Valid {
+		info.MemorySlots = int(memorySlots.Int64)
+	}
+	if sataPorts.Valid {
+		info.SATAPorts = int(sataPorts.Int64)
+	}
+	if m2Slots.Valid {
+		info.M2Slots = int(m2Slots.Int64)
+	}
+	if usbTotal.Valid {
+		info.USBPortsTotal = int(usbTotal.Int64)
+	}
+	if usb20.Valid {
+		info.USBPorts20 = int(usb20.Int64)
+	}
+	if usb30.Valid {
+		info.USBPorts30 = int(usb30.Int64)
+	}
+	if usbc.Valid {
+		info.USBPortsC = int(usbc.Int64)
+	}
+	if sataSpeed.Valid {
+		info.SATASpeed = sataSpeed.String
+	}
+	info.SupportedMemoryTypes = []string(supportedMemoryTypes)
+	info.PCIeSlots = []string(pcieSlots)
+
+	return info, nil
+}
+
+// UpsertMemoryModules replaces all memory modules for a server
+func (s *PostgresStaticDataStorage) UpsertMemoryModules(ctx context.Context, serverID string, modules []MemoryModule) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Delete existing modules
+	_, err = tx.ExecContext(ctx, "DELETE FROM static_data.memory_modules WHERE server_id = $1", serverID)
+	if err != nil {
+		return fmt.Errorf("failed to delete existing memory modules: %w", err)
+	}
+
+	// Insert new modules
+	for _, module := range modules {
+		query := `
+			INSERT INTO static_data.memory_modules (
+				server_id, slot_name, size_gb, memory_type, frequency_mhz, manufacturer,
+				part_number, speed_mts, voltage, timings, ecc, registered
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`
+
+		_, err = tx.ExecContext(ctx, query,
+			serverID, module.SlotName, module.SizeGB, module.MemoryType, module.FrequencyMHz,
+			module.Manufacturer, module.PartNumber, module.SpeedMTs, module.Voltage,
+			module.Timings, module.ECC, module.Registered,
+		)
+		if err != nil {
+			return fmt.Errorf("failed to insert memory module %s: %w", module.SlotName, err)
+		}
+	}
+
+	return tx.Commit()
+}
+
+// GetMemoryModules retrieves all memory modules for a server
+func (s *PostgresStaticDataStorage) GetMemoryModules(ctx context.Context, serverID string) ([]MemoryModule, error) {
+	query := `
+		SELECT id, server_id, slot_name, size_gb, memory_type, frequency_mhz, manufacturer,
+			   part_number, speed_mts, voltage, timings, ecc, registered, created_at, updated_at
+		FROM static_data.memory_modules
+		WHERE server_id = $1
+		ORDER BY slot_name`
+
+	rows, err := s.db.QueryContext(ctx, query, serverID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query memory modules: %w", err)
+	}
+	defer rows.Close()
+
+	var modules []MemoryModule
+	for rows.Next() {
+		var module MemoryModule
+		var memoryType, manufacturer, partNumber, timings sql.NullString
+		var frequencyMHz, speedMTs sql.NullInt64
+		var voltage sql.NullFloat64
+
+		err := rows.Scan(
+			&module.ID, &module.ServerID, &module.SlotName, &module.SizeGB, &memoryType,
+			&frequencyMHz, &manufacturer, &partNumber, &speedMTs, &voltage, &timings,
+			&module.ECC, &module.Registered, &module.CreatedAt, &module.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan memory module: %w", err)
+		}
+
+		if memoryType.Valid {
+			module.MemoryType = memoryType.String
+		}
+		if manufacturer.Valid {
+			module.Manufacturer = manufacturer.String
+		}
+		if partNumber.Valid {
+			module.PartNumber = partNumber.String
+		}
+		if frequencyMHz.Valid {
+			module.FrequencyMHz = int(frequencyMHz.Int64)
+		}
+		if speedMTs.Valid {
+			module.SpeedMTs = int(speedMTs.Int64)
+		}
+		if voltage.Valid {
+			module.Voltage = voltage.Float64
+		}
+		if timings.Valid {
+			module.Timings = timings.String
+		}
+
+		modules = append(modules, module)
+	}
+
+	return modules, rows.Err()
 }
 
 // MarshalJSON custom JSON marshaling for CompleteStaticInfo
