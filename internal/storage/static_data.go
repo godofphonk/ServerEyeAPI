@@ -122,39 +122,39 @@ type MemoryModule struct {
 // MotherboardInfo represents extended motherboard information
 type MotherboardInfo struct {
 	ServerID             string    `json:"server_id"`
-	Manufacturer         string    `json:"manufacturer"`
-	Model                string    `json:"model"`
-	Chipset              string    `json:"chipset"`
-	BIOSVersion          string    `json:"bios_version"`
-	BIOSDate             time.Time `json:"bios_date"`
-	BIOSVendor           string    `json:"bios_vendor"`
-	FormFactor           string    `json:"form_factor"` // ATX, Micro-ATX, Mini-ITX
-	MaxMemoryGB          int       `json:"max_memory_gb"`
-	MemorySlots          int       `json:"memory_slots"`
-	SupportedMemoryTypes []string  `json:"supported_memory_types"` // ['DDR4', 'DDR5']
-	OnboardVideo         bool      `json:"onboard_video"`
-	OnboardAudio         bool      `json:"onboard_audio"`
-	OnboardNetwork       bool      `json:"onboard_network"`
-	SATAPorts            int       `json:"sata_ports"`
-	SATASpeed            string    `json:"sata_speed"` // SATA 3.0, SATA 6.0
-	M2Slots              int       `json:"m2_slots"`
-	PCIeSlots            []string  `json:"pcie_slots"` // ['x16', 'x8', 'x4']
-	USBPortsTotal        int       `json:"usb_ports_total"`
-	USBPorts20           int       `json:"usb_ports_2_0"`
-	USBPorts30           int       `json:"usb_ports_3_0"`
-	USBPortsC            int       `json:"usb_ports_c"`
+	Manufacturer         string    `json:"manufacturer,omitempty"`
+	Model                string    `json:"model,omitempty"`
+	Chipset              string    `json:"chipset,omitempty"`
+	BIOSVersion          string    `json:"bios_version,omitempty"`
+	BIOSDate             time.Time `json:"bios_date,omitempty"`
+	BIOSVendor           string    `json:"bios_vendor,omitempty"`
+	FormFactor           string    `json:"form_factor,omitempty"` // ATX, Micro-ATX, Mini-ITX
+	MaxMemoryGB          int       `json:"max_memory_gb,omitempty"`
+	MemorySlots          int       `json:"memory_slots,omitempty"`
+	SupportedMemoryTypes []string  `json:"supported_memory_types,omitempty"` // ['DDR4', 'DDR5']
+	OnboardVideo         bool      `json:"onboard_video,omitempty"`
+	OnboardAudio         bool      `json:"onboard_audio,omitempty"`
+	OnboardNetwork       bool      `json:"onboard_network,omitempty"`
+	SATAPorts            int       `json:"sata_ports,omitempty"`
+	SATASpeed            string    `json:"sata_speed,omitempty"` // SATA 3.0, SATA 6.0
+	M2Slots              int       `json:"m2_slots,omitempty"`
+	PCIeSlots            []string  `json:"pcie_slots,omitempty"` // ['x16', 'x8', 'x4']
+	USBPortsTotal        int       `json:"usb_ports_total,omitempty"`
+	USBPorts20           int       `json:"usb_ports_2_0,omitempty"`
+	USBPorts30           int       `json:"usb_ports_3_0,omitempty"`
+	USBPortsC            int       `json:"usb_ports_c,omitempty"`
 	CreatedAt            time.Time `json:"created_at"`
 	UpdatedAt            time.Time `json:"updated_at"`
 }
 
 // CompleteStaticInfo combines all static information for a server
 type CompleteStaticInfo struct {
-	ServerInfo        *ServerInfo        `json:"server_info"`
-	HardwareInfo      *HardwareInfo      `json:"hardware_info"`
-	MotherboardInfo   *MotherboardInfo   `json:"motherboard_info"`
-	MemoryModules     []MemoryModule     `json:"memory_modules"`
-	NetworkInterfaces []NetworkInterface `json:"network_interfaces"`
-	DiskInfo          []DiskInfo         `json:"disk_info"`
+	ServerInfo        *ServerInfo        `json:"server_info,omitempty"`
+	HardwareInfo      *HardwareInfo      `json:"hardware_info,omitempty"`
+	MotherboardInfo   *MotherboardInfo   `json:"motherboard_info,omitempty"`
+	MemoryModules     []MemoryModule     `json:"memory_modules,omitempty"`
+	NetworkInterfaces []NetworkInterface `json:"network_interfaces,omitempty"`
+	DiskInfo          []DiskInfo         `json:"disk_info,omitempty"`
 }
 
 // PostgresStaticDataStorage implements StaticDataStorage using PostgreSQL
@@ -471,44 +471,113 @@ func (s *PostgresStaticDataStorage) GetDiskInfo(ctx context.Context, serverID st
 
 // GetCompleteStaticInfo retrieves all static information for a server
 func (s *PostgresStaticDataStorage) GetCompleteStaticInfo(ctx context.Context, serverID string) (*CompleteStaticInfo, error) {
+	result := &CompleteStaticInfo{}
+
 	serverInfo, err := s.GetServerInfo(ctx, serverID)
-	if err != nil {
-		return nil, err
+	if err == nil && serverInfo != nil {
+		result.ServerInfo = serverInfo
 	}
 
 	hardwareInfo, err := s.GetHardwareInfo(ctx, serverID)
-	if err != nil {
-		return nil, err
+	if err == nil && hardwareInfo != nil {
+		result.HardwareInfo = hardwareInfo
 	}
 
 	motherboardInfo, err := s.GetMotherboardInfo(ctx, serverID)
-	if err != nil {
-		return nil, err
+	if err == nil && motherboardInfo != nil {
+		// Only include motherboard info if it has meaningful data
+		if motherboardInfo.Manufacturer != "" || motherboardInfo.Model != "" {
+			// Create a filtered version without empty/zero fields
+			filtered := &MotherboardInfo{
+				ServerID:  motherboardInfo.ServerID,
+				CreatedAt: motherboardInfo.CreatedAt,
+				UpdatedAt: motherboardInfo.UpdatedAt,
+			}
+
+			if motherboardInfo.Manufacturer != "" {
+				filtered.Manufacturer = motherboardInfo.Manufacturer
+			}
+			if motherboardInfo.Model != "" {
+				filtered.Model = motherboardInfo.Model
+			}
+			if motherboardInfo.Chipset != "" && motherboardInfo.Chipset != "Unknown" {
+				filtered.Chipset = motherboardInfo.Chipset
+			}
+			if motherboardInfo.BIOSVersion != "" {
+				filtered.BIOSVersion = motherboardInfo.BIOSVersion
+			}
+			if !motherboardInfo.BIOSDate.IsZero() && motherboardInfo.BIOSDate.Year() > 1 {
+				filtered.BIOSDate = motherboardInfo.BIOSDate
+			}
+			if motherboardInfo.BIOSVendor != "" {
+				filtered.BIOSVendor = motherboardInfo.BIOSVendor
+			}
+			if motherboardInfo.FormFactor != "" {
+				filtered.FormFactor = motherboardInfo.FormFactor
+			}
+			if motherboardInfo.MaxMemoryGB > 0 {
+				filtered.MaxMemoryGB = motherboardInfo.MaxMemoryGB
+			}
+			if motherboardInfo.MemorySlots > 0 {
+				filtered.MemorySlots = motherboardInfo.MemorySlots
+			}
+			if len(motherboardInfo.SupportedMemoryTypes) > 0 {
+				filtered.SupportedMemoryTypes = motherboardInfo.SupportedMemoryTypes
+			}
+			if motherboardInfo.OnboardVideo {
+				filtered.OnboardVideo = motherboardInfo.OnboardVideo
+			}
+			if motherboardInfo.OnboardAudio {
+				filtered.OnboardAudio = motherboardInfo.OnboardAudio
+			}
+			if motherboardInfo.OnboardNetwork {
+				filtered.OnboardNetwork = motherboardInfo.OnboardNetwork
+			}
+			if motherboardInfo.SATAPorts > 0 {
+				filtered.SATAPorts = motherboardInfo.SATAPorts
+			}
+			if motherboardInfo.SATASpeed != "" {
+				filtered.SATASpeed = motherboardInfo.SATASpeed
+			}
+			if motherboardInfo.M2Slots > 0 {
+				filtered.M2Slots = motherboardInfo.M2Slots
+			}
+			if len(motherboardInfo.PCIeSlots) > 0 {
+				filtered.PCIeSlots = motherboardInfo.PCIeSlots
+			}
+			if motherboardInfo.USBPortsTotal > 0 {
+				filtered.USBPortsTotal = motherboardInfo.USBPortsTotal
+			}
+			if motherboardInfo.USBPorts20 > 0 {
+				filtered.USBPorts20 = motherboardInfo.USBPorts20
+			}
+			if motherboardInfo.USBPorts30 > 0 {
+				filtered.USBPorts30 = motherboardInfo.USBPorts30
+			}
+			if motherboardInfo.USBPortsC > 0 {
+				filtered.USBPortsC = motherboardInfo.USBPortsC
+			}
+
+			result.MotherboardInfo = filtered
+		}
 	}
 
 	memoryModules, err := s.GetMemoryModules(ctx, serverID)
-	if err != nil {
-		return nil, err
+	if err == nil && len(memoryModules) > 0 {
+		result.MemoryModules = memoryModules
 	}
 
 	networkInterfaces, err := s.GetNetworkInterfaces(ctx, serverID)
-	if err != nil {
-		return nil, err
+	if err == nil && len(networkInterfaces) > 0 {
+		result.NetworkInterfaces = networkInterfaces
 	}
 
 	diskInfo, err := s.GetDiskInfo(ctx, serverID)
-	if err != nil {
-		return nil, err
+	if err == nil && len(diskInfo) > 0 {
+		result.DiskInfo = diskInfo
 	}
 
-	return &CompleteStaticInfo{
-		ServerInfo:        serverInfo,
-		HardwareInfo:      hardwareInfo,
-		MotherboardInfo:   motherboardInfo,
-		MemoryModules:     memoryModules,
-		NetworkInterfaces: networkInterfaces,
-		DiskInfo:          diskInfo,
-	}, nil
+	return result, nil
 }
 
 // UpsertCompleteStaticInfo updates all static information for a server
