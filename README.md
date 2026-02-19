@@ -17,11 +17,13 @@ ServerEyeAPI supports multiple authentication methods:
 For service-to-service communication.
 
 **Headers:**
+
 ```text
 X-API-Key: sk_your_api_key_here
 ```
 
 **Default Development Key:**
+
 ```text
 sk_csharp_backend_development_key_change_in_production
 ```
@@ -41,6 +43,7 @@ For protected admin endpoints (marked with 🔒).
 **Endpoint:** `GET /health`
 
 **Response:**
+
 ```json
 {
   "status": "healthy",
@@ -56,6 +59,7 @@ For protected admin endpoints (marked with 🔒).
 **Endpoint:** `POST /RegisterKey`
 
 **Request:**
+
 ```json
 {
   "hostname": "server-01",
@@ -65,6 +69,7 @@ For protected admin endpoints (marked with 🔒).
 ```
 
 **Response:**
+
 ```json
 {
   "server_id": "srv_123456789",
@@ -85,11 +90,15 @@ For protected admin endpoints (marked with 🔒).
 
 **Auto-Granularity Strategy:**
 - **Last hour**: 1-minute intervals
+
 - **Last 3 hours**: 5-minute intervals
+
 - **Last 24 hours**: 10-minute intervals
+
 - **Last 30 days**: 1-hour intervals
 
 **Response:**
+
 ```json
 {
   "server_id": "srv_d1dc36d8",
@@ -155,6 +164,7 @@ For protected admin endpoints (marked with 🔒).
 ```
 
 **Usage Examples:**
+
 ```bash
 # Realtime (1 hour)
 curl "http://localhost:8080/api/servers/srv_d1dc36d8/metrics/tiered?start=2026-02-17T18:00:00Z&end=2026-02-17T19:00:00Z"
@@ -173,6 +183,7 @@ curl "http://localhost:8080/api/servers/srv_d1dc36d8/metrics/tiered?start=2026-0
 ### 🔓 Server Sources Management
 
 **Add Source:** `POST /api/servers/{server_id}/sources`
+
 ```json
 {
   "source": "TGBot"  // or "Web"
@@ -180,6 +191,7 @@ curl "http://localhost:8080/api/servers/srv_d1dc36d8/metrics/tiered?start=2026-0
 ```
 
 **Get Sources:** `GET /api/servers/{server_id}/sources`
+
 **Remove Source:** `DELETE /api/servers/{server_id}/sources/{source}`
 
 ---
@@ -187,6 +199,7 @@ curl "http://localhost:8080/api/servers/srv_d1dc36d8/metrics/tiered?start=2026-0
 ### 🔐 API Key Management
 
 **Create Key:** `POST /api/admin/keys`
+
 ```json
 {
   "service_id": "csharp-backend",
@@ -197,7 +210,9 @@ curl "http://localhost:8080/api/servers/srv_d1dc36d8/metrics/tiered?start=2026-0
 ```
 
 **List Keys:** `GET /api/admin/keys`
+
 **Get Key Details:** `GET /api/admin/keys/{keyId}`
+
 **Revoke Key:** `DELETE /api/admin/keys/{keyId}`
 
 ---
@@ -205,6 +220,7 @@ curl "http://localhost:8080/api/servers/srv_d1dc36d8/metrics/tiered?start=2026-0
 ### 🔒 Server Management (Bearer Token Required)
 
 **List All Servers:** `GET /api/servers`
+
 **Get Server Status:** `GET /api/servers/{server_id}/status`
 
 ## Quick Start
