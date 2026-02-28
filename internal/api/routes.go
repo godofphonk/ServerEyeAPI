@@ -40,6 +40,7 @@ func SetupRoutes(
 	apiKeyHandler *handlers.APIKeyHandler,
 	staticInfoHandler *handlers.StaticInfoHandler,
 	metricsPushHandler *handlers.MetricsPushHandler,
+	serverMetricsHandler *handlers.ServerMetricsHandler,
 	apiKeyMiddleware interface{},
 	storageImpl storage.Storage,
 	logger *logrus.Logger,
@@ -93,6 +94,11 @@ func SetupRoutes(
 	router.HandleFunc("/api/servers/by-key/{server_key}/static-info/hardware", staticInfoHandler.GetHardwareInfoByKey).Methods("GET")
 	router.HandleFunc("/api/servers/by-key/{server_key}/static-info/network", staticInfoHandler.GetNetworkInterfacesByKey).Methods("GET")
 	router.HandleFunc("/api/servers/by-key/{server_key}/static-info/disks", staticInfoHandler.GetDiskInfoByKey).Methods("GET")
+
+	// Server metrics with storage temperatures (public)
+	router.HandleFunc("/api/servers/{server_id}/metrics/temperatures", serverMetricsHandler.GetServerMetricsWithTemperatures).Methods("GET")
+	router.HandleFunc("/api/servers/by-key/{server_key}/metrics/temperatures", serverMetricsHandler.GetServerMetricsWithTemperaturesByKey).Methods("GET")
+	router.HandleFunc("/api/servers/{server_id}/alerts/storage-temperature", serverMetricsHandler.GetStorageTemperatureAlerts).Methods("GET")
 
 	// API endpoints for Telegram bot and web dashboard (with auth)
 	api := router.PathPrefix("/api").Subrouter()

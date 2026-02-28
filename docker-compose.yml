@@ -23,7 +23,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: servereye-api
+    container_name: ServereyeAPI-api
     command: ["./servereye"]
     restart: unless-stopped
     ports:
@@ -78,7 +78,7 @@ services:
   # PostgreSQL for metadata
   postgres:
     image: postgres:15-alpine
-    container_name: servereye-postgres
+    container_name: ServereyeAPI-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: servereye
@@ -106,7 +106,7 @@ services:
   # TimescaleDB for time-series data
   timescaledb:
     image: timescale/timescaledb:2.15.0-pg15
-    container_name: servereye-timescaledb
+    container_name: ServereyeAPI-timescaledb
     restart: unless-stopped
     environment:
       POSTGRES_DB: servereye
@@ -149,7 +149,7 @@ services:
   # PostgreSQL for static/persistent server data
   postgres-static:
     image: postgres:15-alpine
-    container_name: servereye-postgres-static
+    container_name: ServereyeAPI-postgres-static
     restart: unless-stopped
     environment:
       POSTGRES_DB: servereye

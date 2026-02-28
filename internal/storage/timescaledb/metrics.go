@@ -54,10 +54,11 @@ func (c *Client) StoreMetric(ctx context.Context, serverID string, metrics *mode
 		memory_total_gb, memory_used_gb, memory_available_gb, memory_free_gb, memory_buffers_gb, memory_cached_gb,
 		disk_details, network_details,
 		cpu_temperature, gpu_temperature, system_temperature, highest_temperature, temperature_unit,
+		storage_temperatures,
 		hostname, os_info, kernel, architecture, uptime_seconds, uptime_human, boot_time,
 		processes_total, processes_running, processes_sleeping
 	) VALUES (
-		$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38
+		$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39
 	)`
 
 	// Convert empty BootTime to NULL
@@ -97,6 +98,7 @@ func (c *Client) StoreMetric(ctx context.Context, serverID string, metrics *mode
 		metrics.TemperatureDetails.SystemTemperature,
 		metrics.TemperatureDetails.HighestTemperature,
 		metrics.TemperatureDetails.TemperatureUnit,
+		metrics.TemperatureDetails.StorageTemperatures,
 		metrics.SystemDetails.Hostname,
 		metrics.SystemDetails.OS,
 		metrics.SystemDetails.Kernel,
@@ -143,6 +145,7 @@ func (c *Client) GetLatestMetric(ctx context.Context, serverID string) (*models.
 		memory_total_gb, memory_used_gb, memory_available_gb, memory_free_gb, memory_buffers_gb, memory_cached_gb,
 		disk_details, network_details,
 		cpu_temperature, gpu_temperature, system_temperature, highest_temperature, temperature_unit,
+		storage_temperatures,
 		hostname, os_info, kernel, architecture, uptime_seconds, uptime_human, boot_time,
 		processes_total, processes_running, processes_sleeping, time
 	FROM server_metrics 
@@ -182,6 +185,7 @@ func (c *Client) GetLatestMetric(ctx context.Context, serverID string) (*models.
 		&metrics.TemperatureDetails.SystemTemperature,
 		&metrics.TemperatureDetails.HighestTemperature,
 		&metrics.TemperatureDetails.TemperatureUnit,
+		&metrics.TemperatureDetails.StorageTemperatures,
 		&metrics.SystemDetails.Hostname,
 		&metrics.SystemDetails.OS,
 		&metrics.SystemDetails.Kernel,

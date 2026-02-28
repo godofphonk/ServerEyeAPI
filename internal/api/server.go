@@ -119,6 +119,7 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 	apiKeyHandler := handlers.NewAPIKeyHandler(apiKeyStorage, logger)
 	staticInfoHandler := handlers.NewStaticInfoHandler(staticDataStorage, logger)
 	metricsPushHandler := handlers.NewMetricsPushHandler(storageImpl, logger)
+	serverMetricsHandler := handlers.NewServerMetricsHandler(logger, storageImpl)
 
 	// Initialize API Key middleware (TODO: Fix and enable)
 	// apiKeyMiddleware := keyMiddleware.NewAPIKeyAuthMiddleware(apiKeyStorage, logger)
@@ -135,6 +136,7 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 		apiKeyHandler,
 		staticInfoHandler,
 		metricsPushHandler,
+		serverMetricsHandler,
 		nil, // TODO: apiKeyMiddleware
 		storageImpl,
 		logger,
