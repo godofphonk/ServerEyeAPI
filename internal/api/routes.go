@@ -41,6 +41,7 @@ func SetupRoutes(
 	staticInfoHandler *handlers.StaticInfoHandler,
 	metricsPushHandler *handlers.MetricsPushHandler,
 	serverMetricsHandler *handlers.ServerMetricsHandler,
+	alertHandler *handlers.AlertHandler,
 	apiKeyMiddleware interface{},
 	storageImpl storage.Storage,
 	logger *logrus.Logger,
@@ -99,6 +100,15 @@ func SetupRoutes(
 	router.HandleFunc("/api/servers/{server_id}/metrics/temperatures", serverMetricsHandler.GetServerMetricsWithTemperatures).Methods("GET")
 	router.HandleFunc("/api/servers/by-key/{server_key}/metrics/temperatures", serverMetricsHandler.GetServerMetricsWithTemperaturesByKey).Methods("GET")
 	router.HandleFunc("/api/servers/{server_id}/alerts/storage-temperature", serverMetricsHandler.GetStorageTemperatureAlerts).Methods("GET")
+
+	// Alert endpoints (public)
+	router.HandleFunc("/api/servers/{server_id}/alerts", alertHandler.GetActiveAlerts).Methods("GET")
+	router.HandleFunc("/api/servers/{server_id}/alerts/all", alertHandler.GetAllAlerts).Methods("GET")
+	router.HandleFunc("/api/servers/{server_id}/alerts/type/{type}", alertHandler.GetAlertsByType).Methods("GET")
+	router.HandleFunc("/api/servers/{server_id}/alerts/range", alertHandler.GetAlertsByTimeRange).Methods("GET")
+	router.HandleFunc("/api/servers/{server_id}/alerts/stats", alertHandler.GetAlertStats).Methods("GET")
+	router.HandleFunc("/api/servers/{server_id}/alerts/{alert_id}/resolve", alertHandler.ResolveAlert).Methods("POST")
+	router.HandleFunc("/api/servers/{server_id}/alerts/type/{type}/resolve", alertHandler.ResolveAlertsByType).Methods("POST")
 
 	// API endpoints for Telegram bot and web dashboard (with auth)
 	api := router.PathPrefix("/api").Subrouter()

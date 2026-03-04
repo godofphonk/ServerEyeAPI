@@ -39,6 +39,9 @@ const (
 	AlertTypeCPUTemperature     AlertType = "cpu_temperature"
 	AlertTypeMemoryUsage        AlertType = "memory_usage"
 	AlertTypeDiskUsage          AlertType = "disk_usage"
+	AlertTypeNetworkUsage       AlertType = "network_usage"
+	AlertTypeLoadAverage        AlertType = "load_average"
+	AlertTypeSystemTemperature  AlertType = "system_temperature"
 )
 
 // Alert represents a system alert
@@ -120,6 +123,18 @@ func GetDefaultThresholds() *TemperatureThresholds {
 			Critical: 50.0,
 		},
 	}
+}
+
+// AlertStats represents alert statistics for a server
+type AlertStats struct {
+	ServerID       string    `json:"server_id"`
+	TotalAlerts    int       `json:"total_alerts"`
+	ActiveAlerts   int       `json:"active_alerts"`
+	ResolvedAlerts int       `json:"resolved_alerts"`
+	CriticalCount  int       `json:"critical_count"`
+	WarningCount   int       `json:"warning_count"`
+	InfoCount      int       `json:"info_count"`
+	LastAlertTime  time.Time `json:"last_alert_time,omitempty"`
 }
 
 // EvaluateStorageTemperature evaluates storage temperature and returns alert status

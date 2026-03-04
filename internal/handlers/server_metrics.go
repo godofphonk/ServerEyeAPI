@@ -22,10 +22,10 @@ package handlers
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/godofphonk/ServerEyeAPI/internal/models"
+	"github.com/godofphonk/ServerEyeAPI/internal/services"
 	"github.com/godofphonk/ServerEyeAPI/internal/storage"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
@@ -33,15 +33,17 @@ import (
 
 // ServerMetricsHandler handles server metrics requests
 type ServerMetricsHandler struct {
-	logger  *logrus.Logger
-	storage storage.Storage
+	logger       *logrus.Logger
+	storage      storage.Storage
+	alertService *services.AlertService
 }
 
 // NewServerMetricsHandler creates a new server metrics handler
-func NewServerMetricsHandler(logger *logrus.Logger, storage storage.Storage) *ServerMetricsHandler {
+func NewServerMetricsHandler(logger *logrus.Logger, storage storage.Storage, alertService *services.AlertService) *ServerMetricsHandler {
 	return &ServerMetricsHandler{
-		logger:  logger,
-		storage: storage,
+		logger:       logger,
+		storage:      storage,
+		alertService: alertService,
 	}
 }
 
@@ -150,8 +152,12 @@ func (h *ServerMetricsHandler) GetStorageTemperatureAlerts(w http.ResponseWriter
 		return
 	}
 
-	// Generate alerts for storage temperatures
-	alerts := h.generateStorageAlerts(serverID, metrics.TemperatureDetails.StorageTemperatures)
+	// Generate alerts for storage temperatures using AlertService
+	alerts, err := h.alertService.GetAlertsByType(r.Context(), serverID, models.AlertTypeStorageTemperature)
+	if err != nil {
+		h.logger.WithError(err).Warn("Failed to get storage temperature alerts")
+		alerts = []*models.Alert{}
+	}
 
 	response := map[string]interface{}{
 		"server_id": serverID,
@@ -212,37 +218,4 @@ func (h *ServerMetricsHandler) buildMetricsResponse(serverInfo *models.ServerInf
 	}
 
 	return response
-}
-
-// generateStorageAlerts generates alerts for storage temperatures
-func (h *ServerMetricsHandler) generateStorageAlerts(serverID string, storageTemps []struct {
-	Device      string  `json:"device"`
-	Type        string  `json:"type"`
-	Temperature float64 `json:"temperature"`
-}) []models.Alert {
-	alerts := make([]models.Alert, 0)
-
-	for _, storage := range storageTemps {
-		alert := models.EvaluateStorageTemperature(storage.Type, storage.Temperature)
-
-		// Only create alerts for warning and critical temperatures
-		if alert.Severity == models.AlertSeverityWarning || alert.Severity == models.AlertSeverityCritical {
-			serverAlert := models.Alert{
-				ID:          serverID + "-" + storage.Device + "-" + fmt.Sprintf("%.0f", storage.Temperature),
-				Type:        models.AlertTypeStorageTemperature,
-				ServerID:    serverID,
-				Severity:    alert.Severity,
-				Title:       "Storage Temperature Alert",
-				Message:     alert.Message,
-				Device:      storage.Device,
-				Temperature: storage.Temperature,
-				Threshold:   alert.Threshold,
-				Value:       storage.Temperature,
-				Status:      "active",
-			}
-			alerts = append(alerts, serverAlert)
-		}
-	}
-
-	return alerts
 }

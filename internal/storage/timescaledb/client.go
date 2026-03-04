@@ -95,6 +95,11 @@ func NewClient(databaseURL string, logger *logrus.Logger, config *ClientConfig) 
 	return client, nil
 }
 
+// GetPool returns the underlying connection pool
+func (c *Client) GetPool() *pgxpool.Pool {
+	return c.pool
+}
+
 // Ping checks database connectivity
 func (c *Client) Ping(ctx context.Context) error {
 	if ctx == nil {
@@ -125,11 +130,6 @@ func (c *Client) Close() error {
 		c.logger.Info("TimescaleDB connection pool closed")
 	}
 	return nil
-}
-
-// GetPool returns the underlying connection pool
-func (c *Client) GetPool() *pgxpool.Pool {
-	return c.pool
 }
 
 // GetStats returns connection pool statistics

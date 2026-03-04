@@ -34,6 +34,7 @@ import (
 	"github.com/godofphonk/ServerEyeAPI/internal/storage/interfaces"
 	postgresStorage "github.com/godofphonk/ServerEyeAPI/internal/storage/postgres"
 	postgresRepo "github.com/godofphonk/ServerEyeAPI/internal/storage/repositories/postgres"
+	timescaledbRepo "github.com/godofphonk/ServerEyeAPI/internal/storage/repositories/timescaledb"
 	"github.com/godofphonk/ServerEyeAPI/internal/storage/timescaledb"
 	"github.com/godofphonk/ServerEyeAPI/internal/version"
 	"github.com/sirupsen/logrus"
@@ -97,10 +98,14 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 	// Initialize API Key storage
 	apiKeyStorage := storage.NewAPIKeyStorage(pgClient.DB(), logger)
 
+	// Initialize repositories
+	alertRepo := timescaledbRepo.NewAlertRepository(timescaleDBClient.GetPool(), logger)
+
 	// Initialize services with repositories
 	authService := services.NewAuthService(keyRepo, serverRepo, logger)
 	serverService := services.NewServerService(serverRepo, keyRepo, logger)
-	metricsService := services.NewMetricsService(keyRepo, storageImpl, logger)
+	alertService := services.NewAlertService(alertRepo, logger)
+	metricsService := services.NewMetricsService(keyRepo, storageImpl, alertService, logger)
 	tieredMetricsService := services.NewTieredMetricsService(timescaleDBClient, logger)
 	commandsService := services.NewCommandsService(keyRepo, logger)
 	metricsCommandsService := services.NewMetricsCommandsService(timescaleDBClient, logger)
@@ -119,7 +124,8 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 	apiKeyHandler := handlers.NewAPIKeyHandler(apiKeyStorage, logger)
 	staticInfoHandler := handlers.NewStaticInfoHandler(staticDataStorage, logger)
 	metricsPushHandler := handlers.NewMetricsPushHandler(storageImpl, logger)
-	serverMetricsHandler := handlers.NewServerMetricsHandler(logger, storageImpl)
+	serverMetricsHandler := handlers.NewServerMetricsHandler(logger, storageImpl, alertService)
+	alertHandler := handlers.NewAlertHandler(alertService, logger)
 
 	// Initialize API Key middleware (TODO: Fix and enable)
 	// apiKeyMiddleware := keyMiddleware.NewAPIKeyAuthMiddleware(apiKeyStorage, logger)
@@ -137,6 +143,7 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 		staticInfoHandler,
 		metricsPushHandler,
 		serverMetricsHandler,
+		alertHandler,
 		nil, // TODO: apiKeyMiddleware
 		storageImpl,
 		logger,
