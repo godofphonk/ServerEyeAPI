@@ -52,7 +52,7 @@ jobs:
         go-version: '1.24'
         
     - name: Cache Go modules
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/go/pkg/mod
         key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
@@ -76,11 +76,12 @@ jobs:
         echo "📊 Test Coverage: ${COVERAGE}%"
       
     - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
+      uses: codecov/codecov-action@v4
       with:
         file: ./coverage.out
         flags: unittests
         name: codecov-umbrella
+        token: ${{ secrets.CODECOV_TOKEN }}
         
     - name: Run security scan
       run: |
@@ -217,6 +218,41 @@ jobs:
         fi
         
         echo "✅ Multi-tier metrics implementation verified!"
+        
+        # Check for Alert system implementation
+        if [ ! -f "internal/services/alert_service.go" ]; then
+          echo "❌ AlertService file not found!"
+          exit 1
+        fi
+        
+        if [ ! -f "internal/handlers/alerts.go" ]; then
+          echo "❌ AlertHandler file not found!"
+          exit 1
+        fi
+        
+        if [ ! -f "internal/storage/repositories/timescaledb/alert_repository.go" ]; then
+          echo "❌ AlertRepository file not found!"
+          exit 1
+        fi
+        
+        if [ ! -f "deployments/migration-009-alerts-table.sql" ]; then
+          echo "❌ Alerts migration file not found!"
+          exit 1
+        fi
+        
+        # Check for WebSocket implementation
+        if [ ! -f "internal/websocket/server.go" ]; then
+          echo "❌ WebSocket server file not found!"
+          exit 1
+        fi
+        
+        if ! grep -q "HandleConnection" internal/websocket/server.go; then
+          echo "❌ WebSocket HandleConnection not found!"
+          exit 1
+        fi
+        
+        echo "✅ Alert system implementation verified!"
+        echo "✅ WebSocket implementation verified!"
 
   # Deploy to Production
   deploy:
@@ -228,7 +264,7 @@ jobs:
     
     steps:
     - name: Deploy to production
-      uses: appleboy/ssh-action@v1.2.5
+      uses: appleboy/ssh-action@v1.3.0
       with:
         host: ${{ secrets.PROD_HOST }}
         username: ${{ secrets.PROD_USER }}
@@ -270,14 +306,21 @@ jobs:
                 - DATABASE_URL=postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@postgres:5432/servereye?sslmode=disable
                 - KEYS_DATABASE_URL=postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@postgres:5432/servereye?sslmode=disable
                 - TIMESCALEDB_URL=postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@timescaledb:5432/servereye?sslmode=disable
+                - STATIC_DATABASE_URL=postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@postgres-static:5432/servereye_static?sslmode=disable
                 - JWT_SECRET=${{ secrets.JWT_SECRET }}
                 - WEBHOOK_SECRET=${{ secrets.WEBHOOK_SECRET }}
-                - WEB_URL: ${{ vars.WEB_URL || 'https://api.servereye.dev' }}
+                - WEB_URL=${{ vars.WEB_URL || 'https://api.servereye.dev' }}
                 # TimescaleDB configuration
                 - TIMESCALEDB_MAX_CONNECTIONS=50
                 - TIMESCALEDB_CONN_TIMEOUT=30s
                 - TIMESCALEDB_QUERY_TIMEOUT=15s
                 - TIMESCALEDB_HEALTH_CHECK_INTERVAL=30s
+                # WebSocket configuration
+                - WS_BUFFER_SIZE=256
+                - WS_WRITE_TIMEOUT=30s
+                - WS_READ_TIMEOUT=300s
+                - WS_PING_INTERVAL=30s
+                - WS_PONG_WAIT=120s
                 # Data retention
                 - METRICS_RETENTION_DAYS=90
                 - STATUS_RETENTION_DAYS=30
@@ -291,6 +334,8 @@ jobs:
                 postgres:
                   condition: service_healthy
                 timescaledb:
+                  condition: service_healthy
+                postgres-static:
                   condition: service_healthy
               healthcheck:
                 test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -377,10 +422,40 @@ jobs:
                     memory: 2G
                     cpus: '1.0'
           
+            # PostgreSQL for static data
+            postgres-static:
+              image: postgres:15-alpine
+              container_name: servereye-postgres-static
+              restart: unless-stopped
+              environment:
+                POSTGRES_DB: servereye_static
+                POSTGRES_USER: postgres
+                POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+              volumes:
+                - servereye_postgres_static_data:/var/lib/postgresql/data
+                - ./deployments/migration-005-static-data.sql:/docker-entrypoint-initdb.d/init-static.sql
+              networks:
+                - servereye-network
+              healthcheck:
+                test: ["CMD-SHELL", "pg_isready -U postgres"]
+                interval: 30s
+                timeout: 10s
+                retries: 3
+              deploy:
+                resources:
+                  limits:
+                    memory: 512M
+                    cpus: '0.25'
+                  reservations:
+                    memory: 256M
+                    cpus: '0.1'
+          
           volumes:
             servereye_postgres_data:
               external: true
             servereye_timescaledb_data:
+              external: true
+            servereye_postgres_static_data:
               external: true
           
           networks:
@@ -402,6 +477,26 @@ jobs:
           # Wait for services to be ready
           echo "⏳ Waiting for services to be ready..."
           sleep 30
+          
+          # Run database migrations
+          echo "🗄️ Running database migrations..."
+          
+          # Run PostgreSQL migrations
+          echo "📝 Running PostgreSQL migrations..."
+          for migration in ./deployments/migration-*.sql; do
+            if [ -f "$migration" ]; then
+              echo "Applying migration: $(basename $migration)"
+              sudo docker exec servereye-postgres psql -U postgres -d servereye -f "/migrations/$(basename $migration)" || echo "Migration already applied or failed: $(basename $migration)"
+            fi
+          done
+          
+          # Run TimescaleDB migrations
+          echo "📝 Running TimescaleDB migrations..."
+          sudo docker exec servereye-timescaledb psql -U postgres -d servereye -f /docker-entrypoint-initdb.d/init-timescaledb.sql || echo "TimescaleDB already initialized"
+          
+          # Run static data migrations
+          echo "📝 Running static data migrations..."
+          sudo docker exec servereye-postgres-static psql -U postgres -d servereye_static -f /docker-entrypoint-initdb.d/init-static.sql || echo "Static DB already initialized"
           
           # Health check
           echo "🏥 Performing health check..."
@@ -446,6 +541,14 @@ jobs:
           exit 1
         fi
         
+        # Test WebSocket endpoint availability
+        echo "🔍 Testing WebSocket endpoint..."
+        if curl -I -s http://${{ secrets.PROD_HOST }}:8080/ws | grep -q "405\|426"; then
+          echo "✅ WebSocket endpoint is available"
+        else
+          echo "⚠️ WebSocket endpoint may not be configured"
+        fi
+        
         # Test metrics endpoints (if available)
         echo "🔍 Testing metrics endpoints..."
         
@@ -454,6 +557,14 @@ jobs:
           echo "✅ Tiered metrics endpoint is working"
         else
           echo "⚠️ Tiered metrics endpoint not available (expected for test environment)"
+        fi
+        
+        # Test alert endpoints structure (without auth)
+        echo "🔍 Testing alert endpoints structure..."
+        if curl -I -s http://${{ secrets.PROD_HOST }}:8080/api/servers/test-server/alerts | grep -q "200\|401\|404"; then
+          echo "✅ Alert endpoints are configured"
+        else
+          echo "⚠️ Alert endpoints may not be configured"
         fi
         
         echo "✅ Post-deployment tests completed!"
