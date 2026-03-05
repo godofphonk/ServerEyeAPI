@@ -192,6 +192,8 @@ jobs:
           BUILD_DATE=${{ env.BUILD_DATE }}
           VERSION=${{ env.VERSION }}
           COMMIT_SHA=${{ env.COMMIT_SHA }}
+        no-cache: true
+        pull: true
         
     - name: Verify multi-tier metrics implementation
       run: |
@@ -293,6 +295,8 @@ jobs:
           
           # Pull latest images
           echo "📥 Pulling latest Docker images..."
+          sudo docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production --no-cache
+          sudo docker rmi ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production 2>/dev/null || true
           sudo docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production
           
           # Update docker-compose.yml with new image
@@ -475,6 +479,8 @@ jobs:
           # Stop existing services
           echo "⏹️ Stopping existing services..."
           sudo docker-compose -f docker-compose.prod.yml down || true
+          sudo docker system prune -f
+          sudo docker volume prune -f
           
           # Create external volumes
           echo "📦 Creating external volumes..."
