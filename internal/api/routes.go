@@ -24,6 +24,7 @@ import (
 	"github.com/godofphonk/ServerEyeAPI/internal/api/middleware"
 	"github.com/godofphonk/ServerEyeAPI/internal/handlers"
 	"github.com/godofphonk/ServerEyeAPI/internal/storage"
+	"github.com/godofphonk/ServerEyeAPI/internal/websocket"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 )
@@ -42,6 +43,7 @@ func SetupRoutes(
 	metricsPushHandler *handlers.MetricsPushHandler,
 	serverMetricsHandler *handlers.ServerMetricsHandler,
 	alertHandler *handlers.AlertHandler,
+	wsServer *websocket.Server,
 	apiKeyMiddleware interface{},
 	storageImpl storage.Storage,
 	logger *logrus.Logger,
@@ -109,6 +111,9 @@ func SetupRoutes(
 	router.HandleFunc("/api/servers/{server_id}/alerts/stats", alertHandler.GetAlertStats).Methods("GET")
 	router.HandleFunc("/api/servers/{server_id}/alerts/{alert_id}/resolve", alertHandler.ResolveAlert).Methods("POST")
 	router.HandleFunc("/api/servers/{server_id}/alerts/type/{type}/resolve", alertHandler.ResolveAlertsByType).Methods("POST")
+
+	// WebSocket endpoint for testing
+	router.HandleFunc("/ws", wsServer.HandleConnection).Methods("GET")
 
 	// API endpoints for Telegram bot and web dashboard (with auth)
 	api := router.PathPrefix("/api").Subrouter()

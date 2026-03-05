@@ -37,6 +37,7 @@ import (
 	timescaledbRepo "github.com/godofphonk/ServerEyeAPI/internal/storage/repositories/timescaledb"
 	"github.com/godofphonk/ServerEyeAPI/internal/storage/timescaledb"
 	"github.com/godofphonk/ServerEyeAPI/internal/version"
+	"github.com/godofphonk/ServerEyeAPI/internal/websocket"
 	"github.com/sirupsen/logrus"
 )
 
@@ -113,6 +114,9 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 	// Link services
 	commandsService.SetMetricsCommands(metricsCommandsService)
 
+	// Initialize WebSocket server
+	wsServer := websocket.NewServer(storageImpl, logger, cfg)
+
 	// Initialize handlers
 	authHandler := handlers.NewAuthHandler(authService, logger)
 	healthHandler := handlers.NewHealthHandler(storageImpl, logger)
@@ -144,6 +148,7 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 		metricsPushHandler,
 		serverMetricsHandler,
 		alertHandler,
+		wsServer,
 		nil, // TODO: apiKeyMiddleware
 		storageImpl,
 		logger,

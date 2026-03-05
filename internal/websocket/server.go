@@ -23,6 +23,7 @@ package websocket
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -101,10 +102,22 @@ func (s *Server) handleClient(client *Client) {
 
 	s.logger.Info("Waiting for authentication message...")
 
+	// Set read deadline for authentication
+	authDeadline := time.Now().Add(30 * time.Second) // 30 seconds timeout for auth
+	if err := client.conn.SetReadDeadline(authDeadline); err != nil {
+		s.logger.WithError(err).Error("Failed to set auth read deadline")
+		return
+	}
+
 	// Wait for authentication
 	authMsg, err := client.ReadMessage()
 	if err != nil {
 		s.logger.WithError(err).Error("Failed to read auth message")
+		if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+			s.logger.Info("Client disconnected during auth")
+		} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			s.logger.Error("Authentication timeout - client did not send auth message")
+		}
 		return
 	}
 
@@ -153,6 +166,12 @@ func (s *Server) handleClient(client *Client) {
 
 	s.logger.WithField("server_id", client.ServerID).Info("WebSocket client connected")
 
+	// Reset read deadline to normal value after successful auth
+	if err := client.conn.SetReadDeadline(time.Now().Add(s.config.WebSocket.PongWait)); err != nil {
+		s.logger.WithError(err).Error("Failed to reset read deadline after auth")
+		return
+	}
+
 	// Send success message
 	client.SendMessage(models.WSMessage{
 		Type: models.WSMessageTypeAuthSuccess,
@@ -160,6 +179,8 @@ func (s *Server) handleClient(client *Client) {
 			"server_id": client.ServerID,
 		},
 	})
+
+	s.logger.WithField("server_id", client.ServerID).Info("✅ Authentication successful, starting message handling")
 
 	// Create channels for non-blocking message handling
 	messageChan := make(chan models.WSMessage, 10)
@@ -171,9 +192,17 @@ func (s *Server) handleClient(client *Client) {
 		defer close(errorChan)
 
 		for {
-			// Set read deadline before each read attempt
+			// Set read deadline before each read attempt (less aggressive)
 			deadline := time.Now().Add(s.config.WebSocket.PongWait)
-			client.conn.SetReadDeadline(deadline)
+			if err := client.conn.SetReadDeadline(deadline); err != nil {
+				s.logger.WithFields(logrus.Fields{
+					"server_id":  client.ServerID,
+					"error":      err.Error(),
+					"error_type": "read_deadline_failed",
+				}).Error("Failed to set read deadline")
+				errorChan <- err
+				return
+			}
 
 			s.logger.WithFields(logrus.Fields{
 				"server_id": client.ServerID,
@@ -182,12 +211,33 @@ func (s *Server) handleClient(client *Client) {
 
 			msg, err := client.ReadMessage()
 			if err != nil {
-				s.logger.WithFields(logrus.Fields{
-					"server_id": client.ServerID,
-					"error":     err.Error(),
-				}).Info("WebSocket read error, exiting reader")
-				errorChan <- err
-				return
+				// Better error classification
+				if websocket.IsCloseError(err, websocket.CloseGoingAway, websocket.CloseNormalClosure) {
+					s.logger.WithFields(logrus.Fields{
+						"server_id":  client.ServerID,
+						"error":      err.Error(),
+						"error_type": "normal_close",
+					}).Info("WebSocket closed normally")
+					errorChan <- err
+					return
+				} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+					// Don't treat timeout as fatal error, just log and continue
+					s.logger.WithFields(logrus.Fields{
+						"server_id":  client.ServerID,
+						"error":      err.Error(),
+						"error_type": "read_timeout",
+					}).Debug("WebSocket read timeout, continuing...")
+					// Reset read deadline and continue
+					continue
+				} else {
+					s.logger.WithFields(logrus.Fields{
+						"server_id":  client.ServerID,
+						"error":      err.Error(),
+						"error_type": "read_error",
+					}).Error("WebSocket read error")
+					errorChan <- err
+					return
+				}
 			}
 
 			s.logger.WithFields(logrus.Fields{
@@ -207,6 +257,25 @@ func (s *Server) handleClient(client *Client) {
 	for {
 		select {
 		case <-pingTicker.C:
+			// Check if connection is still active before sending ping
+			client.mutex.RLock()
+			if client.closed {
+				client.mutex.RUnlock()
+				s.logger.WithField("server_id", client.ServerID).Info("Client already closed, stopping ping")
+				return
+			}
+			client.mutex.RUnlock()
+
+			// Update write deadline before sending ping
+			if err := client.conn.SetWriteDeadline(time.Now().Add(s.config.WebSocket.WriteTimeout)); err != nil {
+				s.logger.WithFields(logrus.Fields{
+					"server_id":  client.ServerID,
+					"error":      err.Error(),
+					"error_type": "write_deadline_failed",
+				}).Error("Failed to set write deadline")
+				return
+			}
+
 			// Send ping to keep connection alive
 			if err := client.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				s.logger.WithFields(logrus.Fields{
@@ -219,8 +288,19 @@ func (s *Server) handleClient(client *Client) {
 			s.logger.WithField("server_id", client.ServerID).Debug("Sent ping to client")
 
 		case msg := <-messageChan:
-			// Handle incoming message
-			s.handleMessage(ctx, client, msg)
+			// Handle incoming message in separate goroutine to avoid blocking
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						s.logger.WithFields(logrus.Fields{
+							"server_id": client.ServerID,
+							"panic":     r,
+						}).Error("Recovered from panic in message handler")
+					}
+				}()
+				s.handleMessage(ctx, client, msg)
+			}()
+			// Continue processing - don't return here
 
 		case err := <-errorChan:
 			// Handle read error with better classification
@@ -230,6 +310,14 @@ func (s *Server) handleClient(client *Client) {
 					"error":      err.Error(),
 					"error_type": "unexpected_close",
 				}).Error("WebSocket closed unexpectedly")
+			} else if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				s.logger.WithFields(logrus.Fields{
+					"server_id":  client.ServerID,
+					"error":      err.Error(),
+					"error_type": "read_timeout",
+				}).Warn("WebSocket read timeout, but connection may still be alive")
+				// Don't return on timeout, let ping mechanism handle it
+				continue
 			} else {
 				s.logger.WithFields(logrus.Fields{
 					"server_id":  client.ServerID,
@@ -280,26 +368,29 @@ func (s *Server) handleMessage(ctx context.Context, client *Client, msg models.W
 		"message_type": msg.Type,
 		"has_data":     msg.Data != nil,
 		"timestamp":    msg.Timestamp,
-	}).Info("Received WebSocket message")
+	}).Debug("Processing WebSocket message")
 
 	switch msg.Type {
 	case models.WSMessageTypeMetrics:
 		s.logger.WithFields(logrus.Fields{
 			"server_id":    client.ServerID,
 			"message_type": msg.Type,
-		}).Info("Processing metrics message")
+		}).Debug("📊 Processing metrics message")
 		s.handleMetrics(ctx, client, msg)
 	case models.WSMessageTypeHeartbeat:
 		s.logger.WithFields(logrus.Fields{
 			"server_id":    client.ServerID,
 			"message_type": msg.Type,
-		}).Info("Processing heartbeat message")
+		}).Debug("💓 Processing heartbeat message")
 		s.handleHeartbeat(ctx, client, msg)
+	case models.WSMessageTypeAuth:
+		s.logger.WithField("server_id", client.ServerID).Warn("🔐 Received duplicate auth message")
+		// Ignore duplicate auth messages
 	default:
 		s.logger.WithFields(logrus.Fields{
 			"server_id":    client.ServerID,
 			"unknown_type": msg.Type,
-		}).Warn("Unknown message type")
+		}).Warn("❓ Unknown message type")
 	}
 }
 
