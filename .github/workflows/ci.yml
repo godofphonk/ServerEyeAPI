@@ -312,10 +312,10 @@ jobs:
               environment:
                 - HOST=0.0.0.0
                 - PORT=8080
-                - DATABASE_URL=postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@postgres:5432/servereye?sslmode=disable
-                - KEYS_DATABASE_URL=postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@postgres:5432/servereye?sslmode=disable
-                - TIMESCALEDB_URL=postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@timescaledb:5432/servereye?sslmode=disable
-                - STATIC_DATA_URL=postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@postgres-static:5432/servereye?sslmode=disable
+                - DATABASE_URL=postgres://servereye:${{ secrets.POSTGRES_PASSWORD }}@postgres:5432/servereye?sslmode=disable
+                - KEYS_DATABASE_URL=postgres://servereye:${{ secrets.POSTGRES_PASSWORD }}@postgres:5432/servereye?sslmode=disable
+                - TIMESCALEDB_URL=postgres://servereye:${{ secrets.POSTGRES_PASSWORD }}@timescaledb:5432/servereye?sslmode=disable
+                - STATIC_DATA_URL=postgres://servereye:${{ secrets.POSTGRES_PASSWORD }}@postgres-static:5432/servereye?sslmode=disable
                 - JWT_SECRET=${{ secrets.JWT_SECRET }}
                 - WEBHOOK_SECRET=${{ secrets.WEBHOOK_SECRET }}
                 - WEB_URL=${{ vars.WEB_URL || 'https://api.servereye.dev' }}
@@ -368,7 +368,7 @@ jobs:
               restart: unless-stopped
               environment:
                 POSTGRES_DB: servereye
-                POSTGRES_USER: postgres
+                POSTGRES_USER: servereye
                 POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
               volumes:
                 - servereye_postgres_data:/var/lib/postgresql/data
@@ -376,7 +376,7 @@ jobs:
               networks:
                 - servereye-network
               healthcheck:
-                test: ["CMD-SHELL", "pg_isready -U postgres"]
+                test: ["CMD-SHELL", "pg_isready -U servereye"]
                 interval: 30s
                 timeout: 10s
                 retries: 3
@@ -396,7 +396,7 @@ jobs:
               restart: unless-stopped
               environment:
                 POSTGRES_DB: servereye
-                POSTGRES_USER: postgres
+                POSTGRES_USER: servereye
                 POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
               volumes:
                 - servereye_timescaledb_data:/var/lib/postgresql/data
@@ -404,7 +404,7 @@ jobs:
               networks:
                 - servereye-network
               healthcheck:
-                test: ["CMD-SHELL", "pg_isready -U postgres"]
+                test: ["CMD-SHELL", "pg_isready -U servereye"]
                 interval: 30s
                 timeout: 10s
                 retries: 3
@@ -438,7 +438,7 @@ jobs:
               restart: unless-stopped
               environment:
                 POSTGRES_DB: servereye
-                POSTGRES_USER: postgres
+                POSTGRES_USER: servereye
                 POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
               volumes:
                 - servereye_postgres_static_data:/var/lib/postgresql/data
@@ -446,7 +446,7 @@ jobs:
               networks:
                 - servereye-network
               healthcheck:
-                test: ["CMD-SHELL", "pg_isready -U postgres -d servereye"]
+                test: ["CMD-SHELL", "pg_isready -U servereye"]
                 interval: 30s
                 timeout: 10s
                 retries: 3
@@ -507,17 +507,17 @@ jobs:
           for migration in ./deployments/migration-*.sql; do
             if [ -f "$migration" ]; then
               echo "Applying migration: $(basename $migration)"
-              sudo docker exec servereye-postgres psql -U postgres -d servereye -f "/migrations/$(basename $migration)" || echo "Migration already applied or failed: $(basename $migration)"
+              sudo docker exec servereye-postgres psql -U servereye -d servereye -f "/migrations/$(basename $migration)" || echo "Migration already applied or failed: $(basename $migration)"
             fi
           done
           
           # Run TimescaleDB migrations
           echo "📝 Running TimescaleDB migrations..."
-          sudo docker exec servereye-timescaledb psql -U postgres -d servereye -f /docker-entrypoint-initdb.d/init-timescaledb.sql || echo "TimescaleDB already initialized"
+          sudo docker exec servereye-timescaledb psql -U servereye -d servereye -f /docker-entrypoint-initdb.d/init-timescaledb.sql || echo "TimescaleDB already initialized"
           
           # Run static data migrations
           echo "📝 Running static data migrations..."
-          sudo docker exec servereye-postgres-static psql -U postgres -d servereye -f /docker-entrypoint-initdb.d/init-static.sql || echo "Static DB already initialized"
+          sudo docker exec servereye-postgres-static psql -U servereye -d servereye -f /docker-entrypoint-initdb.d/001-static-data.sql || echo "Static DB already initialized"
           
           # Health check
           echo "🏥 Performing health check..."
