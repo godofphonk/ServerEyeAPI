@@ -300,8 +300,6 @@ jobs:
           # Update docker-compose.yml with new image
           echo "📝 Updating docker-compose configuration..."
           sudo tee docker-compose.prod.yml > /dev/null <<EOF
-          version: '3.8'
-          
           services:
             servereye-api:
               image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production
@@ -478,6 +476,12 @@ jobs:
           # Stop existing services
           echo "⏹️ Stopping existing services..."
           sudo docker-compose -f docker-compose.prod.yml down || true
+          
+          # Create external volumes
+          echo "📦 Creating external volumes..."
+          sudo docker volume create servereye_postgres_data || true
+          sudo docker volume create servereye_timescaledb_data || true
+          sudo docker volume create servereye_postgres_static_data || true
           
           # Start new services
           echo "▶️ Starting new services..."
