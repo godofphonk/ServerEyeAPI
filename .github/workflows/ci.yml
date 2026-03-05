@@ -192,8 +192,6 @@ jobs:
           BUILD_DATE=${{ env.BUILD_DATE }}
           VERSION=${{ env.VERSION }}
           COMMIT_SHA=${{ env.COMMIT_SHA }}
-        cache-from: type=gha
-        cache-to: type=gha,mode=max
         
     - name: Verify multi-tier metrics implementation
       run: |
@@ -440,14 +438,15 @@ jobs:
                 POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
               volumes:
                 - servereye_postgres_static_data:/var/lib/postgresql/data
-                - ./deployments/migration-005-static-data.sql:/docker-entrypoint-initdb.d/init-static.sql
+                - ./deployments/migration-005-static-data.sql:/docker-entrypoint-initdb.d/001-static-data.sql
               networks:
                 - servereye-network
               healthcheck:
-                test: ["CMD-SHELL", "pg_isready -U postgres"]
+                test: ["CMD-SHELL", "pg_isready -U postgres -d servereye_static"]
                 interval: 30s
                 timeout: 10s
                 retries: 3
+                start_period: 30s
               deploy:
                 resources:
                   limits:
