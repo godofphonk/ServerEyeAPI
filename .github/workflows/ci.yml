@@ -295,7 +295,7 @@ jobs:
           
           # Pull latest images
           echo "📥 Pulling latest Docker images..."
-          sudo docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production --no-cache
+          sudo docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production
           sudo docker rmi ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production 2>/dev/null || true
           sudo docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production
           
