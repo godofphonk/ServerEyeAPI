@@ -315,7 +315,7 @@ jobs:
                 - DATABASE_URL=postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@postgres:5432/servereye?sslmode=disable
                 - KEYS_DATABASE_URL=postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@postgres:5432/servereye?sslmode=disable
                 - TIMESCALEDB_URL=postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@timescaledb:5432/servereye?sslmode=disable
-                - STATIC_DATABASE_URL=postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@postgres-static:5432/servereye_static?sslmode=disable
+                - STATIC_DATA_URL=postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@postgres-static:5432/servereye?sslmode=disable
                 - JWT_SECRET=${{ secrets.JWT_SECRET }}
                 - WEBHOOK_SECRET=${{ secrets.WEBHOOK_SECRET }}
                 - WEB_URL=${{ vars.WEB_URL || 'https://api.servereye.dev' }}
@@ -437,7 +437,7 @@ jobs:
               container_name: servereye-postgres-static
               restart: unless-stopped
               environment:
-                POSTGRES_DB: servereye_static
+                POSTGRES_DB: servereye
                 POSTGRES_USER: postgres
                 POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
               volumes:
@@ -446,7 +446,7 @@ jobs:
               networks:
                 - servereye-network
               healthcheck:
-                test: ["CMD-SHELL", "pg_isready -U postgres -d servereye_static"]
+                test: ["CMD-SHELL", "pg_isready -U postgres -d servereye"]
                 interval: 30s
                 timeout: 10s
                 retries: 3
@@ -517,7 +517,7 @@ jobs:
           
           # Run static data migrations
           echo "📝 Running static data migrations..."
-          sudo docker exec servereye-postgres-static psql -U postgres -d servereye_static -f /docker-entrypoint-initdb.d/init-static.sql || echo "Static DB already initialized"
+          sudo docker exec servereye-postgres-static psql -U postgres -d servereye -f /docker-entrypoint-initdb.d/init-static.sql || echo "Static DB already initialized"
           
           # Health check
           echo "🏥 Performing health check..."
