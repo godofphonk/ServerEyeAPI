@@ -526,12 +526,12 @@ jobs:
           
           # Health check
           echo "🏥 Performing health check..."
-          for i in {1..10}; do
+          for i in {1..30}; do
             if curl -f http://localhost:8080/health; then
               echo "✅ Health check passed!"
               break
             else
-              echo "⏳ Waiting for service to be ready... ($i/10)"
+              echo "⏳ Waiting for service to be ready... ($i/30)"
               sleep 10
             fi
           done
@@ -559,7 +559,19 @@ jobs:
       run: |
         echo "🧪 Running post-deployment tests..."
         
-        # Test health endpoint
+        # Wait for service to be ready
+        echo "⏳ Waiting for service to be ready..."
+        for i in {1..20}; do
+          if curl -f http://${{ secrets.PROD_HOST }}:8080/health; then
+            echo "✅ Health endpoint is working"
+            break
+          else
+            echo "⏳ Waiting for service to be ready... ($i/20)"
+            sleep 15
+          fi
+        done
+        
+        # Final health check
         if curl -f http://${{ secrets.PROD_HOST }}:8080/health; then
           echo "✅ Health endpoint is working"
         else
