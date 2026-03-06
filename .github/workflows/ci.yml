@@ -436,6 +436,13 @@ jobs:
           echo "📝 Running TimescaleDB migrations..."
           sudo docker exec ServereyeAPI-timescaledb psql -U postgres -d servereye -f /docker-entrypoint-initdb.d/init-timescaledb.sql || echo "TimescaleDB already initialized"
           
+          # Apply migration-008 to TimescaleDB
+          echo "📝 Applying migration-008 to TimescaleDB..."
+          if [ -f "./deployments/migration-008-add-storage-temperatures.sql" ]; then
+            echo "Applying migration-008 to TimescaleDB..."
+            sudo docker exec -i ServereyeAPI-timescaledb psql -U postgres -d servereye < "./deployments/migration-008-add-storage-temperatures.sql" || echo "Migration-008 already applied or failed"
+          fi
+          
           # Create servereye database in postgres-static
           echo "📝 Creating servereye database in postgres-static..."
           sudo docker exec ServereyeAPI-postgres-static psql -U postgres -c "CREATE DATABASE servereye;" || echo "Database servereye already exists"
