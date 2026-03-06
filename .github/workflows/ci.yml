@@ -421,7 +421,7 @@ jobs:
           
           # Run static data migrations (postgres-static database)
           echo "📝 Running static data migrations..."
-          for migration in ./deployments/migration-005-*.sql ./deployments/migration-006-*.sql ./deployments/migration-007-*.sql ./deployments/migration-008-*.sql; do
+          for migration in ./deployments/migration-005-*.sql ./deployments/migration-006-*.sql ./deployments/migration-007-*.sql; do
             if [ -f "$migration" ]; then
               echo "Applying static data migration: $(basename $migration)"
               sudo docker exec -i ServereyeAPI-postgres-static psql -U postgres -d servereye < "$migration" || echo "Static migration already applied or failed: $(basename $migration)"
