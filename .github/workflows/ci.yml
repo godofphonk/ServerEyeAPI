@@ -399,6 +399,20 @@ jobs:
           echo "🔍 Checking container status..."
           sudo docker-compose ps
           
+          # Configure pg_hba.conf for Docker network access
+          echo "🔧 Configuring PostgreSQL access..."
+          sudo docker exec ServereyeAPI-postgres sh -c "echo 'host all all 172.20.0.0/16 trust' >> /var/lib/postgresql/data/pg_hba.conf"
+          sudo docker exec ServereyeAPI-postgres sh -c "echo 'host all all 0.0.0.0/0 md5' >> /var/lib/postgresql/data/pg_hba.conf"
+          sudo docker exec ServereyeAPI-postgres psql -U postgres -c "SELECT pg_reload_conf();"
+          
+          sudo docker exec ServereyeAPI-timescaledb sh -c "echo 'host all all 172.20.0.0/16 trust' >> /var/lib/postgresql/data/pg_hba.conf"
+          sudo docker exec ServereyeAPI-timescaledb sh -c "echo 'host all all 0.0.0.0/0 md5' >> /var/lib/postgresql/data/pg_hba.conf"
+          sudo docker exec ServereyeAPI-timescaledb psql -U postgres -c "SELECT pg_reload_conf();"
+          
+          sudo docker exec ServereyeAPI-postgres-static sh -c "echo 'host all all 172.20.0.0/16 trust' >> /var/lib/postgresql/data/pg_hba.conf"
+          sudo docker exec ServereyeAPI-postgres-static sh -c "echo 'host all all 0.0.0.0/0 md5' >> /var/lib/postgresql/data/pg_hba.conf"
+          sudo docker exec ServereyeAPI-postgres-static psql -U postgres -c "SELECT pg_reload_conf();"
+          
           # Run database migrations
           echo "🗄️ Running database migrations..."
           
