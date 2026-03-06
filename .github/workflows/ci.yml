@@ -293,192 +293,55 @@ jobs:
           sudo mkdir -p /opt/servereye
           cd /opt/servereye
           
+          # Clone or pull repository
+          echo "📥 Updating repository..."
+          if [ -d ".git" ]; then
+            git fetch origin production
+            git reset --hard origin/production
+          else
+            git clone -b production https://github.com/${{ github.repository }} .
+          fi
+          
           # Pull latest images
           echo "📥 Pulling latest Docker images..."
           sudo docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production
-          sudo docker rmi ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production 2>/dev/null || true
-          sudo docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production
           
-          # Update docker-compose.yml with new image
+          # Update docker-compose.yml with production image
           echo "📝 Updating docker-compose configuration..."
-          sudo tee docker-compose.prod.yml > /dev/null <<EOF
-          services:
-            servereye-api:
-              image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production
-              container_name: servereye-api
-              restart: unless-stopped
-              ports:
-                - "8080:8080"
-              environment:
-                - HOST=0.0.0.0
-                - PORT=8080
-                - DATABASE_URL=postgres://servereye:${{ secrets.POSTGRES_PASSWORD }}@postgres:5432/servereye?sslmode=disable
-                - KEYS_DATABASE_URL=postgres://servereye:${{ secrets.POSTGRES_PASSWORD }}@postgres:5432/servereye?sslmode=disable
-                - TIMESCALEDB_URL=postgres://servereye:${{ secrets.POSTGRES_PASSWORD }}@timescaledb:5432/servereye?sslmode=disable
-                - STATIC_DATA_URL=postgres://servereye:${{ secrets.POSTGRES_PASSWORD }}@postgres-static:5432/servereye?sslmode=disable
-                - JWT_SECRET=${{ secrets.JWT_SECRET }}
-                - WEBHOOK_SECRET=${{ secrets.WEBHOOK_SECRET }}
-                - WEB_URL=${{ vars.WEB_URL || 'https://api.servereye.dev' }}
-                # TimescaleDB configuration
-                - TIMESCALEDB_MAX_CONNECTIONS=50
-                - TIMESCALEDB_CONN_TIMEOUT=30s
-                - TIMESCALEDB_QUERY_TIMEOUT=15s
-                - TIMESCALEDB_HEALTH_CHECK_INTERVAL=30s
-                # WebSocket configuration
-                - WS_BUFFER_SIZE=256
-                - WS_WRITE_TIMEOUT=30s
-                - WS_READ_TIMEOUT=300s
-                - WS_PING_INTERVAL=30s
-                - WS_PONG_WAIT=120s
-                # Data retention
-                - METRICS_RETENTION_DAYS=90
-                - STATUS_RETENTION_DAYS=30
-                - EVENTS_RETENTION_DAYS=60
-                - COMMANDS_RETENTION_DAYS=30
-              volumes:
-                - ./logs:/app/logs
-              networks:
-                - servereye-network
-              depends_on:
-                postgres:
-                  condition: service_healthy
-                timescaledb:
-                  condition: service_healthy
-                postgres-static:
-                  condition: service_healthy
-              healthcheck:
-                test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-                interval: 30s
-                timeout: 10s
-                retries: 3
-                start_period: 40s
-              deploy:
-                resources:
-                  limits:
-                    memory: 1G
-                    cpus: '0.5'
-                  reservations:
-                    memory: 512M
-                    cpus: '0.25'
+          sed -i '/build:/,/dockerfile:/c\      image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production' docker-compose.yml
           
-            # PostgreSQL for metadata
-            postgres:
-              image: postgres:15-alpine
-              container_name: servereye-postgres
-              restart: unless-stopped
-              environment:
-                POSTGRES_DB: servereye
-                POSTGRES_USER: servereye
-                POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-              volumes:
-                - servereye_postgres_data:/var/lib/postgresql/data
-                - ./deployments:/migrations:ro
-              networks:
-                - servereye-network
-              healthcheck:
-                test: ["CMD-SHELL", "pg_isready -U servereye"]
-                interval: 30s
-                timeout: 10s
-                retries: 3
-              deploy:
-                resources:
-                  limits:
-                    memory: 512M
-                    cpus: '0.25'
-                  reservations:
-                    memory: 256M
-                    cpus: '0.1'
-          
-            # TimescaleDB for time-series data
-            timescaledb:
-              image: timescale/timescaledb:2.15.0-pg15
-              container_name: servereye-timescaledb
-              restart: unless-stopped
-              environment:
-                POSTGRES_DB: servereye
-                POSTGRES_USER: servereye
-                POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-              volumes:
-                - servereye_timescaledb_data:/var/lib/postgresql/data
-                - ./deployments/timescaledb-init.sql:/docker-entrypoint-initdb.d/init-timescaledb.sql
-              networks:
-                - servereye-network
-              healthcheck:
-                test: ["CMD-SHELL", "pg_isready -U servereye"]
-                interval: 30s
-                timeout: 10s
-                retries: 3
-              command: >
-                postgres
-                -c shared_preload_libraries=timescaledb
-                -c timescaledb.max_background_workers=16
-                -c timescaledb.query_chunk_size=200000
-                -c max_connections=200
-                -c shared_buffers=1GB
-                -c effective_cache_size=4GB
-                -c maintenance_work_mem=512MB
-                -c checkpoint_completion_target=0.9
-                -c wal_buffers=64MB
-                -c default_statistics_target=100
-                -c random_page_cost=1.1
-                -c effective_io_concurrency=200
-              deploy:
-                resources:
-                  limits:
-                    memory: 4G
-                    cpus: '2.0'
-                  reservations:
-                    memory: 2G
-                    cpus: '1.0'
-          
-            # PostgreSQL for static data
-            postgres-static:
-              image: postgres:15-alpine
-              container_name: servereye-postgres-static
-              restart: unless-stopped
-              environment:
-                POSTGRES_DB: servereye
-                POSTGRES_USER: servereye
-                POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-              volumes:
-                - servereye_postgres_static_data:/var/lib/postgresql/data
-                - ./deployments/migration-005-static-data.sql:/docker-entrypoint-initdb.d/001-static-data.sql
-              networks:
-                - servereye-network
-              healthcheck:
-                test: ["CMD-SHELL", "pg_isready -U servereye"]
-                interval: 30s
-                timeout: 10s
-                retries: 3
-                start_period: 30s
-              deploy:
-                resources:
-                  limits:
-                    memory: 512M
-                    cpus: '0.25'
-                  reservations:
-                    memory: 256M
-                    cpus: '0.1'
-          
-          volumes:
-            servereye_postgres_data:
-              external: true
-            servereye_timescaledb_data:
-              external: true
-            servereye_postgres_static_data:
-              external: true
-          
-          networks:
-            servereye-network:
-              driver: bridge
-              ipam:
-                config:
-                  - subnet: 172.20.0.0/16
+          # Set environment variables
+          echo "📝 Creating .env file..."
+          sudo tee .env > /dev/null <<EOF
+          HOST=0.0.0.0
+          PORT=8080
+          DATABASE_URL=postgres://servereye:${{ secrets.POSTGRES_PASSWORD }}@postgres:5432/servereye?sslmode=disable
+          KEYS_DATABASE_URL=postgres://servereye:${{ secrets.POSTGRES_PASSWORD }}@postgres:5432/servereye?sslmode=disable
+          TIMESCALEDB_URL=postgres://servereye:${{ secrets.POSTGRES_PASSWORD }}@timescaledb:5432/servereye?sslmode=disable
+          STATIC_DATA_URL=postgres://servereye:${{ secrets.POSTGRES_PASSWORD }}@postgres-static:5432/servereye?sslmode=disable
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          WEBHOOK_SECRET=${{ secrets.WEBHOOK_SECRET }}
+          WEB_URL=${{ vars.WEB_URL || 'https://api.servereye.dev' }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          TIMESCALEDB_MAX_CONNECTIONS=50
+          TIMESCALEDB_CONN_TIMEOUT=30s
+          TIMESCALEDB_QUERY_TIMEOUT=15s
+          TIMESCALEDB_HEALTH_CHECK_INTERVAL=30s
+          WS_BUFFER_SIZE=256
+          WS_WRITE_TIMEOUT=30s
+          WS_READ_TIMEOUT=300s
+          WS_PING_INTERVAL=30s
+          WS_PONG_WAIT=120s
+          METRICS_RETENTION_DAYS=90
+          STATUS_RETENTION_DAYS=30
+          EVENTS_RETENTION_DAYS=60
+          COMMANDS_RETENTION_DAYS=30
           EOF
+          
           
           # Stop existing services
           echo "⏹️ Stopping existing services..."
-          sudo docker-compose -f docker-compose.prod.yml down || true
+          sudo docker-compose down || true
           sudo docker stop $(sudo docker ps -q) || true
           sudo docker rm $(sudo docker ps -aq) || true
           sudo docker network prune -f
@@ -493,7 +356,7 @@ jobs:
           
           # Start new services
           echo "▶️ Starting new services..."
-          sudo docker-compose -f docker-compose.prod.yml up -d
+          sudo docker-compose up -d
           
           # Wait for services to be ready
           echo "⏳ Waiting for services to be ready..."
@@ -501,7 +364,7 @@ jobs:
           
           # Check if containers are running
           echo "🔍 Checking container status..."
-          sudo docker-compose -f docker-compose.prod.yml ps
+          sudo docker-compose ps
           
           # Run database migrations
           echo "🗄️ Running database migrations..."
@@ -542,11 +405,11 @@ jobs:
           
           # Check logs
           echo "📋 Checking service logs..."
-          sudo docker-compose -f docker-compose.prod.yml logs --tail=50
+          sudo docker-compose logs --tail=50
           
           # Check API container logs specifically
           echo "🔍 Checking API container logs..."
-          sudo docker-compose -f docker-compose.prod.yml logs servereye-api --tail=20
+          sudo docker-compose logs servereye-api --tail=20
           
           # Clean up old images
           echo "🧹 Cleaning up old Docker images..."
@@ -585,9 +448,9 @@ jobs:
         else
           echo "❌ Health endpoint failed"
           echo "🔍 Checking container status during test..."
-          sudo docker-compose -f docker-compose.prod.yml ps
+          sudo docker-compose ps
           echo "🔍 Checking API logs during test..."
-          sudo docker-compose -f docker-compose.prod.yml logs servereye-api --tail=10
+          sudo docker-compose logs servereye-api --tail=10
           exit 1
         fi
         
