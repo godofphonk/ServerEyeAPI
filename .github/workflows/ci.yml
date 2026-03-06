@@ -499,6 +499,10 @@ jobs:
           echo "⏳ Waiting for services to be ready..."
           sleep 30
           
+          # Check if containers are running
+          echo "🔍 Checking container status..."
+          sudo docker-compose -f docker-compose.prod.yml ps
+          
           # Run database migrations
           echo "🗄️ Running database migrations..."
           
@@ -540,6 +544,10 @@ jobs:
           echo "📋 Checking service logs..."
           sudo docker-compose -f docker-compose.prod.yml logs --tail=50
           
+          # Check API container logs specifically
+          echo "🔍 Checking API container logs..."
+          sudo docker-compose -f docker-compose.prod.yml logs servereye-api --tail=20
+          
           # Clean up old images
           echo "🧹 Cleaning up old Docker images..."
           sudo docker image prune -f
@@ -561,12 +569,12 @@ jobs:
         
         # Wait for service to be ready
         echo "⏳ Waiting for service to be ready..."
-        for i in {1..20}; do
+        for i in {1..10}; do
           if curl -f http://${{ secrets.PROD_HOST }}:8080/health; then
             echo "✅ Health endpoint is working"
             break
           else
-            echo "⏳ Waiting for service to be ready... ($i/20)"
+            echo "⏳ Waiting for service to be ready... ($i/10)"
             sleep 15
           fi
         done
@@ -576,6 +584,10 @@ jobs:
           echo "✅ Health endpoint is working"
         else
           echo "❌ Health endpoint failed"
+          echo "🔍 Checking container status during test..."
+          sudo docker-compose -f docker-compose.prod.yml ps
+          echo "🔍 Checking API logs during test..."
+          sudo docker-compose -f docker-compose.prod.yml logs servereye-api --tail=10
           exit 1
         fi
         
