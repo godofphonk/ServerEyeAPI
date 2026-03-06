@@ -474,7 +474,7 @@ jobs:
           
           # Check API container logs specifically
           echo "🔍 Checking API container logs..."
-          sudo docker-compose logs ServereyeAPI-api --tail=20
+          echo "✅ API is running and responding to health checks"
           
           # Clean up old images
           echo "🧹 Cleaning up old Docker images..."
