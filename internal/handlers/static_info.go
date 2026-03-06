@@ -188,9 +188,9 @@ func (h *StaticInfoHandler) GetDiskInfo(w http.ResponseWriter, r *http.Request) 
 
 // Helper method to get server_id from server_key
 func (h *StaticInfoHandler) getServerIDFromKey(ctx context.Context, serverKey string) (string, error) {
-	// This would need access to server repository to convert key to ID
-	// For now, we'll return an error - this needs to be implemented
-	return "", fmt.Errorf("server key to ID conversion not implemented")
+	// Need access to server storage to convert key to ID
+	// This is a workaround - we should inject serverStorage in constructor
+	return "", fmt.Errorf("server key to ID conversion not implemented - need serverStorage injection")
 }
 
 // UpsertStaticInfoByKey handles POST/PUT requests using server_key
