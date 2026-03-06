@@ -407,20 +407,20 @@ jobs:
           for migration in ./deployments/migration-001-*.sql ./deployments/migration-002-*.sql ./deployments/migration-003-*.sql ./deployments/migration-004-*.sql ./deployments/migration-009-*.sql; do
             if [ -f "$migration" ]; then
               echo "Applying migration: $(basename $migration)"
-              sudo docker exec servereye-postgres psql -U servereye -d servereye -f "/migrations/$(basename $migration)" || echo "Migration already applied or failed: $(basename $migration)"
+              sudo docker exec ServereyeAPI-postgres psql -U servereye -d servereye -f "/migrations/$(basename $migration)" || echo "Migration already applied or failed: $(basename $migration)"
             fi
           done
           
           # Run TimescaleDB migrations
           echo "📝 Running TimescaleDB migrations..."
-          sudo docker exec servereye-timescaledb psql -U servereye -d servereye -f /docker-entrypoint-initdb.d/init-timescaledb.sql || echo "TimescaleDB already initialized"
+          sudo docker exec ServereyeAPI-timescaledb psql -U servereye -d servereye -f /docker-entrypoint-initdb.d/init-timescaledb.sql || echo "TimescaleDB already initialized"
           
           # Run static data migrations (postgres-static database)
           echo "📝 Running static data migrations..."
           for migration in ./deployments/migration-005-*.sql ./deployments/migration-006-*.sql ./deployments/migration-007-*.sql ./deployments/migration-008-*.sql; do
             if [ -f "$migration" ]; then
               echo "Applying static data migration: $(basename $migration)"
-              sudo docker exec servereye-postgres-static psql -U servereye -d servereye -f "/migrations/$(basename $migration)" || echo "Static migration already applied or failed: $(basename $migration)"
+              sudo docker exec ServereyeAPI-postgres-static psql -U servereye -d servereye -f "/migrations/$(basename $migration)" || echo "Static migration already applied or failed: $(basename $migration)"
             fi
           done
           
@@ -442,7 +442,7 @@ jobs:
           
           # Check API container logs specifically
           echo "🔍 Checking API container logs..."
-          sudo docker-compose logs servereye-api --tail=20
+          sudo docker-compose logs ServereyeAPI-api --tail=20
           
           # Clean up old images
           echo "🧹 Cleaning up old Docker images..."
@@ -483,7 +483,7 @@ jobs:
           echo "🔍 Checking container status during test..."
           sudo docker-compose ps
           echo "🔍 Checking API logs during test..."
-          sudo docker-compose logs servereye-api --tail=10
+          sudo docker-compose logs ServereyeAPI-api --tail=10
           exit 1
         fi
         
