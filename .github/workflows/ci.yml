@@ -407,31 +407,31 @@ jobs:
           for migration in ./deployments/migration-001-*.sql ./deployments/migration-002-*.sql ./deployments/migration-003-*.sql ./deployments/migration-004-*.sql ./deployments/migration-009-*.sql; do
             if [ -f "$migration" ]; then
               echo "Applying migration: $(basename $migration)"
-              sudo docker exec ServereyeAPI-postgres psql -U servereye -d servereye -f "/migrations/$(basename $migration)" || echo "Migration already applied or failed: $(basename $migration)"
+              sudo docker exec ServereyeAPI-postgres psql -U postgres -d servereye -f "/migrations/$(basename $migration)" || echo "Migration already applied or failed: $(basename $migration)"
             fi
           done
           
           # Run TimescaleDB migrations
           echo "📝 Running TimescaleDB migrations..."
-          sudo docker exec ServereyeAPI-timescaledb psql -U servereye -d servereye -f /docker-entrypoint-initdb.d/init-timescaledb.sql || echo "TimescaleDB already initialized"
+          sudo docker exec ServereyeAPI-timescaledb psql -U postgres -d servereye -f /docker-entrypoint-initdb.d/init-timescaledb.sql || echo "TimescaleDB already initialized"
           
           # Run static data migrations (postgres-static database)
           echo "📝 Running static data migrations..."
           for migration in ./deployments/migration-005-*.sql ./deployments/migration-006-*.sql ./deployments/migration-007-*.sql ./deployments/migration-008-*.sql; do
             if [ -f "$migration" ]; then
               echo "Applying static data migration: $(basename $migration)"
-              sudo docker exec ServereyeAPI-postgres-static psql -U servereye -d servereye -f "/migrations/$(basename $migration)" || echo "Static migration already applied or failed: $(basename $migration)"
+              sudo docker exec ServereyeAPI-postgres-static psql -U postgres -d servereye -f "/migrations/$(basename $migration)" || echo "Static migration already applied or failed: $(basename $migration)"
             fi
           done
           
           # Health check
           echo "🏥 Performing health check..."
-          for i in {1..30}; do
+          for i in {1..10}; do
             if curl -f http://localhost:8080/health; then
               echo "✅ Health check passed!"
               break
             else
-              echo "⏳ Waiting for service to be ready... ($i/30)"
+              echo "⏳ Waiting for service to be ready... ($i/10)"
               sleep 10
             fi
           done
@@ -465,12 +465,12 @@ jobs:
         
         # Wait for service to be ready
         echo "⏳ Waiting for service to be ready..."
-        for i in {1..10}; do
+        for i in {1..5}; do
           if curl -f http://${{ secrets.PROD_HOST }}:8080/health; then
             echo "✅ Health endpoint is working"
             break
           else
-            echo "⏳ Waiting for service to be ready... ($i/10)"
+            echo "⏳ Waiting for service to be ready... ($i/5)"
             sleep 15
           fi
         done
