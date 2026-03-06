@@ -502,9 +502,9 @@ jobs:
           # Run database migrations
           echo "🗄️ Running database migrations..."
           
-          # Run PostgreSQL migrations
-          echo "📝 Running PostgreSQL migrations..."
-          for migration in ./deployments/migration-*.sql; do
+          # Run PostgreSQL migrations (main database)
+          echo "📝 Running PostgreSQL migrations for main database..."
+          for migration in ./deployments/migration-001-*.sql ./deployments/migration-002-*.sql ./deployments/migration-003-*.sql ./deployments/migration-004-*.sql ./deployments/migration-009-*.sql; do
             if [ -f "$migration" ]; then
               echo "Applying migration: $(basename $migration)"
               sudo docker exec servereye-postgres psql -U servereye -d servereye -f "/migrations/$(basename $migration)" || echo "Migration already applied or failed: $(basename $migration)"
@@ -515,9 +515,14 @@ jobs:
           echo "📝 Running TimescaleDB migrations..."
           sudo docker exec servereye-timescaledb psql -U servereye -d servereye -f /docker-entrypoint-initdb.d/init-timescaledb.sql || echo "TimescaleDB already initialized"
           
-          # Run static data migrations
+          # Run static data migrations (postgres-static database)
           echo "📝 Running static data migrations..."
-          sudo docker exec servereye-postgres-static psql -U servereye -d servereye -f /docker-entrypoint-initdb.d/001-static-data.sql || echo "Static DB already initialized"
+          for migration in ./deployments/migration-005-*.sql ./deployments/migration-006-*.sql ./deployments/migration-007-*.sql ./deployments/migration-008-*.sql; do
+            if [ -f "$migration" ]; then
+              echo "Applying static data migration: $(basename $migration)"
+              sudo docker exec servereye-postgres-static psql -U servereye -d servereye -f "/migrations/$(basename $migration)" || echo "Static migration already applied or failed: $(basename $migration)"
+            fi
+          done
           
           # Health check
           echo "🏥 Performing health check..."
