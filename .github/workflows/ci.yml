@@ -306,9 +306,42 @@ jobs:
           echo "📥 Pulling latest Docker images..."
           sudo docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production
           
-          # Update docker-compose.yml with production image
-          echo "📝 Updating docker-compose configuration..."
-          sed -i '/build:/,/dockerfile:/c\      image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production' docker-compose.yml
+          # Create docker-compose.override.yml for production
+          echo "📝 Creating production override..."
+          sudo tee docker-compose.override.yml > /dev/null <<EOF
+          services:
+            servereye-api:
+              image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production
+              ports:
+                - "8080:8080"
+              environment:
+                - HOST=0.0.0.0
+                - PORT=8080
+                - DATABASE_URL=postgres://servereye:\${POSTGRES_PASSWORD}@postgres:5432/servereye?sslmode=disable
+                - KEYS_DATABASE_URL=postgres://servereye:\${POSTGRES_PASSWORD}@postgres:5432/servereye?sslmode=disable
+                - TIMESCALEDB_URL=postgres://servereye:\${POSTGRES_PASSWORD}@timescaledb:5432/servereye?sslmode=disable
+                - STATIC_DATA_URL=postgres://servereye:\${POSTGRES_PASSWORD}@postgres-static:5432/servereye?sslmode=disable
+                - JWT_SECRET=\${JWT_SECRET}
+                - WEBHOOK_SECRET=\${WEBHOOK_SECRET}
+                - WEB_URL=\${WEB_URL:-https://api.servereye.dev}
+                - POSTGRES_PASSWORD=\${POSTGRES_PASSWORD}
+                - TIMESCALEDB_MAX_CONNECTIONS=50
+                - TIMESCALEDB_CONN_TIMEOUT=30s
+                - TIMESCALEDB_QUERY_TIMEOUT=15s
+                - TIMESCALEDB_HEALTH_CHECK_INTERVAL=30s
+                - WS_BUFFER_SIZE=256
+                - WS_WRITE_TIMEOUT=30s
+                - WS_READ_TIMEOUT=300s
+                - WS_PING_INTERVAL=30s
+                - WS_PONG_WAIT=120s
+                - METRICS_RETENTION_DAYS=90
+                - STATUS_RETENTION_DAYS=30
+                - EVENTS_RETENTION_DAYS=60
+                - COMMANDS_RETENTION_DAYS=30
+              volumes:
+                - ./logs:/app/logs
+              restart: unless-stopped
+          EOF
           
           # Set environment variables
           echo "📝 Creating .env file..."
