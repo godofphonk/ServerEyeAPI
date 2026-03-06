@@ -399,16 +399,23 @@ jobs:
           echo "🔍 Checking container status..."
           sudo docker-compose ps
           
-          # Configure pg_hba.conf for Docker network access
+          # Configure pg_hba.conf and create servereye user
           echo "🔧 Configuring PostgreSQL access..."
+          
+          # PostgreSQL main
+          sudo docker exec ServereyeAPI-postgres psql -U postgres -c "CREATE USER servereye WITH SUPERUSER PASSWORD '${{ secrets.POSTGRES_PASSWORD }}';" || echo "User servereye already exists"
           sudo docker exec ServereyeAPI-postgres sh -c "echo 'host all all 172.20.0.0/16 trust' >> /var/lib/postgresql/data/pg_hba.conf"
           sudo docker exec ServereyeAPI-postgres sh -c "echo 'host all all 0.0.0.0/0 md5' >> /var/lib/postgresql/data/pg_hba.conf"
           sudo docker exec ServereyeAPI-postgres psql -U postgres -c "SELECT pg_reload_conf();"
           
+          # TimescaleDB
+          sudo docker exec ServereyeAPI-timescaledb psql -U postgres -c "CREATE USER servereye WITH SUPERUSER PASSWORD '${{ secrets.POSTGRES_PASSWORD }}';" || echo "User servereye already exists"
           sudo docker exec ServereyeAPI-timescaledb sh -c "echo 'host all all 172.20.0.0/16 trust' >> /var/lib/postgresql/data/pg_hba.conf"
           sudo docker exec ServereyeAPI-timescaledb sh -c "echo 'host all all 0.0.0.0/0 md5' >> /var/lib/postgresql/data/pg_hba.conf"
           sudo docker exec ServereyeAPI-timescaledb psql -U postgres -c "SELECT pg_reload_conf();"
           
+          # PostgreSQL static
+          sudo docker exec ServereyeAPI-postgres-static psql -U postgres -c "CREATE USER servereye WITH SUPERUSER PASSWORD '${{ secrets.POSTGRES_PASSWORD }}';" || echo "User servereye already exists"
           sudo docker exec ServereyeAPI-postgres-static sh -c "echo 'host all all 172.20.0.0/16 trust' >> /var/lib/postgresql/data/pg_hba.conf"
           sudo docker exec ServereyeAPI-postgres-static sh -c "echo 'host all all 0.0.0.0/0 md5' >> /var/lib/postgresql/data/pg_hba.conf"
           sudo docker exec ServereyeAPI-postgres-static psql -U postgres -c "SELECT pg_reload_conf();"
