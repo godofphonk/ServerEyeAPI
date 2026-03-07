@@ -34,7 +34,7 @@ services:
       - DATABASE_URL=postgres://postgres:password@api-postgres:5432/servereye?sslmode=disable
       - KEYS_DATABASE_URL=postgres://postgres:password@api-postgres:5432/servereye?sslmode=disable
       - TIMESCALEDB_URL=postgres://postgres:password@api-timescaledb:5432/servereye?sslmode=disable
-      - STATIC_DATA_URL=postgres://servereye:password@api-postgres-static:5432/servereye?sslmode=disable
+      - STATIC_DATA_URL=postgres://postgres:password@api-postgres-static:5432/servereye?sslmode=disable
       - JWT_SECRET=your-super-secret-jwt-key-change-in-production
       - WEBHOOK_SECRET=your-webhook-secret-change-in-production
       - WEB_URL=http://localhost:3000
@@ -153,7 +153,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_DB: servereye
-      POSTGRES_USER: servereye
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
     volumes:
       - servereye_postgres_static_data:/var/lib/postgresql/data
@@ -161,7 +161,7 @@ services:
     networks:
       - servereye-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U servereye"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 30s
       timeout: 10s
       retries: 3
