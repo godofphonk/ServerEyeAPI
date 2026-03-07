@@ -31,10 +31,10 @@ services:
     environment:
       - HOST=0.0.0.0
       - PORT=8080
-      - DATABASE_URL=postgres://servereye:password@postgres:5432/servereye?sslmode=disable
-      - KEYS_DATABASE_URL=postgres://servereye:password@postgres:5432/servereye?sslmode=disable
-      - TIMESCALEDB_URL=postgres://servereye:password@timescaledb:5432/servereye?sslmode=disable
-      - STATIC_DATA_URL=postgres://servereye:password@postgres-static:5432/servereye?sslmode=disable
+      - DATABASE_URL=postgres://postgres:password@api-postgres:5432/servereye?sslmode=disable
+      - KEYS_DATABASE_URL=postgres://postgres:password@api-postgres:5432/servereye?sslmode=disable
+      - TIMESCALEDB_URL=postgres://postgres:password@api-timescaledb:5432/servereye?sslmode=disable
+      - STATIC_DATA_URL=postgres://postgres:password@api-postgres-static:5432/servereye?sslmode=disable
       - JWT_SECRET=your-super-secret-jwt-key-change-in-production
       - WEBHOOK_SECRET=your-webhook-secret-change-in-production
       - WEB_URL=http://localhost:3000
@@ -54,11 +54,11 @@ services:
     networks:
       - servereye-network
     depends_on:
-      postgres:
+      api-postgres:
         condition: service_healthy
-      postgres-static:
+      api-postgres-static:
         condition: service_healthy
-      timescaledb:
+      api-timescaledb:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -76,7 +76,7 @@ services:
           cpus: '0.25'
 
   # PostgreSQL for metadata
-  postgres:
+  api-postgres:
     image: postgres:15-alpine
     container_name: ServereyeAPI-postgres
     restart: unless-stopped
@@ -104,7 +104,7 @@ services:
           cpus: '0.1'
 
   # TimescaleDB for time-series data
-  timescaledb:
+  api-timescaledb:
     image: timescale/timescaledb:2.15.0-pg15
     container_name: ServereyeAPI-timescaledb
     restart: unless-stopped
@@ -147,13 +147,13 @@ services:
           cpus: '1.0'
 
   # PostgreSQL for static/persistent server data
-  postgres-static:
+  api-postgres-static:
     image: postgres:15-alpine
     container_name: ServereyeAPI-postgres-static
     restart: unless-stopped
     environment:
       POSTGRES_DB: servereye
-      POSTGRES_USER: servereye
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
     volumes:
       - servereye_postgres_static_data:/var/lib/postgresql/data
@@ -161,7 +161,7 @@ services:
     networks:
       - servereye-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U servereye"]
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -184,6 +184,7 @@ volumes:
 
 networks:
   servereye-network:
+    name: servereye-network
     driver: bridge
     ipam:
       config:

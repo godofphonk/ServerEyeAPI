@@ -317,10 +317,10 @@ jobs:
               environment:
                 - HOST=0.0.0.0
                 - PORT=8080
-                - DATABASE_URL=postgres://servereye:\${POSTGRES_PASSWORD}@postgres:5432/servereye?sslmode=disable
-                - KEYS_DATABASE_URL=postgres://servereye:\${POSTGRES_PASSWORD}@postgres:5432/servereye?sslmode=disable
-                - TIMESCALEDB_URL=postgres://servereye:\${POSTGRES_PASSWORD}@timescaledb:5432/servereye?sslmode=disable
-                - STATIC_DATA_URL=postgres://servereye:\${POSTGRES_PASSWORD}@postgres-static:5432/servereye?sslmode=disable
+                - DATABASE_URL=postgres://servereye:\${POSTGRES_PASSWORD}@api-postgres:5432/servereye?sslmode=disable
+                - KEYS_DATABASE_URL=postgres://servereye:\${POSTGRES_PASSWORD}@api-postgres:5432/servereye?sslmode=disable
+                - TIMESCALEDB_URL=postgres://servereye:\${POSTGRES_PASSWORD}@api-timescaledb:5432/servereye?sslmode=disable
+                - STATIC_DATA_URL=postgres://servereye:\${POSTGRES_PASSWORD}@api-postgres-static:5432/servereye?sslmode=disable
                 - JWT_SECRET=\${JWT_SECRET}
                 - WEBHOOK_SECRET=\${WEBHOOK_SECRET}
                 - WEB_URL=\${WEB_URL:-https://api.servereye.dev}
@@ -348,10 +348,10 @@ jobs:
           sudo tee .env > /dev/null <<EOF
           HOST=0.0.0.0
           PORT=8080
-          DATABASE_URL=postgres://servereye:${{ secrets.POSTGRES_PASSWORD }}@postgres:5432/servereye?sslmode=disable
-          KEYS_DATABASE_URL=postgres://servereye:${{ secrets.POSTGRES_PASSWORD }}@postgres:5432/servereye?sslmode=disable
-          TIMESCALEDB_URL=postgres://servereye:${{ secrets.POSTGRES_PASSWORD }}@timescaledb:5432/servereye?sslmode=disable
-          STATIC_DATA_URL=postgres://servereye:${{ secrets.POSTGRES_PASSWORD }}@postgres-static:5432/servereye?sslmode=disable
+          DATABASE_URL=postgres://servereye:${{ secrets.POSTGRES_PASSWORD }}@api-postgres:5432/servereye?sslmode=disable
+          KEYS_DATABASE_URL=postgres://servereye:${{ secrets.POSTGRES_PASSWORD }}@api-postgres:5432/servereye?sslmode=disable
+          TIMESCALEDB_URL=postgres://servereye:${{ secrets.POSTGRES_PASSWORD }}@api-timescaledb:5432/servereye?sslmode=disable
+          STATIC_DATA_URL=postgres://servereye:${{ secrets.POSTGRES_PASSWORD }}@api-postgres-static:5432/servereye?sslmode=disable
           JWT_SECRET=${{ secrets.JWT_SECRET }}
           WEBHOOK_SECRET=${{ secrets.WEBHOOK_SECRET }}
           WEB_URL=${{ vars.WEB_URL || 'https://api.servereye.dev' }}
@@ -440,7 +440,10 @@ jobs:
           echo "📝 Applying migration-008 to TimescaleDB..."
           if [ -f "./deployments/migration-008-add-storage-temperatures.sql" ]; then
             echo "Applying migration-008 to TimescaleDB..."
-            sudo docker exec -i ServereyeAPI-timescaledb psql -U postgres -d servereye < "./deployments/migration-008-add-storage-temperatures.sql" || echo "Migration-008 already applied or failed"
+            sudo docker exec ServereyeAPI-timescaledb psql -U postgres -d servereye -c "ALTER TABLE server_metrics ADD COLUMN IF NOT EXISTS storage_temperatures JSONB;" || echo "Column already exists"
+            sudo docker exec ServereyeAPI-timescaledb psql -U postgres -d servereye -c "UPDATE server_metrics SET storage_temperatures = '[]' WHERE storage_temperatures IS NULL;" || echo "Update already applied"
+            sudo docker exec ServereyeAPI-timescaledb psql -U postgres -d servereye -c "CREATE INDEX IF NOT EXISTS idx_server_metrics_storage_temperatures ON server_metrics USING GIN (storage_temperatures) WHERE storage_temperatures IS NOT NULL;" || echo "Index already exists"
+            sudo docker exec ServereyeAPI-timescaledb psql -U postgres -d servereye -c "COMMENT ON COLUMN server_metrics.storage_temperatures IS 'JSON array of storage device temperatures with device name, type, and temperature';" || echo "Comment already exists"
           fi
           
           # Create servereye database in postgres-static
