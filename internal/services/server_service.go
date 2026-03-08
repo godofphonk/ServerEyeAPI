@@ -35,17 +35,19 @@ import (
 
 // ServerService handles server-related business logic
 type ServerService struct {
-	serverRepo interfaces.ServerRepository
-	keyRepo    interfaces.GeneratedKeyRepository
-	logger     *logrus.Logger
+	serverRepo     interfaces.ServerRepository
+	keyRepo        interfaces.GeneratedKeyRepository
+	identifierRepo interfaces.ServerSourceIdentifierRepository
+	logger         *logrus.Logger
 }
 
 // NewServerService creates a new server service
-func NewServerService(serverRepo interfaces.ServerRepository, keyRepo interfaces.GeneratedKeyRepository, logger *logrus.Logger) *ServerService {
+func NewServerService(serverRepo interfaces.ServerRepository, keyRepo interfaces.GeneratedKeyRepository, identifierRepo interfaces.ServerSourceIdentifierRepository, logger *logrus.Logger) *ServerService {
 	return &ServerService{
-		serverRepo: serverRepo,
-		keyRepo:    keyRepo,
-		logger:     logger,
+		serverRepo:     serverRepo,
+		keyRepo:        keyRepo,
+		identifierRepo: identifierRepo,
+		logger:         logger,
 	}
 }
 
@@ -379,4 +381,259 @@ func (s *ServerService) RemoveServerSource(ctx context.Context, serverID, source
 	}
 
 	return s.serverRepo.UpdateSources(ctx, serverID, newSourcesStr)
+}
+
+// AddServerSourceIdentifiers adds multiple identifiers for a server source
+func (s *ServerService) AddServerSourceIdentifiers(ctx context.Context, serverID string, req *models.SourceIdentifierRequest) error {
+	// Validate request
+	if err := s.validateSourceIdentifierRequest(req); err != nil {
+		return err
+	}
+
+	// Get current server info to ensure server exists
+	_, err := s.serverRepo.GetByID(ctx, serverID)
+	if err != nil {
+		return fmt.Errorf("server not found: %w", err)
+	}
+
+	// Create identifiers
+	identifiers := make([]*models.ServerSourceIdentifier, 0, len(req.Identifiers))
+	for _, id := range req.Identifiers {
+		// Check if identifier already exists
+		existing, err := s.identifierRepo.GetByServerIDAndIdentifier(ctx, serverID, req.SourceType, id)
+		if err == nil && existing != nil {
+			continue // Skip existing identifier
+		}
+
+		identifier := &models.ServerSourceIdentifier{
+			ServerID:       serverID,
+			SourceType:     req.SourceType,
+			Identifier:     id,
+			IdentifierType: req.IdentifierType,
+			Metadata:       req.Metadata,
+		}
+		identifiers = append(identifiers, identifier)
+	}
+
+	if len(identifiers) == 0 {
+		return fmt.Errorf("all identifiers already exist")
+	}
+
+	// Create batch
+	if err := s.identifierRepo.CreateBatch(ctx, identifiers); err != nil {
+		return fmt.Errorf("failed to create identifiers: %w", err)
+	}
+
+	// Also update legacy sources field if needed
+	if err := s.AddServerSource(ctx, serverID, req.SourceType); err != nil {
+		s.logger.WithError(err).Warn("Failed to update legacy sources field")
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"server_id":       serverID,
+		"source_type":     req.SourceType,
+		"identifiers":     len(identifiers),
+		"identifier_type": req.IdentifierType,
+	}).Info("Server source identifiers added successfully")
+
+	return nil
+}
+
+// GetServerSourceIdentifiers gets all identifiers for a server
+func (s *ServerService) GetServerSourceIdentifiers(ctx context.Context, serverID string) (*models.ServerSourcesResponse, error) {
+	// Get server info
+	server, err := s.serverRepo.GetByID(ctx, serverID)
+	if err != nil {
+		return nil, fmt.Errorf("server not found: %w", err)
+	}
+
+	// Get all identifiers
+	identifiersMap, err := s.identifierRepo.GetAllByServerID(ctx, serverID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get identifiers: %w", err)
+	}
+
+	// Convert map to response format
+	identifiers := make(map[string][]models.ServerSourceIdentifier)
+	for sourceType, ids := range identifiersMap {
+		identifiers[sourceType] = make([]models.ServerSourceIdentifier, len(ids))
+		for i, id := range ids {
+			identifiers[sourceType][i] = *id
+		}
+	}
+
+	// Parse legacy sources
+	sources := []string{}
+	if server.Sources != "" {
+		sources = strings.Split(server.Sources, ",")
+		for i, src := range sources {
+			sources[i] = strings.TrimSpace(src)
+		}
+	}
+
+	return &models.ServerSourcesResponse{
+		ServerID:    serverID,
+		Sources:     sources,
+		Identifiers: identifiers,
+	}, nil
+}
+
+// RemoveServerSourceIdentifiers removes identifiers for a server source
+func (s *ServerService) RemoveServerSourceIdentifiers(ctx context.Context, serverID, sourceType string, identifiers []string) error {
+	// Validate source type
+	if sourceType != "TGBot" && sourceType != "Web" && sourceType != "Email" {
+		return fmt.Errorf("invalid source type: %s", sourceType)
+	}
+
+	// Get server info
+	_, err := s.serverRepo.GetByID(ctx, serverID)
+	if err != nil {
+		return fmt.Errorf("server not found: %w", err)
+	}
+
+	// Delete identifiers
+	for _, identifier := range identifiers {
+		err := s.identifierRepo.DeleteByServerIDSourceTypeAndIdentifier(ctx, serverID, sourceType, identifier)
+		if err != nil {
+			s.logger.WithError(err).WithFields(logrus.Fields{
+				"server_id":   serverID,
+				"source_type": sourceType,
+				"identifier":  identifier,
+			}).Warn("Failed to delete identifier")
+		}
+	}
+
+	// Check if there are any remaining identifiers for this source type
+	remaining, err := s.identifierRepo.GetByServerIDAndSourceType(ctx, serverID, sourceType)
+	if err != nil {
+		s.logger.WithError(err).Warn("Failed to check remaining identifiers")
+	} else if len(remaining) == 0 {
+		// Remove from legacy sources field
+		err := s.RemoveServerSource(ctx, serverID, sourceType)
+		if err != nil {
+			s.logger.WithError(err).Warn("Failed to remove from legacy sources field")
+		}
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"server_id":   serverID,
+		"source_type": sourceType,
+		"identifiers": len(identifiers),
+	}).Info("Server source identifiers removed successfully")
+
+	return nil
+}
+
+// validateSourceIdentifierRequest validates source identifier request
+func (s *ServerService) validateSourceIdentifierRequest(req *models.SourceIdentifierRequest) error {
+	if req.SourceType == "" {
+		return fmt.Errorf("source_type is required")
+	}
+	if req.IdentifierType == "" {
+		return fmt.Errorf("identifier_type is required")
+	}
+	if len(req.Identifiers) == 0 {
+		return fmt.Errorf("at least one identifier is required")
+	}
+
+	// Validate source type
+	validSourceTypes := []string{"TGBot", "Web", "Email"}
+	isValidSourceType := false
+	for _, st := range validSourceTypes {
+		if req.SourceType == st {
+			isValidSourceType = true
+			break
+		}
+	}
+	if !isValidSourceType {
+		return fmt.Errorf("invalid source_type: %s", req.SourceType)
+	}
+
+	// Validate identifier type
+	validIdentifierTypes := []string{"telegram_id", "user_id", "email"}
+	isValidIdentifierType := false
+	for _, it := range validIdentifierTypes {
+		if req.IdentifierType == it {
+			isValidIdentifierType = true
+			break
+		}
+	}
+	if !isValidIdentifierType {
+		return fmt.Errorf("invalid identifier_type: %s", req.IdentifierType)
+	}
+
+	// Validate identifiers for type
+	for _, id := range req.Identifiers {
+		if id == "" {
+			return fmt.Errorf("identifier cannot be empty")
+		}
+
+		// Additional validation based on type
+		switch req.IdentifierType {
+		case "telegram_id":
+			// Telegram ID should be numeric
+			if !s.isNumeric(id) {
+				return fmt.Errorf("telegram_id must be numeric: %s", id)
+			}
+		case "email":
+			// Basic email validation
+			if !strings.Contains(id, "@") {
+				return fmt.Errorf("invalid email format: %s", id)
+			}
+		}
+	}
+
+	return nil
+}
+
+// isNumeric checks if string is numeric
+func (s *ServerService) isNumeric(str string) bool {
+	for _, c := range str {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+// GetServersByTelegramID finds all servers associated with a Telegram ID
+func (s *ServerService) GetServersByTelegramID(ctx context.Context, telegramID string) ([]*models.Server, error) {
+	// Validate telegram ID
+	if !s.isNumeric(telegramID) {
+		return nil, fmt.Errorf("telegram_id must be numeric: %s", telegramID)
+	}
+
+	// Get all identifiers with this telegram ID
+	identifiers, err := s.identifierRepo.GetByIdentifier(ctx, "telegram_id", telegramID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get identifiers: %w", err)
+	}
+
+	if len(identifiers) == 0 {
+		return []*models.Server{}, nil
+	}
+
+	// Get unique server IDs
+	serverIDMap := make(map[string]bool)
+	for _, identifier := range identifiers {
+		serverIDMap[identifier.ServerID] = true
+	}
+
+	// Fetch all servers
+	servers := make([]*models.Server, 0, len(serverIDMap))
+	for serverID := range serverIDMap {
+		server, err := s.serverRepo.GetByID(ctx, serverID)
+		if err != nil {
+			s.logger.WithError(err).WithField("server_id", serverID).Warn("Failed to get server by ID")
+			continue
+		}
+		servers = append(servers, server)
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"telegram_id":   telegramID,
+		"servers_count": len(servers),
+	}).Info("Servers retrieved by Telegram ID")
+
+	return servers, nil
 }
