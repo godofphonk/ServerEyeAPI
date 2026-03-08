@@ -430,7 +430,7 @@ jobs:
           
           # Run PostgreSQL migrations (main database)
           echo "📝 Running PostgreSQL migrations for main database..."
-          for migration in ./deployments/migration-001-*.sql ./deployments/migration-002-*.sql ./deployments/migration-003-*.sql ./deployments/migration-004-*.sql ./deployments/migration-009-*.sql ./deployments/migration-010-*.sql; do
+          for migration in ./deployments/migration-001-*.sql ./deployments/migration-002-*.sql ./deployments/migration-003-*.sql ./deployments/migration-004-*.sql ./deployments/migration-009-*.sql ./deployments/migration-010-*.sql ./deployments/migration-011-*.sql; do
             if [ -f "$migration" ]; then
               echo "Applying migration: $(basename $migration)"
               sudo docker exec ServereyeAPI-postgres psql -U postgres -d servereye -f "/migrations/$(basename $migration)" || echo "Migration already applied or failed: $(basename $migration)"

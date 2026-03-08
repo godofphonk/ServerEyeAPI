@@ -50,8 +50,8 @@ func NewServerSourceIdentifierRepository(db *sql.DB, logger *logrus.Logger) inte
 // Create creates a new server source identifier
 func (r *ServerSourceIdentifierRepository) Create(ctx context.Context, identifier *models.ServerSourceIdentifier) error {
 	query := `
-		INSERT INTO server_source_identifiers (server_id, source_type, identifier, identifier_type, metadata, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO server_source_identifiers (server_id, source_type, identifier, identifier_type, telegram_id, metadata, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id
 	`
 
@@ -71,6 +71,7 @@ func (r *ServerSourceIdentifierRepository) Create(ctx context.Context, identifie
 		identifier.SourceType,
 		identifier.Identifier,
 		identifier.IdentifierType,
+		identifier.TelegramID,
 		metadataJSON,
 		time.Now(),
 		time.Now(),
@@ -81,11 +82,11 @@ func (r *ServerSourceIdentifierRepository) Create(ctx context.Context, identifie
 	}
 
 	r.logger.WithFields(logrus.Fields{
-		"id":               identifier.ID,
-		"server_id":        identifier.ServerID,
-		"source_type":      identifier.SourceType,
-		"identifier":       identifier.Identifier,
-		"identifier_type":  identifier.IdentifierType,
+		"id":              identifier.ID,
+		"server_id":       identifier.ServerID,
+		"source_type":     identifier.SourceType,
+		"identifier":      identifier.Identifier,
+		"identifier_type": identifier.IdentifierType,
 	}).Info("Server source identifier created successfully")
 
 	return nil
@@ -94,7 +95,7 @@ func (r *ServerSourceIdentifierRepository) Create(ctx context.Context, identifie
 // GetByID retrieves a server source identifier by ID
 func (r *ServerSourceIdentifierRepository) GetByID(ctx context.Context, id int64) (*models.ServerSourceIdentifier, error) {
 	query := `
-		SELECT id, server_id, source_type, identifier, identifier_type, metadata, created_at, updated_at
+		SELECT id, server_id, source_type, identifier, identifier_type, telegram_id, metadata, created_at, updated_at
 		FROM server_source_identifiers
 		WHERE id = $1
 	`
@@ -108,6 +109,7 @@ func (r *ServerSourceIdentifierRepository) GetByID(ctx context.Context, id int64
 		&identifier.SourceType,
 		&identifier.Identifier,
 		&identifier.IdentifierType,
+		&identifier.TelegramID,
 		&metadataJSON,
 		&identifier.CreatedAt,
 		&identifier.UpdatedAt,
@@ -134,7 +136,7 @@ func (r *ServerSourceIdentifierRepository) GetByID(ctx context.Context, id int64
 // GetByServerID retrieves all server source identifiers for a server
 func (r *ServerSourceIdentifierRepository) GetByServerID(ctx context.Context, serverID string) ([]*models.ServerSourceIdentifier, error) {
 	query := `
-		SELECT id, server_id, source_type, identifier, identifier_type, metadata, created_at, updated_at
+		SELECT id, server_id, source_type, identifier, identifier_type, telegram_id, metadata, created_at, updated_at
 		FROM server_source_identifiers
 		WHERE server_id = $1
 		ORDER BY created_at DESC
@@ -146,7 +148,7 @@ func (r *ServerSourceIdentifierRepository) GetByServerID(ctx context.Context, se
 // GetByServerIDAndSourceType retrieves identifiers for a server and source type
 func (r *ServerSourceIdentifierRepository) GetByServerIDAndSourceType(ctx context.Context, serverID, sourceType string) ([]*models.ServerSourceIdentifier, error) {
 	query := `
-		SELECT id, server_id, source_type, identifier, identifier_type, metadata, created_at, updated_at
+		SELECT id, server_id, source_type, identifier, identifier_type, telegram_id, metadata, created_at, updated_at
 		FROM server_source_identifiers
 		WHERE server_id = $1 AND source_type = $2
 		ORDER BY created_at DESC
@@ -158,7 +160,7 @@ func (r *ServerSourceIdentifierRepository) GetByServerIDAndSourceType(ctx contex
 // GetByServerIDAndIdentifier retrieves a specific identifier
 func (r *ServerSourceIdentifierRepository) GetByServerIDAndIdentifier(ctx context.Context, serverID, sourceType, identifier string) (*models.ServerSourceIdentifier, error) {
 	query := `
-		SELECT id, server_id, source_type, identifier, identifier_type, metadata, created_at, updated_at
+		SELECT id, server_id, source_type, identifier, identifier_type, telegram_id, metadata, created_at, updated_at
 		FROM server_source_identifiers
 		WHERE server_id = $1 AND source_type = $2 AND identifier = $3
 	`
@@ -172,6 +174,7 @@ func (r *ServerSourceIdentifierRepository) GetByServerIDAndIdentifier(ctx contex
 		&ident.SourceType,
 		&ident.Identifier,
 		&ident.IdentifierType,
+		&ident.TelegramID,
 		&metadataJSON,
 		&ident.CreatedAt,
 		&ident.UpdatedAt,
@@ -199,7 +202,7 @@ func (r *ServerSourceIdentifierRepository) GetByServerIDAndIdentifier(ctx contex
 func (r *ServerSourceIdentifierRepository) Update(ctx context.Context, identifier *models.ServerSourceIdentifier) error {
 	query := `
 		UPDATE server_source_identifiers
-		SET identifier_type = $2, metadata = $3, updated_at = $4
+		SET identifier_type = $2, telegram_id = $3, metadata = $4, updated_at = $5
 		WHERE id = $1
 	`
 
@@ -217,6 +220,7 @@ func (r *ServerSourceIdentifierRepository) Update(ctx context.Context, identifie
 	result, err := r.db.ExecContext(ctx, query,
 		identifier.ID,
 		identifier.IdentifierType,
+		identifier.TelegramID,
 		metadataJSON,
 		time.Now(),
 	)
@@ -325,8 +329,8 @@ func (r *ServerSourceIdentifierRepository) CreateBatch(ctx context.Context, iden
 	defer tx.Rollback()
 
 	query := `
-		INSERT INTO server_source_identifiers (server_id, source_type, identifier, identifier_type, metadata, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO server_source_identifiers (server_id, source_type, identifier, identifier_type, telegram_id, metadata, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		RETURNING id
 	`
 
@@ -346,6 +350,7 @@ func (r *ServerSourceIdentifierRepository) CreateBatch(ctx context.Context, iden
 			identifier.SourceType,
 			identifier.Identifier,
 			identifier.IdentifierType,
+			identifier.TelegramID,
 			metadataJSON,
 			time.Now(),
 			time.Now(),
@@ -396,8 +401,8 @@ func (r *ServerSourceIdentifierRepository) DeleteBatch(ctx context.Context, ids 
 	}
 
 	r.logger.WithFields(logrus.Fields{
-		"count":       len(ids),
-		"rows_count":  rowsAffected,
+		"count":      len(ids),
+		"rows_count": rowsAffected,
 	}).Info("Server source identifiers deleted successfully in batch")
 
 	return nil
@@ -421,13 +426,25 @@ func (r *ServerSourceIdentifierRepository) GetAllByServerID(ctx context.Context,
 // GetByIdentifier finds all servers with a specific identifier
 func (r *ServerSourceIdentifierRepository) GetByIdentifier(ctx context.Context, identifierType, identifier string) ([]*models.ServerSourceIdentifier, error) {
 	query := `
-		SELECT id, server_id, source_type, identifier, identifier_type, metadata, created_at, updated_at
+		SELECT id, server_id, source_type, identifier, identifier_type, telegram_id, metadata, created_at, updated_at
 		FROM server_source_identifiers
 		WHERE identifier_type = $1 AND identifier = $2
 		ORDER BY created_at DESC
 	`
 
 	return r.scanIdentifiers(ctx, query, identifierType, identifier)
+}
+
+// GetByTelegramID finds all servers with a specific telegram_id
+func (r *ServerSourceIdentifierRepository) GetByTelegramID(ctx context.Context, telegramID int64) ([]*models.ServerSourceIdentifier, error) {
+	query := `
+		SELECT id, server_id, source_type, identifier, identifier_type, telegram_id, metadata, created_at, updated_at
+		FROM server_source_identifiers
+		WHERE telegram_id = $1
+		ORDER BY created_at DESC
+	`
+
+	return r.scanIdentifiers(ctx, query, telegramID)
 }
 
 // Ping checks database connectivity
@@ -454,6 +471,7 @@ func (r *ServerSourceIdentifierRepository) scanIdentifiers(ctx context.Context, 
 			&identifier.SourceType,
 			&identifier.Identifier,
 			&identifier.IdentifierType,
+			&identifier.TelegramID,
 			&metadataJSON,
 			&identifier.CreatedAt,
 			&identifier.UpdatedAt,

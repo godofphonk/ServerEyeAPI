@@ -23,6 +23,7 @@ package services
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -410,6 +411,7 @@ func (s *ServerService) AddServerSourceIdentifiers(ctx context.Context, serverID
 			SourceType:     req.SourceType,
 			Identifier:     id,
 			IdentifierType: req.IdentifierType,
+			TelegramID:     req.TelegramID,
 			Metadata:       req.Metadata,
 		}
 		identifiers = append(identifiers, identifier)
@@ -603,8 +605,14 @@ func (s *ServerService) GetServersByTelegramID(ctx context.Context, telegramID s
 		return nil, fmt.Errorf("telegram_id must be numeric: %s", telegramID)
 	}
 
+	// Convert to int64
+	telegramIDInt, err := strconv.ParseInt(telegramID, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("invalid telegram_id format: %w", err)
+	}
+
 	// Get all identifiers with this telegram ID
-	identifiers, err := s.identifierRepo.GetByIdentifier(ctx, "telegram_id", telegramID)
+	identifiers, err := s.identifierRepo.GetByTelegramID(ctx, telegramIDInt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get identifiers: %w", err)
 	}

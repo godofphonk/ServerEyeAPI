@@ -171,6 +171,11 @@ func (m *MockIdentifierRepo) GetByIdentifier(ctx context.Context, identifierType
 	return args.Get(0).([]*models.ServerSourceIdentifier), args.Error(1)
 }
 
+func (m *MockIdentifierRepo) GetByTelegramID(ctx context.Context, telegramID int64) ([]*models.ServerSourceIdentifier, error) {
+	args := m.Called(ctx, telegramID)
+	return args.Get(0).([]*models.ServerSourceIdentifier), args.Error(1)
+}
+
 func (m *MockIdentifierRepo) Ping(ctx context.Context) error {
 	args := m.Called(ctx)
 	return args.Error(0)

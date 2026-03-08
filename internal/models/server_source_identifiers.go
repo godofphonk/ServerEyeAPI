@@ -26,10 +26,11 @@ import "time"
 type ServerSourceIdentifier struct {
 	ID             int64                  `json:"id" db:"id"`
 	ServerID       string                 `json:"server_id" db:"server_id"`
-	SourceType     string                 `json:"source_type" db:"source_type"`         // TGBot, Web, Email, etc.
-	Identifier     string                 `json:"identifier" db:"identifier"`           // TG ID, user ID, email
-	IdentifierType string                 `json:"identifier_type" db:"identifier_type"` // telegram_id, user_id, email
-	Metadata       map[string]interface{} `json:"metadata" db:"metadata"`               // additional info
+	SourceType     string                 `json:"source_type" db:"source_type"`           // TGBot, Web, Email, etc.
+	Identifier     string                 `json:"identifier" db:"identifier"`             // TG ID, user ID, email
+	IdentifierType string                 `json:"identifier_type" db:"identifier_type"`   // telegram_id, user_id, email
+	TelegramID     *int64                 `json:"telegram_id,omitempty" db:"telegram_id"` // Optional Telegram ID for account linking
+	Metadata       map[string]interface{} `json:"metadata" db:"metadata"`                 // additional info
 	CreatedAt      time.Time              `json:"created_at" db:"created_at"`
 	UpdatedAt      time.Time              `json:"updated_at" db:"updated_at"`
 }
@@ -39,6 +40,7 @@ type SourceIdentifierRequest struct {
 	SourceType     string                 `json:"source_type" validate:"required,oneof=TGBot Web Email"`               // TGBot, Web, Email
 	Identifiers    []string               `json:"identifiers" validate:"required,min=1"`                               // TG IDs, user IDs, emails
 	IdentifierType string                 `json:"identifier_type" validate:"required,oneof=telegram_id user_id email"` // telegram_id, user_id, email
+	TelegramID     *int64                 `json:"telegram_id,omitempty"`                                               // Optional Telegram ID for account linking
 	Metadata       map[string]interface{} `json:"metadata,omitempty"`                                                  // optional metadata
 }
 
