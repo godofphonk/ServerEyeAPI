@@ -73,6 +73,18 @@ func SetupRoutes(
 	router.HandleFunc("/api/servers/by-key/{server_key}/sources", serverSourcesHandler.GetServerSourcesByKey).Methods("GET")
 	router.HandleFunc("/api/servers/by-key/{server_key}/sources/{source}", serverSourcesHandler.RemoveServerSourceByKey).Methods("DELETE")
 
+	// Server source identifiers endpoints (public for TG bot and web)
+	router.HandleFunc("/api/servers/{server_id}/sources/identifiers", serverSourcesHandler.AddServerSourceIdentifiers).Methods("POST")
+	router.HandleFunc("/api/servers/{server_id}/sources/identifiers", serverSourcesHandler.GetServerSourceIdentifiers).Methods("GET")
+	router.HandleFunc("/api/servers/{server_id}/sources/{source_type}/identifiers", serverSourcesHandler.RemoveServerSourceIdentifiers).Methods("DELETE")
+
+	// Server source identifiers by key endpoints (public for TG bot)
+	router.HandleFunc("/api/servers/by-key/{server_key}/sources/identifiers", serverSourcesHandler.AddServerSourceIdentifiersByKey).Methods("POST")
+	router.HandleFunc("/api/servers/by-key/{server_key}/sources/identifiers", serverSourcesHandler.GetServerSourceIdentifiersByKey).Methods("GET")
+
+	// Get servers by Telegram ID (public for TG bot)
+	router.HandleFunc("/api/telegram/{telegram_id}/servers", serverSourcesHandler.GetServersByTelegramID).Methods("GET")
+
 	// API Key management routes (admin only) - TODO: Add middleware protection
 	router.HandleFunc("/api/admin/keys", apiKeyHandler.CreateAPIKey).Methods("POST")
 	router.HandleFunc("/api/admin/keys", apiKeyHandler.ListAPIKeys).Methods("GET")
