@@ -492,6 +492,56 @@ func (h *ServerSourcesHandler) writeJSON(w http.ResponseWriter, status int, data
 	json.NewEncoder(w).Encode(data)
 }
 
+// UpdateTelegramID handles PUT /api/servers/{server_id}/sources/{source_type}/identifiers/{identifier}/telegram-id
+func (h *ServerSourcesHandler) UpdateTelegramID(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serverID := vars["server_id"]
+	sourceType := vars["source_type"]
+	identifier := vars["identifier"]
+
+	if serverID == "" || sourceType == "" || identifier == "" {
+		h.writeError(w, "server_id, source_type, and identifier are required", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		TelegramID int64 `json:"telegram_id" validate:"required"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Update telegram_id
+	err := h.serverService.UpdateTelegramID(r.Context(), serverID, sourceType, identifier, req.TelegramID)
+	if err != nil {
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"server_id":   serverID,
+			"source_type": sourceType,
+			"identifier":  identifier,
+			"telegram_id": req.TelegramID,
+		}).Error("Failed to update telegram_id")
+		h.writeError(w, "Failed to update telegram_id", http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.WithFields(logrus.Fields{
+		"server_id":   serverID,
+		"source_type": sourceType,
+		"identifier":  identifier,
+		"telegram_id": req.TelegramID,
+	}).Info("Telegram ID updated successfully")
+
+	h.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"message":     "Telegram ID updated successfully",
+		"server_id":   serverID,
+		"source_type": sourceType,
+		"identifier":  identifier,
+		"telegram_id": req.TelegramID,
+	})
+}
+
 // writeError writes error response
 func (h *ServerSourcesHandler) writeError(w http.ResponseWriter, message string, status int) {
 	h.writeJSON(w, status, map[string]string{"error": message})

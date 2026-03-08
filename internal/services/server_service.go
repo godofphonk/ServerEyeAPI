@@ -645,3 +645,36 @@ func (s *ServerService) GetServersByTelegramID(ctx context.Context, telegramID s
 
 	return servers, nil
 }
+
+// UpdateTelegramID updates telegram_id for an existing server source identifier
+func (s *ServerService) UpdateTelegramID(ctx context.Context, serverID, sourceType, identifier string, telegramID int64) error {
+	// Get existing identifier
+	existing, err := s.identifierRepo.GetByServerIDAndIdentifier(ctx, serverID, sourceType, identifier)
+	if err != nil {
+		return fmt.Errorf("identifier not found: %w", err)
+	}
+
+	// Update telegram_id
+	existing.TelegramID = &telegramID
+	existing.UpdatedAt = time.Now()
+
+	// Add update metadata
+	if existing.Metadata == nil {
+		existing.Metadata = make(map[string]interface{})
+	}
+	existing.Metadata["telegram_linked_at"] = time.Now().Format(time.RFC3339)
+
+	// Save changes
+	if err := s.identifierRepo.Update(ctx, existing); err != nil {
+		return fmt.Errorf("failed to update telegram_id: %w", err)
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"server_id":   serverID,
+		"source_type": sourceType,
+		"identifier":  identifier,
+		"telegram_id": telegramID,
+	}).Info("Telegram ID updated successfully")
+
+	return nil
+}

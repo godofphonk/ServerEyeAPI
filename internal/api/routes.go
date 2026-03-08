@@ -77,6 +77,7 @@ func SetupRoutes(
 	router.HandleFunc("/api/servers/{server_id}/sources/identifiers", serverSourcesHandler.AddServerSourceIdentifiers).Methods("POST")
 	router.HandleFunc("/api/servers/{server_id}/sources/identifiers", serverSourcesHandler.GetServerSourceIdentifiers).Methods("GET")
 	router.HandleFunc("/api/servers/{server_id}/sources/{source_type}/identifiers", serverSourcesHandler.RemoveServerSourceIdentifiers).Methods("DELETE")
+	router.HandleFunc("/api/servers/{server_id}/sources/{source_type}/identifiers/{identifier}/telegram-id", serverSourcesHandler.UpdateTelegramID).Methods("PUT")
 
 	// Server source identifiers by key endpoints (public for TG bot)
 	router.HandleFunc("/api/servers/by-key/{server_key}/sources/identifiers", serverSourcesHandler.AddServerSourceIdentifiersByKey).Methods("POST")
