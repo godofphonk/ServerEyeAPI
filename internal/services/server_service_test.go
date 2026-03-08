@@ -37,6 +37,14 @@ type MockServerRepo struct {
 	mock.Mock
 }
 
+type MockIdentifierRepo struct {
+	mock.Mock
+}
+
+type MockKeyRepo struct {
+	mock.Mock
+}
+
 func (m *MockServerRepo) Create(ctx context.Context, server *models.Server) error {
 	args := m.Called(ctx, server)
 	return args.Error(0)
@@ -97,8 +105,75 @@ func (m *MockServerRepo) UpdateLastSeen(ctx context.Context, serverID string, la
 	return args.Error(0)
 }
 
-type MockKeyRepo struct {
-	mock.Mock
+// MockIdentifierRepo methods
+func (m *MockIdentifierRepo) Create(ctx context.Context, identifier *models.ServerSourceIdentifier) error {
+	args := m.Called(ctx, identifier)
+	return args.Error(0)
+}
+
+func (m *MockIdentifierRepo) GetByID(ctx context.Context, id int64) (*models.ServerSourceIdentifier, error) {
+	args := m.Called(ctx, id)
+	return args.Get(0).(*models.ServerSourceIdentifier), args.Error(1)
+}
+
+func (m *MockIdentifierRepo) GetByServerID(ctx context.Context, serverID string) ([]*models.ServerSourceIdentifier, error) {
+	args := m.Called(ctx, serverID)
+	return args.Get(0).([]*models.ServerSourceIdentifier), args.Error(1)
+}
+
+func (m *MockIdentifierRepo) GetByServerIDAndSourceType(ctx context.Context, serverID, sourceType string) ([]*models.ServerSourceIdentifier, error) {
+	args := m.Called(ctx, serverID, sourceType)
+	return args.Get(0).([]*models.ServerSourceIdentifier), args.Error(1)
+}
+
+func (m *MockIdentifierRepo) GetByServerIDAndIdentifier(ctx context.Context, serverID, sourceType, identifier string) (*models.ServerSourceIdentifier, error) {
+	args := m.Called(ctx, serverID, sourceType, identifier)
+	return args.Get(0).(*models.ServerSourceIdentifier), args.Error(1)
+}
+
+func (m *MockIdentifierRepo) Update(ctx context.Context, identifier *models.ServerSourceIdentifier) error {
+	args := m.Called(ctx, identifier)
+	return args.Error(0)
+}
+
+func (m *MockIdentifierRepo) Delete(ctx context.Context, id int64) error {
+	args := m.Called(ctx, id)
+	return args.Error(0)
+}
+
+func (m *MockIdentifierRepo) DeleteByServerIDAndSourceType(ctx context.Context, serverID, sourceType string) error {
+	args := m.Called(ctx, serverID, sourceType)
+	return args.Error(0)
+}
+
+func (m *MockIdentifierRepo) DeleteByServerIDSourceTypeAndIdentifier(ctx context.Context, serverID, sourceType, identifier string) error {
+	args := m.Called(ctx, serverID, sourceType, identifier)
+	return args.Error(0)
+}
+
+func (m *MockIdentifierRepo) CreateBatch(ctx context.Context, identifiers []*models.ServerSourceIdentifier) error {
+	args := m.Called(ctx, identifiers)
+	return args.Error(0)
+}
+
+func (m *MockIdentifierRepo) DeleteBatch(ctx context.Context, ids []int64) error {
+	args := m.Called(ctx, ids)
+	return args.Error(0)
+}
+
+func (m *MockIdentifierRepo) GetAllByServerID(ctx context.Context, serverID string) (map[string][]*models.ServerSourceIdentifier, error) {
+	args := m.Called(ctx, serverID)
+	return args.Get(0).(map[string][]*models.ServerSourceIdentifier), args.Error(1)
+}
+
+func (m *MockIdentifierRepo) GetByIdentifier(ctx context.Context, identifierType, identifier string) ([]*models.ServerSourceIdentifier, error) {
+	args := m.Called(ctx, identifierType, identifier)
+	return args.Get(0).([]*models.ServerSourceIdentifier), args.Error(1)
+}
+
+func (m *MockIdentifierRepo) Ping(ctx context.Context) error {
+	args := m.Called(ctx)
+	return args.Error(0)
 }
 
 func (m *MockKeyRepo) Create(ctx context.Context, key *models.GeneratedKey) error {
@@ -144,9 +219,10 @@ func (m *MockKeyRepo) ListByStatus(ctx context.Context, status string) ([]*model
 func TestNewServerService(t *testing.T) {
 	mockServerRepo := &MockServerRepo{}
 	mockKeyRepo := &MockKeyRepo{}
+	mockIdentifierRepo := &MockIdentifierRepo{}
 	logger := logrus.New()
 
-	service := NewServerService(mockServerRepo, mockKeyRepo, logger)
+	service := NewServerService(mockServerRepo, mockKeyRepo, mockIdentifierRepo, logger)
 
 	assert.NotNil(t, service)
 }

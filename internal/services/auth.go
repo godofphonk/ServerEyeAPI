@@ -31,24 +31,26 @@ import (
 
 // AuthService handles authentication operations using repositories directly
 type AuthService struct {
-	keyRepo    interfaces.GeneratedKeyRepository
-	serverRepo interfaces.ServerRepository
-	logger     *logrus.Logger
+	keyRepo        interfaces.GeneratedKeyRepository
+	serverRepo     interfaces.ServerRepository
+	identifierRepo interfaces.ServerSourceIdentifierRepository
+	logger         *logrus.Logger
 }
 
 // NewAuthService creates a new auth service
-func NewAuthService(keyRepo interfaces.GeneratedKeyRepository, serverRepo interfaces.ServerRepository, logger *logrus.Logger) *AuthService {
+func NewAuthService(keyRepo interfaces.GeneratedKeyRepository, serverRepo interfaces.ServerRepository, identifierRepo interfaces.ServerSourceIdentifierRepository, logger *logrus.Logger) *AuthService {
 	return &AuthService{
-		keyRepo:    keyRepo,
-		serverRepo: serverRepo,
-		logger:     logger,
+		keyRepo:        keyRepo,
+		serverRepo:     serverRepo,
+		identifierRepo: identifierRepo,
+		logger:         logger,
 	}
 }
 
 // RegisterKey registers a new server key
 func (s *AuthService) RegisterKey(ctx context.Context, req *models.RegisterKeyRequest) (*models.RegisterKeyResponse, error) {
 	// Use ServerService for registration
-	serverService := NewServerService(s.serverRepo, s.keyRepo, s.logger)
+	serverService := NewServerService(s.serverRepo, s.keyRepo, s.identifierRepo, s.logger)
 
 	serverReq := &RegisterServerRequest{
 		Hostname:        req.Hostname,
@@ -71,7 +73,7 @@ func (s *AuthService) RegisterKey(ctx context.Context, req *models.RegisterKeyRe
 // AuthenticateServer authenticates a server using ServerService
 func (s *AuthService) AuthenticateServer(ctx context.Context, serverID, serverKey string) (*models.GeneratedKey, error) {
 	// Use ServerService for authentication
-	serverService := NewServerService(s.serverRepo, s.keyRepo, s.logger)
+	serverService := NewServerService(s.serverRepo, s.keyRepo, s.identifierRepo, s.logger)
 
 	server, err := serverService.AuthenticateWebSocket(ctx, serverID, serverKey)
 	if err != nil {
@@ -104,13 +106,13 @@ func (s *AuthService) GetServerByID(ctx context.Context, serverID string) (*mode
 
 // UpdateServerStatus updates server status
 func (s *AuthService) UpdateServerStatus(ctx context.Context, serverID, status string) error {
-	serverService := NewServerService(s.serverRepo, s.keyRepo, s.logger)
+	serverService := NewServerService(s.serverRepo, s.keyRepo, s.identifierRepo, s.logger)
 	return serverService.UpdateServerStatus(ctx, serverID, status)
 }
 
 // ListServers retrieves all servers
 func (s *AuthService) ListServers(ctx context.Context) ([]*models.Server, error) {
-	serverService := NewServerService(s.serverRepo, s.keyRepo, s.logger)
+	serverService := NewServerService(s.serverRepo, s.keyRepo, s.identifierRepo, s.logger)
 	return serverService.ListServers(ctx, "")
 }
 

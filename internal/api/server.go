@@ -101,10 +101,11 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 
 	// Initialize repositories
 	alertRepo := timescaledbRepo.NewAlertRepository(timescaleDBClient.GetPool(), logger)
+	identifierRepo := postgresRepo.NewServerSourceIdentifierRepository(pgClient.DB(), logger)
 
 	// Initialize services with repositories
-	authService := services.NewAuthService(keyRepo, serverRepo, logger)
-	serverService := services.NewServerService(serverRepo, keyRepo, logger)
+	authService := services.NewAuthService(keyRepo, serverRepo, identifierRepo, logger)
+	serverService := services.NewServerService(serverRepo, keyRepo, identifierRepo, logger)
 	alertService := services.NewAlertService(alertRepo, logger)
 	metricsService := services.NewMetricsService(keyRepo, storageImpl, alertService, logger)
 	tieredMetricsService := services.NewTieredMetricsService(timescaleDBClient, logger)
