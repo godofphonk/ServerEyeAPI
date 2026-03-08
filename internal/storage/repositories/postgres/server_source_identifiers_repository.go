@@ -66,12 +66,19 @@ func (r *ServerSourceIdentifierRepository) Create(ctx context.Context, identifie
 		metadataJSON = []byte("{}")
 	}
 
+	var telegramIDValue interface{}
+	if identifier.TelegramID != nil {
+		telegramIDValue = *identifier.TelegramID
+	} else {
+		telegramIDValue = nil
+	}
+
 	err = r.db.QueryRowContext(ctx, query,
 		identifier.ServerID,
 		identifier.SourceType,
 		identifier.Identifier,
 		identifier.IdentifierType,
-		identifier.TelegramID,
+		telegramIDValue,
 		metadataJSON,
 		time.Now(),
 		time.Now(),
@@ -217,10 +224,17 @@ func (r *ServerSourceIdentifierRepository) Update(ctx context.Context, identifie
 		metadataJSON = []byte("{}")
 	}
 
+	var telegramIDValue interface{}
+	if identifier.TelegramID != nil {
+		telegramIDValue = *identifier.TelegramID
+	} else {
+		telegramIDValue = nil
+	}
+
 	result, err := r.db.ExecContext(ctx, query,
 		identifier.ID,
 		identifier.IdentifierType,
-		identifier.TelegramID,
+		telegramIDValue,
 		metadataJSON,
 		time.Now(),
 	)
@@ -345,12 +359,19 @@ func (r *ServerSourceIdentifierRepository) CreateBatch(ctx context.Context, iden
 			metadataJSON = []byte("{}")
 		}
 
+		var telegramIDValue interface{}
+		if identifier.TelegramID != nil {
+			telegramIDValue = *identifier.TelegramID
+		} else {
+			telegramIDValue = nil
+		}
+
 		err = tx.QueryRowContext(ctx, query,
 			identifier.ServerID,
 			identifier.SourceType,
 			identifier.Identifier,
 			identifier.IdentifierType,
-			identifier.TelegramID,
+			telegramIDValue,
 			metadataJSON,
 			time.Now(),
 			time.Now(),

@@ -276,19 +276,27 @@ func (h *ServerSourcesHandler) AddServerSourceIdentifiersByKey(w http.ResponseWr
 			"source_type":     req.SourceType,
 			"identifiers":     len(req.Identifiers),
 			"identifier_type": req.IdentifierType,
+			"telegram_id":     req.TelegramID,
 		}).Error("Failed to add server source identifiers by key")
 		h.writeError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	h.writeJSON(w, http.StatusOK, map[string]interface{}{
+	response := map[string]interface{}{
 		"message":         "Identifiers added successfully",
 		"server_id":       serverInfo.ServerID,
 		"server_key":      serverKey,
 		"source_type":     req.SourceType,
 		"identifiers":     req.Identifiers,
 		"identifier_type": req.IdentifierType,
-	})
+	}
+
+	// Add telegram_id to response if present
+	if req.TelegramID != nil {
+		response["telegram_id"] = *req.TelegramID
+	}
+
+	h.writeJSON(w, http.StatusOK, response)
 }
 
 // GetServerSourceIdentifiers handles GET /api/servers/{server_id}/sources/identifiers
