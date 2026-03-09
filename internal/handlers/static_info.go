@@ -25,6 +25,16 @@ func NewStaticInfoHandler(staticStorage storage.StaticDataStorage, logger *logru
 	}
 }
 
+// checkStaticStorage verifies that static storage is available
+func (h *StaticInfoHandler) checkStaticStorage(w http.ResponseWriter) bool {
+	if h.staticStorage == nil {
+		h.logger.Error("Static data storage not available")
+		http.Error(w, "Static data storage not available", http.StatusServiceUnavailable)
+		return false
+	}
+	return true
+}
+
 // UpsertStaticInfo handles POST/PUT requests to update static server information
 func (h *StaticInfoHandler) UpsertStaticInfo(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
@@ -32,6 +42,10 @@ func (h *StaticInfoHandler) UpsertStaticInfo(w http.ResponseWriter, r *http.Requ
 
 	if serverID == "" {
 		http.Error(w, "server_id is required", http.StatusBadRequest)
+		return
+	}
+
+	if !h.checkStaticStorage(w) {
 		return
 	}
 
@@ -65,6 +79,10 @@ func (h *StaticInfoHandler) GetStaticInfo(w http.ResponseWriter, r *http.Request
 
 	if serverID == "" {
 		http.Error(w, "server_id is required", http.StatusBadRequest)
+		return
+	}
+
+	if !h.checkStaticStorage(w) {
 		return
 	}
 
@@ -237,6 +255,10 @@ func (h *StaticInfoHandler) GetStaticInfoByKey(w http.ResponseWriter, r *http.Re
 
 	if serverKey == "" {
 		http.Error(w, "server_key is required", http.StatusBadRequest)
+		return
+	}
+
+	if !h.checkStaticStorage(w) {
 		return
 	}
 
