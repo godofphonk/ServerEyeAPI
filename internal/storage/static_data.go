@@ -62,7 +62,7 @@ type HardwareInfo struct {
 	CPUFrequencyMHz float64   `json:"cpu_frequency_mhz"`
 	GPUModel        string    `json:"gpu_model"`
 	GPUDriver       string    `json:"gpu_driver"`
-	GPUMemoryGB     int       `json:"gpu_memory_gb"`
+	GPUMemoryGB     float64   `json:"gpu_memory_gb"`
 	TotalMemoryGB   float64   `json:"total_memory_gb"`
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
@@ -253,7 +253,8 @@ func (s *PostgresStaticDataStorage) GetHardwareInfo(ctx context.Context, serverI
 
 	info := &HardwareInfo{}
 	var cpuModel, gpuModel, gpuDriver sql.NullString
-	var cpuCores, cpuThreads, gpuMemoryGB sql.NullInt64
+	var cpuCores, cpuThreads sql.NullInt64
+	var gpuMemoryGB sql.NullFloat64
 	var cpuFreq, totalMemory sql.NullFloat64
 
 	err := s.db.QueryRowContext(ctx, query, serverID).Scan(
@@ -288,7 +289,7 @@ func (s *PostgresStaticDataStorage) GetHardwareInfo(ctx context.Context, serverI
 		info.CPUFrequencyMHz = cpuFreq.Float64
 	}
 	if gpuMemoryGB.Valid {
-		info.GPUMemoryGB = int(gpuMemoryGB.Int64)
+		info.GPUMemoryGB = gpuMemoryGB.Float64
 	}
 	if totalMemory.Valid {
 		info.TotalMemoryGB = totalMemory.Float64
