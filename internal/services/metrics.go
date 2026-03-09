@@ -224,6 +224,48 @@ func (s *MetricsService) GetServerMetricsWithStatus(ctx context.Context, serverI
 	}
 
 	// Combine metrics and status
+	// Create a comprehensive metrics response with all available data
+	cleanMetrics := map[string]interface{}{
+		"time": metrics.Time,
+	}
+
+	// Always include aggregated values for backward compatibility
+	cleanMetrics["cpu"] = metrics.CPU
+	cleanMetrics["memory"] = metrics.Memory
+	cleanMetrics["disk"] = metrics.Disk
+	cleanMetrics["network"] = metrics.Network
+
+	// Add detailed CPU data if available
+	if metrics.CPUUsage.UsageTotal > 0 {
+		cleanMetrics["cpu_usage"] = metrics.CPUUsage
+	}
+
+	// Add detailed memory data if available
+	if metrics.MemoryDetails.UsedPercent > 0 || metrics.MemoryDetails.TotalGB > 0 {
+		cleanMetrics["memory_details"] = metrics.MemoryDetails
+	}
+
+	// Add detailed disk data if available
+	if len(metrics.DiskDetails) > 0 {
+		cleanMetrics["disk_details"] = metrics.DiskDetails
+	}
+
+	// Add detailed network data if available
+	if len(metrics.NetworkDetails.Interfaces) > 0 {
+		cleanMetrics["network_details"] = metrics.NetworkDetails
+	}
+
+	// Add temperature data if available
+	if metrics.TemperatureDetails.CPUTemperature > 0 || metrics.TemperatureDetails.GPUTemperature > 0 || metrics.TemperatureDetails.HighestTemperature > 0 {
+		cleanMetrics["temperature"] = metrics.TemperatureDetails.HighestTemperature
+		cleanMetrics["temperature_details"] = metrics.TemperatureDetails
+	}
+
+	// Add system details if available
+	if metrics.SystemDetails.ProcessesTotal > 0 {
+		cleanMetrics["system_details"] = metrics.SystemDetails
+	}
+
 	response := map[string]interface{}{
 		"server_id": serverID,
 		"timestamp": metrics.Time,
@@ -234,7 +276,7 @@ func (s *MetricsService) GetServerMetricsWithStatus(ctx context.Context, serverI
 			"agent_version": key.AgentVersion,
 			"hostname":      key.Hostname,
 		},
-		"metrics": metrics,
+		"metrics": cleanMetrics,
 	}
 
 	return response, nil
