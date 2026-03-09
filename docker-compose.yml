@@ -114,7 +114,7 @@ services:
       POSTGRES_PASSWORD: password
     volumes:
       - servereye_timescaledb_data:/var/lib/postgresql/data
-      - ./deployments/timescaledb-init.sql:/docker-entrypoint-initdb.d/init-timescaledb.sql
+      - ./deployments/timescaledb/timescaledb-init.sql:/docker-entrypoint-initdb.d/init-timescaledb.sql
       - ./deployments:/migrations:ro
     networks:
       - servereye-network
@@ -157,7 +157,7 @@ services:
       POSTGRES_PASSWORD: password
     volumes:
       - servereye_postgres_static_data:/var/lib/postgresql/data
-      - ./deployments/migration-005-static-data.sql:/docker-entrypoint-initdb.d/init-static-data.sql
+      - ./deployments/static-postgres/migration-005-static-data.sql:/docker-entrypoint-initdb.d/init-static-data.sql
     networks:
       - servereye-network
     healthcheck:
