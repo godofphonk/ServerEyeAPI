@@ -224,13 +224,45 @@ func (h *StaticInfoHandler) UpsertStaticInfoByKey(w http.ResponseWriter, r *http
 	// Convert server_key to server_id (TODO: implement proper conversion)
 	serverID := "srv_" + serverKey[4:] // Simple conversion for now
 
+	// Log incoming request from agent
+	h.logger.WithFields(logrus.Fields{
+		"server_key": serverKey,
+		"server_id":  serverID,
+		"user_agent": r.Header.Get("User-Agent"),
+		"method":     r.Method,
+	}).Info("🔄 Received static info update request from agent")
+
 	// Read request body
 	var info storage.CompleteStaticInfo
 	if err := json.NewDecoder(r.Body).Decode(&info); err != nil {
-		h.logger.WithError(err).Error("Failed to decode static info request")
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"server_key": serverKey,
+			"server_id":  serverID,
+		}).Error("Failed to decode static info request")
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
+
+	// Log what data is being sent
+	dataSections := []string{}
+	if info.ServerInfo != nil {
+		dataSections = append(dataSections, "server_info")
+	}
+	if info.HardwareInfo != nil {
+		dataSections = append(dataSections, "hardware_info")
+	}
+	if len(info.NetworkInterfaces) > 0 {
+		dataSections = append(dataSections, fmt.Sprintf("network_interfaces(%d)", len(info.NetworkInterfaces)))
+	}
+	if len(info.DiskInfo) > 0 {
+		dataSections = append(dataSections, fmt.Sprintf("disk_info(%d)", len(info.DiskInfo)))
+	}
+
+	h.logger.WithFields(logrus.Fields{
+		"server_key":    serverKey,
+		"server_id":     serverID,
+		"data_sections": dataSections,
+	}).Info("📊 Processing static info data sections")
 
 	if err := h.staticStorage.UpsertCompleteStaticInfo(r.Context(), serverID, &info); err != nil {
 		h.logger.WithError(err).WithField("server_id", serverID).Error("Failed to upsert static info")
