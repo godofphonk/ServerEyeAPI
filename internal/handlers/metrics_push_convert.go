@@ -9,7 +9,7 @@ func (h *MetricsPushHandler) convertV2ToOldFormat(v2 *models.MetricsV2) *models.
 	// Aggregated values for backward compatibility
 	old.CPU = v2.CPUUsage.UsageTotal
 	old.Memory = v2.Memory.UsedPercent
-	
+
 	// Calculate average disk usage
 	if len(v2.Disks) > 0 {
 		var totalDiskUsage float64
@@ -18,7 +18,7 @@ func (h *MetricsPushHandler) convertV2ToOldFormat(v2 *models.MetricsV2) *models.
 		}
 		old.Disk = totalDiskUsage / float64(len(v2.Disks))
 	}
-	
+
 	// Calculate total network traffic in MB
 	var totalRxMB, totalTxMB float64
 	for _, iface := range v2.Network.Interfaces {

@@ -35,12 +35,12 @@ type MetricsV2 struct {
 
 // CPUUsageMetrics represents CPU usage statistics
 type CPUUsageMetrics struct {
-	UsageTotal   float64      `json:"usage_total"`
-	UsageUser    float64      `json:"usage_user"`
-	UsageSystem  float64      `json:"usage_system"`
-	UsageIdle    float64      `json:"usage_idle"`
-	LoadAverage  LoadAverage  `json:"load_average"`
-	FrequencyMHz float64      `json:"frequency_mhz"`
+	UsageTotal   float64     `json:"usage_total"`
+	UsageUser    float64     `json:"usage_user"`
+	UsageSystem  float64     `json:"usage_system"`
+	UsageIdle    float64     `json:"usage_idle"`
+	LoadAverage  LoadAverage `json:"load_average"`
+	FrequencyMHz float64     `json:"frequency_mhz"`
 }
 
 // LoadAverage represents system load averages
@@ -91,10 +91,10 @@ type NetworkInterface struct {
 
 // TemperatureMetrics represents temperature readings
 type TemperatureMetrics struct {
-	CPU     float64               `json:"cpu"`
-	GPU     float64               `json:"gpu"`
-	Storage []StorageTemperature  `json:"storage"`
-	Highest float64               `json:"highest"`
+	CPU     float64              `json:"cpu"`
+	GPU     float64              `json:"gpu"`
+	Storage []StorageTemperature `json:"storage"`
+	Highest float64              `json:"highest"`
 }
 
 // StorageTemperature represents temperature of a storage device
@@ -113,8 +113,8 @@ type SystemMetrics struct {
 
 // MetricsMessageV2 represents the complete metrics message from agent (new format)
 type MetricsMessageV2 struct {
-	Type      string     `json:"type"`
-	ServerID  string     `json:"server_id"`
-	Data      MetricsV2  `json:"data"`
-	Timestamp int64      `json:"timestamp"`
+	Type      string    `json:"type"`
+	ServerID  string    `json:"server_id"`
+	Data      MetricsV2 `json:"data"`
+	Timestamp int64     `json:"timestamp"`
 }
