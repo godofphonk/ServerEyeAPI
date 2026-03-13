@@ -345,7 +345,7 @@ func (s *ServerService) GetServerSources(ctx context.Context, serverID string) (
 	return sources, nil
 }
 
-// RemoveServerSource removes a source from a server
+// RemoveServerSource removes a source from a server and its identifiers
 func (s *ServerService) RemoveServerSource(ctx context.Context, serverID, source string) error {
 	// Get current server info
 	server, err := s.serverRepo.GetByID(ctx, serverID)
@@ -357,7 +357,7 @@ func (s *ServerService) RemoveServerSource(ctx context.Context, serverID, source
 		return fmt.Errorf("no sources to remove")
 	}
 
-	// Parse and remove source
+	// Parse and remove source from legacy field
 	sources := strings.Split(server.Sources, ",")
 	var newSources []string
 	found := false
@@ -375,12 +375,22 @@ func (s *ServerService) RemoveServerSource(ctx context.Context, serverID, source
 		return fmt.Errorf("source %s not found for server", source)
 	}
 
-	// Update server sources
+	// Update server sources legacy field
 	var newSourcesStr string
 	if len(newSources) > 0 {
 		newSourcesStr = strings.Join(newSources, ",")
 	}
 
+	// Remove all identifiers for this source type
+	err = s.identifierRepo.DeleteByServerIDAndSourceType(ctx, serverID, source)
+	if err != nil {
+		s.logger.WithError(err).WithFields(logrus.Fields{
+			"server_id":   serverID,
+			"source_type": source,
+		}).Warn("Failed to delete identifiers for source")
+	}
+
+	// Update server sources
 	return s.serverRepo.UpdateSources(ctx, serverID, newSourcesStr)
 }
 
