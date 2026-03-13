@@ -72,6 +72,7 @@ func SetupRoutes(
 	router.HandleFunc("/api/servers/by-key/{server_key}/sources", serverSourcesHandler.AddServerSourceByKey).Methods("POST")
 	router.HandleFunc("/api/servers/by-key/{server_key}/sources", serverSourcesHandler.GetServerSourcesByKey).Methods("GET")
 	router.HandleFunc("/api/servers/by-key/{server_key}/sources/{source}", serverSourcesHandler.RemoveServerSourceByKey).Methods("DELETE")
+	router.HandleFunc("/api/servers/by-key/{server_key}/sources/{source_type}/identifiers", serverSourcesHandler.RemoveServerSourceIdentifiersByKey).Methods("DELETE")
 
 	// Server source identifiers endpoints (public for TG bot and web)
 	router.HandleFunc("/api/servers/{server_id}/sources/identifiers", serverSourcesHandler.AddServerSourceIdentifiers).Methods("POST")

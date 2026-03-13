@@ -357,6 +357,15 @@ func (s *ServerService) RemoveServerSource(ctx context.Context, serverID, source
 		return fmt.Errorf("no sources to remove")
 	}
 
+	// Delete all identifiers for this source type
+	err = s.identifierRepo.DeleteByServerIDAndSourceType(ctx, serverID, source)
+	if err != nil {
+		s.logger.WithError(err).WithFields(logrus.Fields{
+			"server_id":   serverID,
+			"source_type": source,
+		}).Warn("Failed to delete identifiers for source")
+	}
+
 	// Parse and remove source from legacy field
 	sources := strings.Split(server.Sources, ",")
 	var newSources []string
@@ -381,17 +390,38 @@ func (s *ServerService) RemoveServerSource(ctx context.Context, serverID, source
 		newSourcesStr = strings.Join(newSources, ",")
 	}
 
-	// Remove all identifiers for this source type
-	err = s.identifierRepo.DeleteByServerIDAndSourceType(ctx, serverID, source)
-	if err != nil {
-		s.logger.WithError(err).WithFields(logrus.Fields{
-			"server_id":   serverID,
-			"source_type": source,
-		}).Warn("Failed to delete identifiers for source")
-	}
-
 	// Update server sources
 	return s.serverRepo.UpdateSources(ctx, serverID, newSourcesStr)
+}
+
+// RemoveServerSourceByIdentifier removes a specific identifier and optionally the source if no identifiers remain
+func (s *ServerService) RemoveServerSourceByIdentifier(ctx context.Context, serverID, sourceType, identifier string) error {
+	// Delete the specific identifier
+	err := s.identifierRepo.DeleteByServerIDSourceTypeAndIdentifier(ctx, serverID, sourceType, identifier)
+	if err != nil {
+		return fmt.Errorf("failed to delete identifier: %w", err)
+	}
+
+	// Check if there are any remaining identifiers for this source type
+	remaining, err := s.identifierRepo.GetByServerIDAndSourceType(ctx, serverID, sourceType)
+	if err != nil {
+		s.logger.WithError(err).Warn("Failed to check remaining identifiers")
+		return nil // Don't fail the operation
+	}
+
+	// If no identifiers remain, remove the source from legacy field
+	if len(remaining) == 0 {
+		return s.RemoveServerSource(ctx, serverID, sourceType)
+	}
+
+	s.logger.WithFields(logrus.Fields{
+		"server_id":   serverID,
+		"source_type": sourceType,
+		"identifier":  identifier,
+		"remaining":   len(remaining),
+	}).Info("Identifier removed, source remains due to other identifiers")
+
+	return nil
 }
 
 // AddServerSourceIdentifiers adds multiple identifiers for a server source

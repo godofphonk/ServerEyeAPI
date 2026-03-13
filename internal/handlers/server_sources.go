@@ -376,6 +376,13 @@ func (h *ServerSourcesHandler) RemoveServerSourceIdentifiers(w http.ResponseWrit
 		return
 	}
 
+	// Log the request for debugging
+	h.logger.WithFields(logrus.Fields{
+		"server_id":   serverID,
+		"source_type": sourceType,
+		"identifiers": req.Identifiers,
+	}).Info("RemoveServerSourceIdentifiers request received")
+
 	err := h.serverService.RemoveServerSourceIdentifiers(r.Context(), serverID, sourceType, req.Identifiers)
 	if err != nil {
 		h.logger.WithError(err).WithFields(logrus.Fields{
@@ -490,6 +497,71 @@ func (h *ServerSourcesHandler) RemoveServerSourceByKey(w http.ResponseWriter, r 
 		"server_id":  serverInfo.ServerID,
 		"server_key": serverKey,
 		"source":     source,
+	})
+}
+
+// RemoveServerSourceIdentifiersByKey handles DELETE /api/servers/by-key/{server_key}/sources/{source_type}/identifiers
+func (h *ServerSourcesHandler) RemoveServerSourceIdentifiersByKey(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serverKey := vars["server_key"]
+	sourceType := vars["source_type"]
+
+	if serverKey == "" {
+		h.writeError(w, "server_key is required", http.StatusBadRequest)
+		return
+	}
+
+	if sourceType == "" {
+		h.writeError(w, "source_type is required", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Identifiers []string `json:"identifiers"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if len(req.Identifiers) == 0 {
+		h.writeError(w, "At least one identifier is required", http.StatusBadRequest)
+		return
+	}
+
+	// Log the request for debugging
+	h.logger.WithFields(logrus.Fields{
+		"server_key":  serverKey,
+		"source_type": sourceType,
+		"identifiers": req.Identifiers,
+	}).Info("RemoveServerSourceIdentifiersByKey request received")
+
+	// Get server ID from key
+	serverInfo, err := h.serverService.GetServerByKey(r.Context(), serverKey)
+	if err != nil {
+		h.writeError(w, "Server not found", http.StatusNotFound)
+		return
+	}
+
+	err = h.serverService.RemoveServerSourceIdentifiers(r.Context(), serverInfo.ServerID, sourceType, req.Identifiers)
+	if err != nil {
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"server_id":   serverInfo.ServerID,
+			"server_key":  serverKey,
+			"source_type": sourceType,
+			"identifiers": len(req.Identifiers),
+		}).Error("Failed to remove server source identifiers by key")
+		h.writeError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"message":     "Identifiers removed successfully",
+		"server_id":   serverInfo.ServerID,
+		"server_key":  serverKey,
+		"source_type": sourceType,
+		"identifiers": req.Identifiers,
 	})
 }
 
