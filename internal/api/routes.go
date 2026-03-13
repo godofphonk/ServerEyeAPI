@@ -84,7 +84,7 @@ func SetupRoutes(
 	router.HandleFunc("/api/servers/by-key/{server_key}/sources/identifiers", serverSourcesHandler.GetServerSourceIdentifiersByKey).Methods("GET")
 
 	// Get servers by Telegram ID (public for TG bot)
-	router.HandleFunc("/api/telegram/{telegram_id}/servers", serverSourcesHandler.GetServersByTelegramID).Methods("GET")
+	router.HandleFunc("/api/servers/by-telegram/{telegramId}", serverSourcesHandler.GetServersByTelegramID).Methods("GET")
 
 	// API Key management routes (admin only) - TODO: Add middleware protection
 	router.HandleFunc("/api/admin/keys", apiKeyHandler.CreateAPIKey).Methods("POST")

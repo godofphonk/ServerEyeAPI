@@ -468,6 +468,18 @@ func (r *ServerSourceIdentifierRepository) GetByTelegramID(ctx context.Context, 
 	return r.scanIdentifiers(ctx, query, telegramID)
 }
 
+// GetByTelegramIDOrIdentifier finds all servers with telegram_id or identifier (for backward compatibility)
+func (r *ServerSourceIdentifierRepository) GetByTelegramIDOrIdentifier(ctx context.Context, telegramID int64, identifier string) ([]*models.ServerSourceIdentifier, error) {
+	query := `
+		SELECT id, server_id, source_type, identifier, identifier_type, telegram_id, metadata, created_at, updated_at
+		FROM server_source_identifiers
+		WHERE telegram_id = $1 OR identifier = $2
+		ORDER BY created_at DESC
+	`
+
+	return r.scanIdentifiers(ctx, query, telegramID, identifier)
+}
+
 // Ping checks database connectivity
 func (r *ServerSourceIdentifierRepository) Ping(ctx context.Context) error {
 	return r.db.PingContext(ctx)

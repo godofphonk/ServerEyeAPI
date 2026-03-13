@@ -47,6 +47,7 @@ type ServerSourceIdentifierRepository interface {
 	GetAllByServerID(ctx context.Context, serverID string) (map[string][]*models.ServerSourceIdentifier, error)
 	GetByIdentifier(ctx context.Context, identifierType, identifier string) ([]*models.ServerSourceIdentifier, error)
 	GetByTelegramID(ctx context.Context, telegramID int64) ([]*models.ServerSourceIdentifier, error)
+	GetByTelegramIDOrIdentifier(ctx context.Context, telegramID int64, identifier string) ([]*models.ServerSourceIdentifier, error)
 
 	// Health check
 	Ping(ctx context.Context) error

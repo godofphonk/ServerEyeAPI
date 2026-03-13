@@ -395,25 +395,25 @@ func (h *ServerSourcesHandler) RemoveServerSourceIdentifiers(w http.ResponseWrit
 	})
 }
 
-// GetServersByTelegramID handles GET /api/telegram/{telegram_id}/servers
+// GetServersByTelegramID handles GET /api/servers/by-telegram/{telegramId}
 func (h *ServerSourcesHandler) GetServersByTelegramID(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	telegramID := vars["telegram_id"]
+	telegramID := vars["telegramId"]
 
 	if telegramID == "" {
-		h.writeError(w, "telegram_id is required", http.StatusBadRequest)
+		h.writeError(w, "telegramId is required", http.StatusBadRequest)
 		return
 	}
 
 	servers, err := h.serverService.GetServersByTelegramID(r.Context(), telegramID)
 	if err != nil {
-		h.logger.WithError(err).WithField("telegram_id", telegramID).Error("Failed to get servers by Telegram ID")
+		h.logger.WithError(err).WithField("telegramId", telegramID).Error("Failed to get servers by Telegram ID")
 		h.writeError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	h.writeJSON(w, http.StatusOK, map[string]interface{}{
-		"telegram_id":   telegramID,
+		"telegramId":    telegramID,
 		"servers_count": len(servers),
 		"servers":       servers,
 	})

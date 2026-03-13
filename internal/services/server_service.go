@@ -611,8 +611,8 @@ func (s *ServerService) GetServersByTelegramID(ctx context.Context, telegramID s
 		return nil, fmt.Errorf("invalid telegram_id format: %w", err)
 	}
 
-	// Get all identifiers with this telegram ID
-	identifiers, err := s.identifierRepo.GetByTelegramID(ctx, telegramIDInt)
+	// Get all identifiers with this telegram ID OR identifier (for backward compatibility)
+	identifiers, err := s.identifierRepo.GetByTelegramIDOrIdentifier(ctx, telegramIDInt, telegramID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get identifiers: %w", err)
 	}
