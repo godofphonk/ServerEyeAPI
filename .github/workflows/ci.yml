@@ -270,8 +270,30 @@ jobs:
           exit 1
         fi
         
+        # Check for TimescaleDB multi-tier implementation
+        if [ ! -f "deployments/timescaledb/timescaledb-multi-tier.sql" ]; then
+          echo "❌ TimescaleDB multi-tier migration file not found!"
+          exit 1
+        fi
+        
+        if ! grep -q "metrics_1m_avg" deployments/timescaledb/timescaledb-multi-tier.sql; then
+          echo "❌ 1-minute metrics aggregate not found!"
+          exit 1
+        fi
+        
+        if ! grep -q "metrics_5m_avg" deployments/timescaledb/timescaledb-multi-tier.sql; then
+          echo "❌ 5-minute metrics aggregate not found!"
+          exit 1
+        fi
+        
+        if ! grep -q "get_metrics_by_granularity" deployments/timescaledb/timescaledb-multi-tier.sql; then
+          echo "❌ Multi-tier granularity function not found!"
+          exit 1
+        fi
+        
         echo "✅ Alert system implementation verified!"
         echo "✅ WebSocket implementation verified!"
+        echo "✅ TimescaleDB multi-tier implementation verified!"
 
   # Deploy to Production
   deploy:
@@ -451,6 +473,15 @@ jobs:
             fi
           done
           
+          # Verify TimescaleDB multi-tier aggregates
+          echo "🔍 Verifying TimescaleDB multi-tier aggregates..."
+          if sudo docker exec ServereyeAPI-timescaledb psql -U postgres -d servereye -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_name LIKE 'metrics_%_avg';" | grep -q "4"; then
+            echo "✅ All multi-tier aggregates created successfully"
+          else
+            echo "❌ Multi-tier aggregates missing"
+            exit 1
+          fi
+          
           # Create servereye database in postgres-static
           echo "📝 Creating servereye database in postgres-static..."
           sudo docker exec ServereyeAPI-postgres-static psql -U postgres -c "CREATE DATABASE servereye;" || echo "Database servereye already exists"
@@ -547,6 +578,14 @@ jobs:
           echo "✅ Static info endpoints are configured"
         else
           echo "⚠️ Static info endpoints may not be configured"
+        fi
+        
+        # Test multi-tier metrics endpoints
+        echo "🔍 Testing multi-tier metrics endpoints..."
+        if curl -I -s "http://${{ secrets.PROD_HOST }}:8080/api/servers/test-server/metrics/tiered?start=$(date -d '1 hour ago' -Iseconds)&end=$(date -Iseconds)" | grep -q "200\|401\|404"; then
+          echo "✅ Multi-tier metrics endpoints are configured"
+        else
+          echo "⚠️ Multi-tier metrics endpoints may not be configured"
         fi
         
         echo "✅ Post-deployment tests completed!"

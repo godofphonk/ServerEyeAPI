@@ -115,6 +115,7 @@ services:
     volumes:
       - servereye_timescaledb_data:/var/lib/postgresql/data
       - ./deployments/timescaledb/timescaledb-init.sql:/docker-entrypoint-initdb.d/init-timescaledb.sql
+      - ./deployments/timescaledb/timescaledb-multi-tier.sql:/docker-entrypoint-initdb.d/init-multi-tier.sql
       - ./deployments:/migrations:ro
     networks:
       - servereye-network
