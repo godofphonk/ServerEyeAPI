@@ -108,7 +108,7 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 	serverService := services.NewServerService(serverRepo, keyRepo, identifierRepo, logger)
 	alertService := services.NewAlertService(alertRepo, logger)
 	metricsService := services.NewMetricsService(keyRepo, storageImpl, alertService, logger)
-	tieredMetricsService := services.NewTieredMetricsService(timescaleDBClient, logger)
+	tieredMetricsService := services.NewTieredMetricsService(timescaleDBClient, pgClient.DB(), logger)
 	commandsService := services.NewCommandsService(keyRepo, logger)
 	metricsCommandsService := services.NewMetricsCommandsService(timescaleDBClient, logger)
 

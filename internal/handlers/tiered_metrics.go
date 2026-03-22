@@ -86,6 +86,62 @@ func (h *TieredMetricsHandler) GetMetrics(w http.ResponseWriter, r *http.Request
 	h.writeJSON(w, http.StatusOK, response)
 }
 
+// GetMetricsByKey retrieves metrics using server_key instead of server_id
+func (h *TieredMetricsHandler) GetMetricsByKey(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serverKey := vars["server_key"]
+	if serverKey == "" {
+		h.writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "server_key is required"})
+		return
+	}
+
+	// Convert server_key to server_id
+	serverID, err := h.service.GetServerIDByKey(r.Context(), serverKey)
+	if err != nil {
+		h.writeJSON(w, http.StatusNotFound, ErrorResponse{Error: "Server not found for the provided key"})
+		return
+	}
+
+	startStr := r.URL.Query().Get("start")
+	endStr := r.URL.Query().Get("end")
+	if startStr == "" || endStr == "" {
+		h.writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "start and end query parameters are required"})
+		return
+	}
+
+	startTime, err := time.Parse(time.RFC3339, startStr)
+	if err != nil {
+		h.writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid start time format, use RFC3339"})
+		return
+	}
+
+	endTime, err := time.Parse(time.RFC3339, endStr)
+	if err != nil {
+		h.writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "invalid end time format, use RFC3339"})
+		return
+	}
+
+	if endTime.Before(startTime) {
+		h.writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "end time must be after start time"})
+		return
+	}
+
+	// Limit time range to maximum 30 days
+	if endTime.Sub(startTime) > 30*24*time.Hour {
+		h.writeJSON(w, http.StatusBadRequest, ErrorResponse{Error: "time range cannot exceed 30 days"})
+		return
+	}
+
+	response, err := h.service.GetMetricsWithAutoGranularity(r.Context(), serverID, startTime, endTime)
+	if err != nil {
+		h.logger.WithError(err).WithField("server_key", serverKey).Error("Failed to get tiered metrics by key")
+		h.writeJSON(w, http.StatusInternalServerError, ErrorResponse{Error: "Failed to retrieve metrics"})
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, response)
+}
+
 // GetRealTimeMetrics gets real-time metrics (last hour with 1-minute granularity)
 func (h *TieredMetricsHandler) GetRealTimeMetrics(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)

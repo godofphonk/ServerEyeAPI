@@ -99,6 +99,7 @@ func SetupRoutes(
 
 	// Unified metrics endpoint (public)
 	router.HandleFunc("/api/servers/{server_id}/metrics/tiered", tieredMetricsHandler.GetMetrics).Methods("GET")
+	router.HandleFunc("/api/servers/by-key/{server_key}/metrics/tiered", tieredMetricsHandler.GetMetricsByKey).Methods("GET")
 
 	// Static server information endpoints (public)
 	router.HandleFunc("/api/servers/{server_id}/static-info", staticInfoHandler.UpsertStaticInfo).Methods("POST", "PUT")

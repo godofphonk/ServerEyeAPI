@@ -7,6 +7,7 @@
 package wire
 
 import (
+	"database/sql"
 	"fmt"
 	"github.com/godofphonk/ServerEyeAPI/internal/api"
 	"github.com/godofphonk/ServerEyeAPI/internal/config"
@@ -43,7 +44,8 @@ var ProviderSet = wire.NewSet(
 
 	NewPostgresClient,
 	NewTimescaleDBClient,
-	NewTimescaleDBStorageAdapter, postgres.NewGeneratedKeyRepository, postgres.NewServerRepository, services.NewServerService, services.NewMetricsService, services.NewTieredMetricsService, services.NewCommandsService, services.NewMetricsCommandsService, services.NewAuthService, websocket.NewServer, handlers.NewAuthHandler, handlers.NewHealthHandler, handlers.NewMetricsHandler, handlers.NewTieredMetricsHandler, handlers.NewServersHandler, handlers.NewServerSourcesHandler, handlers.NewCommandsHandler, api.New,
+	NewTimescaleDBStorageAdapter,
+	NewPostgresDB, postgres.NewGeneratedKeyRepository, postgres.NewServerRepository, storage.NewAPIKeyStorage, handlers.NewAPIKeyHandler, services.NewServerService, services.NewMetricsService, services.NewTieredMetricsService, services.NewCommandsService, services.NewMetricsCommandsService, services.NewAuthService, websocket.NewServer, handlers.NewAuthHandler, handlers.NewHealthHandler, handlers.NewMetricsHandler, handlers.NewTieredMetricsHandler, handlers.NewServersHandler, handlers.NewServerSourcesHandler, handlers.NewCommandsHandler, api.New,
 )
 
 // NewLogger creates a new logger instance
@@ -79,4 +81,9 @@ func NewTimescaleDBStorageAdapter(
 	cfg *config.Config,
 ) *storage.TimescaleDBStorageAdapter {
 	return storage.NewTimescaleDBStorageAdapter(keyRepo, serverRepo, timescaleDB, logger, cfg)
+}
+
+// NewPostgresDB extracts raw DB from PostgreSQL client
+func NewPostgresDB(client *postgres2.Client) *sql.DB {
+	return client.DB()
 }

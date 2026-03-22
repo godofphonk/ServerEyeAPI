@@ -24,6 +24,7 @@
 package wire
 
 import (
+	"database/sql"
 	"fmt"
 
 	"github.com/godofphonk/ServerEyeAPI/internal/api"
@@ -49,6 +50,7 @@ var ProviderSet = wire.NewSet(
 	NewPostgresClient,
 	NewTimescaleDBClient,
 	NewTimescaleDBStorageAdapter,
+	NewPostgresDB, // Add raw DB access
 
 	// Repository layer
 	postgresRepo.NewGeneratedKeyRepository,
@@ -122,4 +124,9 @@ func NewTimescaleDBStorageAdapter(
 	cfg *config.Config,
 ) *storage.TimescaleDBStorageAdapter {
 	return storage.NewTimescaleDBStorageAdapter(keyRepo, serverRepo, timescaleDB, logger, cfg)
+}
+
+// NewPostgresDB extracts raw DB from PostgreSQL client
+func NewPostgresDB(client *postgresStorage.Client) *sql.DB {
+	return client.DB()
 }
