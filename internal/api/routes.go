@@ -63,6 +63,10 @@ func SetupRoutes(
 	// Metrics endpoint by key (public for TG bot)
 	router.HandleFunc("/api/servers/by-key/{server_key}/metrics", metricsHandler.GetServerMetricsByKey).Methods("GET")
 
+	// Server status endpoints (public)
+	router.HandleFunc("/api/servers/{server_id}/status", metricsHandler.GetServerStatus).Methods("GET")
+	router.HandleFunc("/api/servers/by-key/{server_key}/status", metricsHandler.GetServerStatusByKey).Methods("GET")
+
 	// Server sources endpoints (public for TG bot and web)
 	router.HandleFunc("/api/servers/{server_id}/sources", serverSourcesHandler.AddServerSource).Methods("POST")
 	router.HandleFunc("/api/servers/{server_id}/sources", serverSourcesHandler.GetServerSources).Methods("GET")

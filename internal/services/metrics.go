@@ -191,92 +191,151 @@ func (s *MetricsService) GetAllServerMetrics(ctx context.Context, serverID strin
 	return metrics, nil
 }
 
-// GetServerMetricsWithStatus retrieves both metrics and status for a server
+// GetServerMetricsWithStatus retrieves ONLY dynamic metrics for a server (NO static info, NO status)
 func (s *MetricsService) GetServerMetricsWithStatus(ctx context.Context, serverID string) (map[string]interface{}, error) {
+	// Verify server exists
+	_, err := s.keyRepo.GetByServerID(ctx, serverID)
+	if err != nil {
+		return nil, fmt.Errorf("server not found: %w", err)
+	}
+
+	// Get latest metrics
+	metrics, err := s.storage.GetMetric(ctx, serverID)
+	if err != nil {
+		s.logger.WithFields(logrus.Fields{
+			"server_id": serverID,
+			"error":     err.Error(),
+		}).Info("No current metrics available")
+
+		// Return empty response with current timestamp instead of error
+		// This prevents frontend from seeing zeros and allows proper "no data" handling
+		return map[string]interface{}{
+			"server_id": serverID,
+			"metrics": map[string]interface{}{
+				"cpu_percent":    0,
+				"memory_percent": 0,
+				"disk_percent":   0,
+				"network_mbps":   0,
+				"timestamp":      time.Now(),
+				"status":         "no_data",
+			},
+		}, nil
+	}
+
+	// Build ONLY dynamic metrics response (NO static data)
+	cleanMetrics := map[string]interface{}{
+		"timestamp": metrics.Time,
+	}
+
+	// Core performance metrics (percentages)
+	cleanMetrics["cpu_percent"] = metrics.CPU
+	cleanMetrics["memory_percent"] = metrics.Memory
+	cleanMetrics["disk_percent"] = metrics.Disk
+	cleanMetrics["network_mbps"] = metrics.Network
+
+	// Load averages (dynamic)
+	if metrics.CPUUsage.LoadAverage.Load1 > 0 || metrics.CPUUsage.LoadAverage.Load5 > 0 {
+		cleanMetrics["load_average"] = map[string]interface{}{
+			"1m":  metrics.CPUUsage.LoadAverage.Load1,
+			"5m":  metrics.CPUUsage.LoadAverage.Load5,
+			"15m": metrics.CPUUsage.LoadAverage.Load15,
+		}
+	}
+
+	// Temperature (dynamic)
+	if metrics.TemperatureDetails.HighestTemperature > 0 {
+		cleanMetrics["temperature_celsius"] = metrics.TemperatureDetails.HighestTemperature
+		cleanMetrics["temperatures"] = map[string]interface{}{
+			"cpu":     metrics.TemperatureDetails.CPUTemperature,
+			"gpu":     metrics.TemperatureDetails.GPUTemperature,
+			"storage": metrics.TemperatureDetails.StorageTemperatures,
+			"highest": metrics.TemperatureDetails.HighestTemperature,
+		}
+	}
+
+	// Process information (dynamic)
+	if metrics.SystemDetails.ProcessesTotal > 0 {
+		cleanMetrics["processes_total"] = metrics.SystemDetails.ProcessesTotal
+		cleanMetrics["processes_running"] = metrics.SystemDetails.ProcessesRunning
+		cleanMetrics["processes_sleeping"] = metrics.SystemDetails.ProcessesSleeping
+	}
+
+	// Uptime (dynamic)
+	if metrics.SystemDetails.UptimeSeconds > 0 {
+		cleanMetrics["uptime_seconds"] = metrics.SystemDetails.UptimeSeconds
+	}
+
+	// Memory details (dynamic usage, NOT total)
+	if metrics.MemoryDetails.UsedGB > 0 {
+		cleanMetrics["memory_details"] = map[string]interface{}{
+			"used_gb":      metrics.MemoryDetails.UsedGB,
+			"available_gb": metrics.MemoryDetails.AvailableGB,
+			"free_gb":      metrics.MemoryDetails.FreeGB,
+			"buffers_gb":   metrics.MemoryDetails.BuffersGB,
+			"cached_gb":    metrics.MemoryDetails.CachedGB,
+		}
+	}
+
+	// Disk details (dynamic usage)
+	if len(metrics.DiskDetails) > 0 {
+		diskDetails := make([]map[string]interface{}, 0, len(metrics.DiskDetails))
+		for _, disk := range metrics.DiskDetails {
+			diskDetails = append(diskDetails, map[string]interface{}{
+				"path":         disk.Path,
+				"used_gb":      disk.UsedGB,
+				"free_gb":      disk.FreeGB,
+				"used_percent": disk.UsedPercent,
+			})
+		}
+		cleanMetrics["disk_details"] = diskDetails
+	}
+
+	// Network details (dynamic traffic)
+	if len(metrics.NetworkDetails.Interfaces) > 0 {
+		cleanMetrics["network_details"] = map[string]interface{}{
+			"total_rx_mbps": metrics.NetworkDetails.TotalRxMbps,
+			"total_tx_mbps": metrics.NetworkDetails.TotalTxMbps,
+		}
+	}
+
+	response := map[string]interface{}{
+		"server_id": serverID,
+		"metrics":   cleanMetrics,
+	}
+
+	return response, nil
+}
+
+// GetServerStatus retrieves ONLY server status (online, last_seen, agent_version)
+func (s *MetricsService) GetServerStatus(ctx context.Context, serverID string) (map[string]interface{}, error) {
 	// Verify server exists
 	key, err := s.keyRepo.GetByServerID(ctx, serverID)
 	if err != nil {
 		return nil, fmt.Errorf("server not found: %w", err)
 	}
 
-	// Get metrics
+	// Get latest metrics to determine last_seen
 	metrics, err := s.storage.GetMetric(ctx, serverID)
+
+	var lastSeen time.Time
+	var online bool
+
 	if err != nil {
-		s.logger.WithFields(logrus.Fields{
-			"server_id": serverID,
-			"error":     err.Error(),
-		}).Warn("Failed to retrieve metrics, returning status only")
-
-		// Return status only if metrics not available
-		return map[string]interface{}{
-			"server_id": serverID,
-			"timestamp": time.Now(),
-			"status": map[string]interface{}{
-				"online":        false,
-				"last_seen":     key.CreatedAt,
-				"os_info":       key.OSInfo,
-				"agent_version": key.AgentVersion,
-				"hostname":      key.Hostname,
-			},
-			"metrics": nil,
-			"alerts":  []string{"Metrics not available"},
-		}, nil
-	}
-
-	// Combine metrics and status
-	// Create a comprehensive metrics response with all available data
-	cleanMetrics := map[string]interface{}{
-		"time": metrics.Time,
-	}
-
-	// Always include aggregated values for backward compatibility
-	cleanMetrics["cpu"] = metrics.CPU
-	cleanMetrics["memory"] = metrics.Memory
-	cleanMetrics["disk"] = metrics.Disk
-	cleanMetrics["network"] = metrics.Network
-
-	// Add detailed CPU data if available
-	if metrics.CPUUsage.UsageTotal > 0 {
-		cleanMetrics["cpu_usage"] = metrics.CPUUsage
-	}
-
-	// Add detailed memory data if available
-	if metrics.MemoryDetails.UsedPercent > 0 || metrics.MemoryDetails.TotalGB > 0 {
-		cleanMetrics["memory_details"] = metrics.MemoryDetails
-	}
-
-	// Add detailed disk data if available
-	if len(metrics.DiskDetails) > 0 {
-		cleanMetrics["disk_details"] = metrics.DiskDetails
-	}
-
-	// Add detailed network data if available
-	if len(metrics.NetworkDetails.Interfaces) > 0 {
-		cleanMetrics["network_details"] = metrics.NetworkDetails
-	}
-
-	// Add temperature data if available
-	if metrics.TemperatureDetails.CPUTemperature > 0 || metrics.TemperatureDetails.GPUTemperature > 0 || metrics.TemperatureDetails.HighestTemperature > 0 {
-		cleanMetrics["temperature"] = metrics.TemperatureDetails.HighestTemperature
-		cleanMetrics["temperature_details"] = metrics.TemperatureDetails
-	}
-
-	// Add system details if available
-	if metrics.SystemDetails.ProcessesTotal > 0 {
-		cleanMetrics["system_details"] = metrics.SystemDetails
+		// No metrics available - server offline
+		lastSeen = key.CreatedAt
+		online = false
+	} else {
+		// Metrics available - check if recent
+		lastSeen = metrics.Time
+		// Consider online if last seen within 5 minutes
+		online = time.Since(lastSeen) < 5*time.Minute
 	}
 
 	response := map[string]interface{}{
-		"server_id": serverID,
-		"timestamp": metrics.Time,
-		"status": map[string]interface{}{
-			"online":        true,
-			"last_seen":     metrics.Time,
-			"os_info":       key.OSInfo,
-			"agent_version": key.AgentVersion,
-			"hostname":      key.Hostname,
-		},
-		"metrics": cleanMetrics,
+		"server_id":     serverID,
+		"online":        online,
+		"last_seen":     lastSeen,
+		"agent_version": key.AgentVersion,
 	}
 
 	return response, nil
