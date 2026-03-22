@@ -17,6 +17,9 @@ const (
 	Granularity1Min  MetricsGranularity = "1m"
 	Granularity5Min  MetricsGranularity = "5m"
 	Granularity10Min MetricsGranularity = "10m"
+	Granularity30Min MetricsGranularity = "30m"
+	Granularity2Hour MetricsGranularity = "2h"
+	Granularity6Hour MetricsGranularity = "6h"
 	Granularity1Hour MetricsGranularity = "1h"
 )
 
@@ -567,12 +570,14 @@ func (c *Client) determineGranularity(start, end time.Time) MetricsGranularity {
 
 	if duration <= time.Hour {
 		return Granularity1Min
-	} else if duration <= 3*time.Hour {
-		return Granularity5Min
-	} else if duration <= 24*time.Hour {
+	} else if duration <= 6*time.Hour {
 		return Granularity10Min
+	} else if duration <= 24*time.Hour {
+		return Granularity30Min
+	} else if duration <= 7*24*time.Hour {
+		return Granularity2Hour
 	} else {
-		return Granularity1Hour
+		return Granularity6Hour
 	}
 }
 
@@ -584,6 +589,12 @@ func (c *Client) getViewName(granularity MetricsGranularity) string {
 		return "metrics_5m_avg"
 	case Granularity10Min:
 		return "metrics_10m_avg"
+	case Granularity30Min:
+		return "metrics_30m_avg"
+	case Granularity2Hour:
+		return "metrics_2h_avg"
+	case Granularity6Hour:
+		return "metrics_6h_avg"
 	case Granularity1Hour:
 		return "metrics_1h_avg"
 	default:
