@@ -291,9 +291,46 @@ jobs:
           exit 1
         fi
         
+        # Check for optimized granularity system
+        if [ ! -f "deployments/timescaledb/timescaledb-optimized-granularity.sql" ]; then
+          echo "❌ Optimized granularity migration file not found!"
+          exit 1
+        fi
+        
+        if [ ! -f "deployments/timescaledb/timescaledb-optimized-function.sql" ]; then
+          echo "❌ Optimized granularity function migration file not found!"
+          exit 1
+        fi
+        
+        if [ ! -f "deployments/timescaledb/migration-012-optimized-granularity.sql" ]; then
+          echo "❌ Optimized granularity master migration file not found!"
+          exit 1
+        fi
+        
+        if ! grep -q "metrics_30m_avg" deployments/timescaledb/timescaledb-optimized-granularity.sql; then
+          echo "❌ 30-minute metrics aggregate not found!"
+          exit 1
+        fi
+        
+        if ! grep -q "metrics_2h_avg" deployments/timescaledb/timescaledb-optimized-granularity.sql; then
+          echo "❌ 2-hour metrics aggregate not found!"
+          exit 1
+        fi
+        
+        if ! grep -q "metrics_6h_avg" deployments/timescaledb/timescaledb-optimized-granularity.sql; then
+          echo "❌ 6-hour metrics aggregate not found!"
+          exit 1
+        fi
+        
+        if ! grep -q "migration-012-optimized-granularity.sql" deployments/timescaledb/migration-012-optimized-granularity.sql; then
+          echo "❌ Migration 012 self-reference not found!"
+          exit 1
+        fi
+        
         echo "✅ Alert system implementation verified!"
         echo "✅ WebSocket implementation verified!"
         echo "✅ TimescaleDB multi-tier implementation verified!"
+        echo "✅ Optimized granularity system verified!"
 
   # Deploy to Production
   deploy:
@@ -475,10 +512,21 @@ jobs:
           
           # Verify TimescaleDB multi-tier aggregates
           echo "🔍 Verifying TimescaleDB multi-tier aggregates..."
-          if sudo docker exec ServereyeAPI-timescaledb psql -U postgres -d servereye -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_name LIKE 'metrics_%_avg';" | grep -q "4"; then
-            echo "✅ All multi-tier aggregates created successfully"
+          if sudo docker exec ServereyeAPI-timescaledb psql -U postgres -d servereye -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_name LIKE 'metrics_%_avg';" | grep -q "7"; then
+            echo "✅ All multi-tier aggregates created successfully (including optimized granularity views)"
           else
-            echo "❌ Multi-tier aggregates missing"
+            echo "❌ Multi-tier aggregates missing or incomplete"
+            echo "Expected: 7 aggregates (1m, 5m, 10m, 30m, 2h, 6h, 1h)"
+            echo "Found: $(sudo docker exec ServereyeAPI-timescaledb psql -U postgres -d servereye -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_name LIKE 'metrics_%_avg';") aggregates"
+            exit 1
+          fi
+          
+          # Verify optimized granularity function
+          echo "🔍 Verifying optimized granularity function..."
+          if sudo docker exec ServereyeAPI-timescaledb psql -U postgres -d servereye -c "SELECT proname FROM pg_proc WHERE proname = 'get_metrics_by_granularity';" | grep -q "get_metrics_by_granularity"; then
+            echo "✅ Optimized granularity function verified"
+          else
+            echo "❌ Optimized granularity function missing"
             exit 1
           fi
           
