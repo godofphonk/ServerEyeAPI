@@ -123,6 +123,7 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 	healthHandler := handlers.NewHealthHandler(storageImpl, logger)
 	metricsHandler := handlers.NewMetricsHandler(metricsService, logger)
 	tieredMetricsHandler := handlers.NewTieredMetricsHandler(tieredMetricsService, logger)
+	unifiedServerHandler := handlers.NewUnifiedServerHandler(metricsService, tieredMetricsService, staticDataStorage, logger)
 	serversHandler := handlers.NewServersHandler(storageImpl, logger)
 	serverSourcesHandler := handlers.NewServerSourcesHandler(serverService, logger)
 	commandsHandler := handlers.NewCommandsHandler(commandsService, logger)
@@ -141,6 +142,7 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 		healthHandler,
 		metricsHandler,
 		tieredMetricsHandler,
+		unifiedServerHandler,
 		serversHandler,
 		serverSourcesHandler,
 		commandsHandler,

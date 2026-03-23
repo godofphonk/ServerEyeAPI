@@ -35,6 +35,7 @@ func SetupRoutes(
 	healthHandler *handlers.HealthHandler,
 	metricsHandler *handlers.MetricsHandler,
 	tieredMetricsHandler *handlers.TieredMetricsHandler,
+	unifiedServerHandler *handlers.UnifiedServerHandler,
 	serversHandler *handlers.ServersHandler,
 	serverSourcesHandler *handlers.ServerSourcesHandler,
 	commandsHandler *handlers.CommandsHandler,
@@ -100,6 +101,9 @@ func SetupRoutes(
 	// Unified metrics endpoint (public)
 	router.HandleFunc("/api/servers/{server_id}/metrics/tiered", tieredMetricsHandler.GetMetrics).Methods("GET")
 	router.HandleFunc("/api/servers/by-key/{server_key}/metrics/tiered", tieredMetricsHandler.GetMetricsByKey).Methods("GET")
+
+	// Unified server data endpoint (public) - combines metrics, status, and static info
+	router.HandleFunc("/api/servers/by-key/{server_key}/unified", unifiedServerHandler.GetUnifiedServerData).Methods("GET")
 
 	// Static server information endpoints (public)
 	router.HandleFunc("/api/servers/{server_id}/static-info", staticInfoHandler.UpsertStaticInfo).Methods("POST", "PUT")
