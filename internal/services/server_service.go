@@ -315,7 +315,8 @@ func (s *ServerService) AddServerSource(ctx context.Context, serverID, source st
 		sources := strings.Split(currentSources, ",")
 		for _, src := range sources {
 			if strings.TrimSpace(src) == source {
-				return fmt.Errorf("source %s already exists for server", source)
+				// Source already exists, no action needed
+				return nil
 			}
 		}
 		// Add new source
@@ -458,7 +459,11 @@ func (s *ServerService) AddServerSourceIdentifiers(ctx context.Context, serverID
 	}
 
 	if len(identifiers) == 0 {
-		return fmt.Errorf("all identifiers already exist")
+		// All identifiers already exist, but that's ok - just ensure source exists
+		if err := s.AddServerSource(ctx, serverID, req.SourceType); err != nil {
+			s.logger.WithError(err).Warn("Failed to update legacy sources field")
+		}
+		return nil
 	}
 
 	// Create batch
