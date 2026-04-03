@@ -23,7 +23,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: ServereyeAPI-api
+    container_name: ServerEyeAPI-api
     command: ["./servereye"]
     restart: unless-stopped
     ports:
@@ -31,9 +31,9 @@ services:
     environment:
       - HOST=0.0.0.0
       - PORT=8080
-      - DATABASE_URL=postgres://servereye:password@api-postgres:5432/servereye?sslmode=disable
-      - KEYS_DATABASE_URL=postgres://servereye:password@api-postgres:5432/servereye?sslmode=disable
-      - TIMESCALEDB_URL=postgres://servereye:password@api-timescaledb:5432/servereye?sslmode=disable
+      - DATABASE_URL=postgres://postgres:password@api-postgres:5432/servereye?sslmode=disable
+      - KEYS_DATABASE_URL=postgres://postgres:password@api-postgres:5432/servereye?sslmode=disable
+      - TIMESCALEDB_URL=postgres://postgres:password@api-timescaledb:5432/servereye?sslmode=disable
       - STATIC_DATA_URL=postgres://servereye:password@api-postgres-static:5432/servereye?sslmode=disable
       - JWT_SECRET=your-super-secret-jwt-key-change-in-production
       - WEBHOOK_SECRET=your-webhook-secret-change-in-production
@@ -78,7 +78,7 @@ services:
   # PostgreSQL for metadata
   api-postgres:
     image: postgres:15-alpine
-    container_name: ServereyeAPI-postgres
+    container_name: ServerEyeAPI-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: servereye
@@ -106,7 +106,7 @@ services:
   # TimescaleDB for time-series data
   api-timescaledb:
     image: timescale/timescaledb:2.15.0-pg15
-    container_name: ServereyeAPI-timescaledb
+    container_name: ServerEyeAPI-timescaledb
     restart: unless-stopped
     environment:
       POSTGRES_DB: servereye
@@ -150,7 +150,7 @@ services:
   # PostgreSQL for static/persistent server data
   api-postgres-static:
     image: postgres:15-alpine
-    container_name: ServereyeAPI-postgres-static
+    container_name: ServerEyeAPI-postgres-static
     restart: unless-stopped
     environment:
       POSTGRES_DB: servereye
@@ -185,8 +185,4 @@ volumes:
 
 networks:
   servereye-network:
-    name: servereye-network
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
+    external: true
