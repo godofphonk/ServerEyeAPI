@@ -2,6 +2,7 @@ package services
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -12,13 +13,15 @@ import (
 // TieredMetricsService handles tiered metrics with automatic granularity selection
 type TieredMetricsService struct {
 	timescaleDB *timescaledb.Client
+	pgDB        *sql.DB
 	logger      *logrus.Logger
 }
 
 // NewTieredMetricsService creates a new tiered metrics service
-func NewTieredMetricsService(timescaleDB *timescaledb.Client, logger *logrus.Logger) *TieredMetricsService {
+func NewTieredMetricsService(timescaleDB *timescaledb.Client, pgDB *sql.DB, logger *logrus.Logger) *TieredMetricsService {
 	return &TieredMetricsService{
 		timescaleDB: timescaleDB,
+		pgDB:        pgDB,
 		logger:      logger,
 	}
 }
@@ -362,6 +365,22 @@ func (s *TieredMetricsService) calculateAverageSlice(points []timescaledb.Tiered
 		TempAvg:    sumTemp / count,
 		LoadAvg:    sumLoad / count,
 	}
+}
+
+// GetServerIDByKey converts server_key to server_id
+func (s *TieredMetricsService) GetServerIDByKey(ctx context.Context, serverKey string) (string, error) {
+	var serverID string
+	query := `SELECT server_id FROM generated_keys WHERE server_key = $1`
+
+	err := s.pgDB.QueryRowContext(ctx, query, serverKey).Scan(&serverID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "", fmt.Errorf("server key not found: %s", serverKey)
+		}
+		return "", fmt.Errorf("failed to query server_id by key: %w", err)
+	}
+
+	return serverID, nil
 }
 
 func (s *TieredMetricsService) calculateAverages(points []timescaledb.TieredMetricsPoint) *MetricAverages {

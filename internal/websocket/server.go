@@ -411,14 +411,70 @@ func (s *Server) handleMetrics(ctx context.Context, client *Client, msg models.W
 		"data_keys": len(msg.Data),
 	}).Info("Metrics message has data, parsing...")
 
-	// Parse metrics message
-	var metricsMsg models.MetricsMessage
 	dataBytes, err := json.Marshal(msg.Data)
 	if err != nil {
 		s.logger.WithError(err).WithField("server_id", client.ServerID).Error("Failed to marshal metrics data")
 		return
 	}
 
+	// Try to parse as new format first (MetricsV2)
+	// Agent sends: {"type": "metrics", "server_id": "...", "data": {"metrics": {"metrics": {...}}}}
+	var nestedMsg struct {
+		Metrics models.MetricsV2 `json:"metrics"`
+	}
+
+	parseErr := json.Unmarshal(dataBytes, &nestedMsg)
+	var newMetricsMsg struct {
+		Metrics models.MetricsV2 `json:"metrics"`
+	}
+
+	if parseErr == nil && !nestedMsg.Metrics.Timestamp.IsZero() {
+		// Successfully parsed nested structure
+		newMetricsMsg.Metrics = nestedMsg.Metrics
+		parseErr = nil
+	} else {
+		// Fallback: try direct structure (data.metrics)
+		var directMsg struct {
+			Metrics models.MetricsV2 `json:"metrics"`
+		}
+		if directErr := json.Unmarshal(dataBytes, &directMsg); directErr == nil && !directMsg.Metrics.Timestamp.IsZero() {
+			newMetricsMsg = directMsg
+			parseErr = nil
+		}
+	}
+
+	if parseErr == nil && !newMetricsMsg.Metrics.Timestamp.IsZero() {
+		s.logger.WithFields(logrus.Fields{
+			"server_id":   client.ServerID,
+			"format":      "v2",
+			"cpu_total":   newMetricsMsg.Metrics.CPUUsage.UsageTotal,
+			"memory_used": newMetricsMsg.Metrics.Memory.UsedPercent,
+			"temperature": newMetricsMsg.Metrics.Temperature.Highest,
+		}).Info("📊 Using new metrics format (V2)")
+
+		// Convert V2 to old format for storage compatibility
+		oldMetrics := s.convertV2ToOldFormat(&newMetricsMsg.Metrics)
+		oldMetrics.Time = newMetricsMsg.Metrics.Timestamp
+
+		s.logger.WithFields(logrus.Fields{
+			"server_id":   client.ServerID,
+			"cpu":         oldMetrics.CPU,
+			"memory":      oldMetrics.Memory,
+			"temperature": oldMetrics.TemperatureDetails.HighestTemperature,
+		}).Info("Storing V2 metrics")
+
+		// Store converted metrics
+		if err := s.storage.StoreMetric(ctx, client.ServerID, oldMetrics); err != nil {
+			s.logger.WithError(err).WithField("server_id", client.ServerID).Error("Failed to store V2 metrics")
+			return
+		}
+
+		s.logger.WithField("server_id", client.ServerID).Info("✅ Successfully stored V2 metrics")
+		return
+	}
+
+	// Fallback to old format
+	var metricsMsg models.MetricsMessage
 	if err := json.Unmarshal(dataBytes, &metricsMsg); err != nil {
 		s.logger.WithError(err).WithField("server_id", client.ServerID).Error("Invalid metrics message format")
 		return
@@ -429,15 +485,16 @@ func (s *Server) handleMetrics(ctx context.Context, client *Client, msg models.W
 		"cpu":       metricsMsg.Metrics.CPU,
 		"memory":    metricsMsg.Metrics.Memory,
 		"disk":      metricsMsg.Metrics.Disk,
-	}).Info("Parsed metrics message, storing in Redis")
+		"format":    "v1",
+	}).Info("📊 Using old metrics format (V1)")
 
-	// Store metrics in Redis
+	// Store metrics
 	if err := s.storage.StoreMetric(ctx, client.ServerID, &metricsMsg.Metrics); err != nil {
 		s.logger.WithError(err).WithField("server_id", client.ServerID).Error("Failed to store metrics")
 		return
 	}
 
-	s.logger.WithField("server_id", client.ServerID).Info("✅ Successfully stored metrics from WebSocket")
+	s.logger.WithField("server_id", client.ServerID).Info("✅ Successfully stored V1 metrics")
 }
 
 // handleHeartbeat handles heartbeat messages
@@ -486,4 +543,121 @@ func (s *Server) SendToClient(serverID string, msg models.WSMessage) bool {
 	}
 
 	return client.SendMessage(msg)
+}
+
+// convertV2ToOldFormat converts new MetricsV2 format to old ServerMetrics format
+func (s *Server) convertV2ToOldFormat(v2 *models.MetricsV2) *models.ServerMetrics {
+	old := &models.ServerMetrics{}
+
+	// Aggregated values for backward compatibility
+	old.CPU = v2.CPUUsage.UsageTotal
+	old.Memory = v2.Memory.UsedPercent
+
+	// Calculate average disk usage
+	if len(v2.Disks) > 0 {
+		var totalDiskUsage float64
+		for _, disk := range v2.Disks {
+			totalDiskUsage += disk.UsedPercent
+		}
+		old.Disk = totalDiskUsage / float64(len(v2.Disks))
+	}
+
+	// Calculate total network traffic in MB
+	var totalRxMB, totalTxMB float64
+	for _, iface := range v2.Network.Interfaces {
+		totalRxMB += float64(iface.RxBytes) / 1024 / 1024
+		totalTxMB += float64(iface.TxBytes) / 1024 / 1024
+	}
+	old.Network = totalRxMB + totalTxMB
+
+	// CPU detailed metrics
+	old.CPUUsage.UsageTotal = v2.CPUUsage.UsageTotal
+	old.CPUUsage.UsageUser = v2.CPUUsage.UsageUser
+	old.CPUUsage.UsageSystem = v2.CPUUsage.UsageSystem
+	old.CPUUsage.UsageIdle = v2.CPUUsage.UsageIdle
+	old.CPUUsage.LoadAverage.Load1 = v2.CPUUsage.LoadAverage.Load1Min
+	old.CPUUsage.LoadAverage.Load5 = v2.CPUUsage.LoadAverage.Load5Min
+	old.CPUUsage.LoadAverage.Load15 = v2.CPUUsage.LoadAverage.Load15Min
+	old.CPUUsage.Frequency = v2.CPUUsage.FrequencyMHz
+
+	// Memory detailed metrics
+	old.MemoryDetails.TotalGB = v2.Memory.TotalGB
+	old.MemoryDetails.UsedGB = v2.Memory.UsedGB
+	old.MemoryDetails.AvailableGB = v2.Memory.AvailableGB
+	old.MemoryDetails.FreeGB = v2.Memory.FreeGB
+	old.MemoryDetails.BuffersGB = v2.Memory.BuffersGB
+	old.MemoryDetails.CachedGB = v2.Memory.CachedGB
+	old.MemoryDetails.UsedPercent = v2.Memory.UsedPercent
+
+	// Disk detailed metrics
+	if len(v2.Disks) > 0 {
+		old.DiskDetails = make([]struct {
+			Path        string  `json:"path"`
+			TotalGB     float64 `json:"total_gb"`
+			UsedGB      float64 `json:"used_gb"`
+			FreeGB      float64 `json:"free_gb"`
+			UsedPercent float64 `json:"used_percent"`
+			Filesystem  string  `json:"filesystem"`
+		}, len(v2.Disks))
+		for i, disk := range v2.Disks {
+			old.DiskDetails[i].Path = disk.MountPoint
+			old.DiskDetails[i].UsedGB = disk.UsedGB
+			old.DiskDetails[i].FreeGB = disk.FreeGB
+			old.DiskDetails[i].UsedPercent = disk.UsedPercent
+			old.DiskDetails[i].TotalGB = disk.UsedGB + disk.FreeGB
+		}
+	}
+
+	// Network detailed metrics
+	if len(v2.Network.Interfaces) > 0 {
+		old.NetworkDetails.Interfaces = make([]struct {
+			Name        string  `json:"name"`
+			RxBytes     int64   `json:"rx_bytes"`
+			TxBytes     int64   `json:"tx_bytes"`
+			RxPackets   int64   `json:"rx_packets"`
+			TxPackets   int64   `json:"tx_packets"`
+			RxSpeedMbps float64 `json:"rx_speed_mbps"`
+			TxSpeedMbps float64 `json:"tx_speed_mbps"`
+			Status      string  `json:"status"`
+		}, len(v2.Network.Interfaces))
+		for i, iface := range v2.Network.Interfaces {
+			old.NetworkDetails.Interfaces[i].Name = iface.Name
+			old.NetworkDetails.Interfaces[i].RxBytes = iface.RxBytes
+			old.NetworkDetails.Interfaces[i].TxBytes = iface.TxBytes
+			old.NetworkDetails.Interfaces[i].RxPackets = iface.RxPackets
+			old.NetworkDetails.Interfaces[i].TxPackets = iface.TxPackets
+			old.NetworkDetails.Interfaces[i].RxSpeedMbps = iface.RxSpeedMbps
+			old.NetworkDetails.Interfaces[i].TxSpeedMbps = iface.TxSpeedMbps
+			old.NetworkDetails.Interfaces[i].Status = iface.Status
+		}
+		old.NetworkDetails.TotalRxMbps = v2.Network.TotalRxMbps
+		old.NetworkDetails.TotalTxMbps = v2.Network.TotalTxMbps
+		old.Network = v2.Network.TotalRxMbps + v2.Network.TotalTxMbps // Use total as aggregate
+	}
+
+	// Temperature metrics
+	old.TemperatureDetails.CPUTemperature = v2.Temperature.CPU
+	old.TemperatureDetails.GPUTemperature = v2.Temperature.GPU
+	old.TemperatureDetails.HighestTemperature = v2.Temperature.Highest
+
+	if len(v2.Temperature.Storage) > 0 {
+		old.TemperatureDetails.StorageTemperatures = make([]struct {
+			Device      string  `json:"device"`
+			Type        string  `json:"type"`
+			Temperature float64 `json:"temperature"`
+		}, len(v2.Temperature.Storage))
+
+		for i, storage := range v2.Temperature.Storage {
+			old.TemperatureDetails.StorageTemperatures[i].Device = storage.Device
+			old.TemperatureDetails.StorageTemperatures[i].Temperature = storage.Temperature
+		}
+	}
+
+	// System metrics
+	old.SystemDetails.ProcessesTotal = v2.System.ProcessesTotal
+	old.SystemDetails.ProcessesRunning = v2.System.ProcessesRunning
+	old.SystemDetails.ProcessesSleeping = v2.System.ProcessesSleeping
+	old.SystemDetails.UptimeSeconds = v2.System.UptimeSeconds
+
+	return old
 }

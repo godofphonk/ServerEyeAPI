@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"time"
 
@@ -41,36 +42,79 @@ func (h *MetricsPushHandler) PushMetrics(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Try to parse as V2 format first
+	var bodyBytes []byte
+	bodyBytes, err = io.ReadAll(r.Body)
+	if err != nil {
+		h.logger.WithError(err).Error("Failed to read request body")
+		http.Error(w, "Failed to read request", http.StatusBadRequest)
+		return
+	}
+
+	// Try V2 format
+	var v2Msg struct {
+		Metrics models.MetricsV2 `json:"metrics"`
+	}
+	if err := json.Unmarshal(bodyBytes, &v2Msg); err == nil && !v2Msg.Metrics.Timestamp.IsZero() {
+		h.logger.WithFields(logrus.Fields{
+			"server_id":   serverInfo.ServerID,
+			"format":      "v2",
+			"cpu_total":   v2Msg.Metrics.CPUUsage.UsageTotal,
+			"memory_used": v2Msg.Metrics.Memory.UsedPercent,
+			"temperature": v2Msg.Metrics.Temperature.Highest,
+		}).Info("📊 HTTP: Received V2 metrics format")
+
+		// Convert V2 to old format
+		oldMetrics := h.convertV2ToOldFormat(&v2Msg.Metrics)
+		oldMetrics.Time = v2Msg.Metrics.Timestamp
+
+		if err := h.storage.StoreMetric(r.Context(), serverInfo.ServerID, oldMetrics); err != nil {
+			h.logger.WithError(err).WithField("server_id", serverInfo.ServerID).Error("Failed to store V2 metrics")
+			http.Error(w, "Failed to store metrics", http.StatusInternalServerError)
+			return
+		}
+
+		h.logger.WithFields(logrus.Fields{
+			"server_id":   serverInfo.ServerID,
+			"cpu":         oldMetrics.CPU,
+			"memory":      oldMetrics.Memory,
+			"temperature": oldMetrics.TemperatureDetails.HighestTemperature,
+		}).Info("✅ V2 metrics stored successfully via HTTP")
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success":   true,
+			"server_id": serverInfo.ServerID,
+			"timestamp": time.Now().Unix(),
+		})
+		return
+	}
+
+	// Fallback to V1 format
 	var metricsMsg models.MetricsMessage
-	if err := json.NewDecoder(r.Body).Decode(&metricsMsg); err != nil {
-		h.logger.WithError(err).Error("Failed to decode metrics message")
+	if err := json.Unmarshal(bodyBytes, &metricsMsg); err != nil {
+		h.logger.WithError(err).Error("Failed to decode metrics message (V1 or V2)")
 		http.Error(w, "Invalid JSON format", http.StatusBadRequest)
 		return
 	}
 
 	metricsMsg.ServerID = serverInfo.ServerID
-
-	// Always set timestamp to current time
 	metricsMsg.Metrics.Time = time.Now()
 
 	h.logger.WithFields(logrus.Fields{
 		"server_id": serverInfo.ServerID,
-		"timestamp": metricsMsg.Metrics.Time,
-		"is_zero":   metricsMsg.Metrics.Time.IsZero(),
-	}).Info("About to store metrics with timestamp")
+		"format":    "v1",
+		"cpu":       metricsMsg.Metrics.CPU,
+		"memory":    metricsMsg.Metrics.Memory,
+	}).Info("📊 HTTP: Received V1 metrics format")
 
 	if err := h.storage.StoreMetric(r.Context(), serverInfo.ServerID, &metricsMsg.Metrics); err != nil {
-		h.logger.WithError(err).WithField("server_id", serverInfo.ServerID).Error("Failed to store metrics")
+		h.logger.WithError(err).WithField("server_id", serverInfo.ServerID).Error("Failed to store V1 metrics")
 		http.Error(w, "Failed to store metrics", http.StatusInternalServerError)
 		return
 	}
 
-	h.logger.WithFields(logrus.Fields{
-		"server_id": serverInfo.ServerID,
-		"hostname":  serverInfo.Hostname,
-		"cpu":       metricsMsg.Metrics.CPU,
-		"memory":    metricsMsg.Metrics.Memory,
-	}).Info("Metrics stored successfully via HTTP")
+	h.logger.WithField("server_id", serverInfo.ServerID).Info("✅ V1 metrics stored successfully via HTTP")
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{

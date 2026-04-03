@@ -39,24 +39,24 @@ jobs:
     if: github.ref != 'refs/heads/production'  # Skip tests on production
     permissions:
       contents: read
-      security-events: read
+      security-events: write
       actions: read
     outputs:
       coverage: ${{ steps.coverage.outputs.percentage }}
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-    
+      
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
-        go-version: '1.25'
+        go-version: '1.26'
         
     - name: Cache Go modules
       uses: actions/cache@v4
       with:
         path: ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum', '**/go.mod') }}
         restore-keys: |
           ${{ runner.os }}-go-
           
@@ -95,6 +95,10 @@ jobs:
         if [ ! -f results.sarif ]; then
           echo '{"runs": []}' > results.sarif
         fi
+        # Ensure file is valid JSON
+        if ! jq empty results.sarif 2>/dev/null; then
+          echo '{"runs": []}' > results.sarif
+        fi
       
     - name: Upload SARIF file
       uses: github/codeql-action/upload-sarif@v4
@@ -118,9 +122,9 @@ jobs:
       uses: actions/checkout@v4
       
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
-        go-version: '1.25'
+        go-version: '1.26'
         
     - name: Check formatting
       run: |
@@ -244,8 +248,18 @@ jobs:
           exit 1
         fi
         
-        if [ ! -f "deployments/migration-009-alerts-table.sql" ]; then
+        if [ ! -f "deployments/postgres/migration-009-alerts-table.sql" ]; then
           echo "❌ Alerts migration file not found!"
+          exit 1
+        fi
+        
+        if [ ! -f "deployments/postgres/migration-010-server-source-identifiers.sql" ]; then
+          echo "❌ Server source identifiers migration file not found!"
+          exit 1
+        fi
+        
+        if [ ! -f "deployments/postgres/migration-011-add-telegram-id.sql" ]; then
+          echo "❌ Telegram ID migration file not found!"
           exit 1
         fi
         
@@ -260,8 +274,67 @@ jobs:
           exit 1
         fi
         
+        # Check for TimescaleDB multi-tier implementation
+        if [ ! -f "deployments/timescaledb/timescaledb-multi-tier.sql" ]; then
+          echo "❌ TimescaleDB multi-tier migration file not found!"
+          exit 1
+        fi
+        
+        if ! grep -q "metrics_1m_avg" deployments/timescaledb/timescaledb-multi-tier.sql; then
+          echo "❌ 1-minute metrics aggregate not found!"
+          exit 1
+        fi
+        
+        if ! grep -q "metrics_5m_avg" deployments/timescaledb/timescaledb-multi-tier.sql; then
+          echo "❌ 5-minute metrics aggregate not found!"
+          exit 1
+        fi
+        
+        if ! grep -q "get_metrics_by_granularity" deployments/timescaledb/timescaledb-multi-tier.sql; then
+          echo "❌ Multi-tier granularity function not found!"
+          exit 1
+        fi
+        
+        # Check for optimized granularity system
+        if [ ! -f "deployments/timescaledb/timescaledb-optimized-granularity.sql" ]; then
+          echo "❌ Optimized granularity migration file not found!"
+          exit 1
+        fi
+        
+        if [ ! -f "deployments/timescaledb/timescaledb-optimized-function.sql" ]; then
+          echo "❌ Optimized granularity function migration file not found!"
+          exit 1
+        fi
+        
+        if [ ! -f "deployments/timescaledb/migration-012-optimized-granularity.sql" ]; then
+          echo "❌ Optimized granularity master migration file not found!"
+          exit 1
+        fi
+        
+        if ! grep -q "metrics_30m_avg" deployments/timescaledb/timescaledb-optimized-granularity.sql; then
+          echo "❌ 30-minute metrics aggregate not found!"
+          exit 1
+        fi
+        
+        if ! grep -q "metrics_2h_avg" deployments/timescaledb/timescaledb-optimized-granularity.sql; then
+          echo "❌ 2-hour metrics aggregate not found!"
+          exit 1
+        fi
+        
+        if ! grep -q "metrics_6h_avg" deployments/timescaledb/timescaledb-optimized-granularity.sql; then
+          echo "❌ 6-hour metrics aggregate not found!"
+          exit 1
+        fi
+        
+        if ! grep -q "migration-012-optimized-granularity.sql" deployments/timescaledb/migration-012-optimized-granularity.sql; then
+          echo "❌ Migration 012 self-reference not found!"
+          exit 1
+        fi
+        
         echo "✅ Alert system implementation verified!"
         echo "✅ WebSocket implementation verified!"
+        echo "✅ TimescaleDB multi-tier implementation verified!"
+        echo "✅ Optimized granularity system verified!"
 
   # Deploy to Production
   deploy:
@@ -317,9 +390,9 @@ jobs:
               environment:
                 - HOST=0.0.0.0
                 - PORT=8080
-                - DATABASE_URL=postgres://servereye:\${POSTGRES_PASSWORD}@api-postgres:5432/servereye?sslmode=disable
-                - KEYS_DATABASE_URL=postgres://servereye:\${POSTGRES_PASSWORD}@api-postgres:5432/servereye?sslmode=disable
-                - TIMESCALEDB_URL=postgres://servereye:\${POSTGRES_PASSWORD}@api-timescaledb:5432/servereye?sslmode=disable
+                - DATABASE_URL=postgres://postgres:\${POSTGRES_PASSWORD}@api-postgres:5432/servereye?sslmode=disable
+                - KEYS_DATABASE_URL=postgres://postgres:\${POSTGRES_PASSWORD}@api-postgres:5432/servereye?sslmode=disable
+                - TIMESCALEDB_URL=postgres://postgres:\${POSTGRES_PASSWORD}@api-timescaledb:5432/servereye?sslmode=disable
                 - STATIC_DATA_URL=postgres://servereye:\${POSTGRES_PASSWORD}@api-postgres-static:5432/servereye?sslmode=disable
                 - JWT_SECRET=\${JWT_SECRET}
                 - WEBHOOK_SECRET=\${WEBHOOK_SECRET}
@@ -348,9 +421,9 @@ jobs:
           sudo tee .env > /dev/null <<EOF
           HOST=0.0.0.0
           PORT=8080
-          DATABASE_URL=postgres://servereye:${{ secrets.POSTGRES_PASSWORD }}@api-postgres:5432/servereye?sslmode=disable
-          KEYS_DATABASE_URL=postgres://servereye:${{ secrets.POSTGRES_PASSWORD }}@api-postgres:5432/servereye?sslmode=disable
-          TIMESCALEDB_URL=postgres://servereye:${{ secrets.POSTGRES_PASSWORD }}@api-timescaledb:5432/servereye?sslmode=disable
+          DATABASE_URL=postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@api-postgres:5432/servereye?sslmode=disable
+          KEYS_DATABASE_URL=postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@api-postgres:5432/servereye?sslmode=disable
+          TIMESCALEDB_URL=postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@api-timescaledb:5432/servereye?sslmode=disable
           STATIC_DATA_URL=postgres://servereye:${{ secrets.POSTGRES_PASSWORD }}@api-postgres-static:5432/servereye?sslmode=disable
           JWT_SECRET=${{ secrets.JWT_SECRET }}
           WEBHOOK_SECRET=${{ secrets.WEBHOOK_SECRET }}
@@ -372,24 +445,25 @@ jobs:
           EOF
           
           
-          # Stop existing services
+          # Stop existing services gracefully
           echo "⏹️ Stopping existing services..."
-          sudo docker-compose down || true
-          sudo docker stop $(sudo docker ps -q) || true
-          sudo docker rm $(sudo docker ps -aq) || true
-          sudo docker network prune -f
-          sudo docker system prune -f
-          sudo docker volume prune -f
+          if [ -f "docker-compose.yml" ]; then
+            sudo docker compose down || true
+          fi
+          
+          # Create external network (for new VPS)
+          echo "🌐 Creating external network..."
+          sudo docker network create servereye-network || echo "Network already exists"
           
           # Create external volumes
           echo "📦 Creating external volumes..."
-          sudo docker volume create servereye_postgres_data || true
-          sudo docker volume create servereye_timescaledb_data || true
-          sudo docker volume create servereye_postgres_static_data || true
+          sudo docker volume create servereye_postgres_data || echo "Volume servereye_postgres_data already exists"
+          sudo docker volume create servereye_timescaledb_data || echo "Volume servereye_timescaledb_data already exists"
+          sudo docker volume create servereye_postgres_static_data || echo "Volume servereye_postgres_static_data already exists"
           
           # Start new services
           echo "▶️ Starting new services..."
-          sudo docker-compose up -d
+          sudo docker compose up -d
           
           # Wait for services to be ready
           echo "⏳ Waiting for services to be ready..."
@@ -397,62 +471,88 @@ jobs:
           
           # Check if containers are running
           echo "🔍 Checking container status..."
-          sudo docker-compose ps
+          sudo docker compose ps
           
-          # Configure pg_hba.conf and create servereye user
+          # Wait for databases to be fully ready
+          echo "⏳ Waiting for databases to initialize..."
+          sleep 15
+          
+          # Configure PostgreSQL access (idempotent)
           echo "🔧 Configuring PostgreSQL access..."
           
-          # PostgreSQL main
-          sudo docker exec ServereyeAPI-postgres psql -U postgres -c "CREATE USER servereye WITH SUPERUSER PASSWORD '${{ secrets.POSTGRES_PASSWORD }}';" || echo "User servereye already exists"
-          sudo docker exec ServereyeAPI-postgres sh -c "echo 'host all all 172.20.0.0/16 trust' >> /var/lib/postgresql/data/pg_hba.conf"
-          sudo docker exec ServereyeAPI-postgres sh -c "echo 'host all all 0.0.0.0/0 md5' >> /var/lib/postgresql/data/pg_hba.conf"
-          sudo docker exec ServereyeAPI-postgres psql -U postgres -c "SELECT pg_reload_conf();"
+          # PostgreSQL main - no need to create servereye user, using postgres
+          echo "Configuring main PostgreSQL..."
+          sudo docker exec ServerEyeAPI-postgres psql -U postgres -d servereye -c "SELECT 1;" || echo "Database not ready yet"
           
-          # TimescaleDB
-          sudo docker exec ServereyeAPI-timescaledb psql -U postgres -c "CREATE USER servereye WITH SUPERUSER PASSWORD '${{ secrets.POSTGRES_PASSWORD }}';" || echo "User servereye already exists"
-          sudo docker exec ServereyeAPI-timescaledb sh -c "echo 'host all all 172.20.0.0/16 trust' >> /var/lib/postgresql/data/pg_hba.conf"
-          sudo docker exec ServereyeAPI-timescaledb sh -c "echo 'host all all 0.0.0.0/0 md5' >> /var/lib/postgresql/data/pg_hba.conf"
-          sudo docker exec ServereyeAPI-timescaledb psql -U postgres -c "SELECT pg_reload_conf();"
+          # TimescaleDB - no need to create servereye user, using postgres
+          echo "Configuring TimescaleDB..."
+          sudo docker exec ServerEyeAPI-timescaledb psql -U postgres -d servereye -c "SELECT 1;" || echo "Database not ready yet"
           
-          # PostgreSQL static
-          sudo docker exec ServereyeAPI-postgres-static psql -U postgres -c "CREATE USER servereye WITH SUPERUSER PASSWORD '${{ secrets.POSTGRES_PASSWORD }}';" || echo "User servereye already exists"
-          sudo docker exec ServereyeAPI-postgres-static sh -c "echo 'host all all 172.20.0.0/16 trust' >> /var/lib/postgresql/data/pg_hba.conf"
-          sudo docker exec ServereyeAPI-postgres-static sh -c "echo 'host all all 0.0.0.0/0 md5' >> /var/lib/postgresql/data/pg_hba.conf"
-          sudo docker exec ServereyeAPI-postgres-static psql -U postgres -c "SELECT pg_reload_conf();"
+          # PostgreSQL static - using servereye user (already created by docker-compose)
+          echo "Configuring static PostgreSQL..."
+          sudo docker exec ServerEyeAPI-postgres-static psql -U servereye -d servereye -c "SELECT 1;" || echo "Database not ready yet"
           
           # Run database migrations
           echo "🗄️ Running database migrations..."
           
+          # Initialize main PostgreSQL schema first
+          echo "📝 Initializing main PostgreSQL schema..."
+          if [ -f "./deployments/init-schema.sql" ]; then
+            sudo docker exec -i ServerEyeAPI-postgres psql -U postgres -d servereye < "./deployments/init-schema.sql" || echo "Schema already initialized"
+          fi
+          
           # Run PostgreSQL migrations (main database)
           echo "📝 Running PostgreSQL migrations for main database..."
-          for migration in ./deployments/migration-001-*.sql ./deployments/migration-002-*.sql ./deployments/migration-003-*.sql ./deployments/migration-004-*.sql ./deployments/migration-009-*.sql; do
+          for migration in ./deployments/postgres/migration-*.sql; do
             if [ -f "$migration" ]; then
               echo "Applying migration: $(basename $migration)"
-              sudo docker exec ServereyeAPI-postgres psql -U postgres -d servereye -f "/migrations/$(basename $migration)" || echo "Migration already applied or failed: $(basename $migration)"
+              sudo docker exec -i ServerEyeAPI-postgres psql -U postgres -d servereye < "$migration" || echo "Migration already applied or failed: $(basename $migration)"
             fi
           done
           
-          # Run TimescaleDB migrations
-          echo "📝 Running TimescaleDB migrations..."
-          sudo docker exec ServereyeAPI-timescaledb psql -U postgres -d servereye -f /docker-entrypoint-initdb.d/init-timescaledb.sql || echo "TimescaleDB already initialized"
+          # Run TimescaleDB init first
+          echo "📝 Initializing TimescaleDB..."
+          if [ -f "./deployments/timescaledb/timescaledb-init.sql" ]; then
+            sudo docker exec -i ServerEyeAPI-timescaledb psql -U postgres -d servereye < "./deployments/timescaledb/timescaledb-init.sql" || echo "TimescaleDB already initialized"
+          fi
           
-          # Apply migration-008 to TimescaleDB
-          echo "📝 Applying migration-008 to TimescaleDB..."
-          sudo docker exec ServereyeAPI-timescaledb psql -U postgres -d servereye -v ON_ERROR_STOP=1 -c "ALTER TABLE server_metrics ADD COLUMN IF NOT EXISTS storage_temperatures JSONB;"
-          sudo docker exec ServereyeAPI-timescaledb psql -U postgres -d servereye -v ON_ERROR_STOP=1 -c "UPDATE server_metrics SET storage_temperatures = '[]' WHERE storage_temperatures IS NULL;"
-          sudo docker exec ServereyeAPI-timescaledb psql -U postgres -d servereye -v ON_ERROR_STOP=1 -c "CREATE INDEX IF NOT EXISTS idx_server_metrics_storage_temperatures ON server_metrics USING GIN (storage_temperatures) WHERE storage_temperatures IS NOT NULL;"
-          sudo docker exec ServereyeAPI-timescaledb psql -U postgres -d servereye -v ON_ERROR_STOP=1 -c "COMMENT ON COLUMN server_metrics.storage_temperatures IS 'JSON array of storage device temperatures with device name, type, and temperature';"
+          # Run TimescaleDB multi-tier
+          echo "� Setting up TimescaleDB multi-tier..."
+          if [ -f "./deployments/timescaledb/timescaledb-multi-tier.sql" ]; then
+            sudo docker exec -i ServerEyeAPI-timescaledb psql -U postgres -d servereye < "./deployments/timescaledb/timescaledb-multi-tier.sql" || echo "Multi-tier already configured"
+          fi
           
-          # Create servereye database in postgres-static
-          echo "📝 Creating servereye database in postgres-static..."
-          sudo docker exec ServereyeAPI-postgres-static psql -U postgres -c "CREATE DATABASE servereye;" || echo "Database servereye already exists"
+          # Add missing column if needed
+          echo "📝 Adding storage_temperatures column if missing..."
+          sudo docker exec ServerEyeAPI-timescaledb psql -U postgres -d servereye -c "ALTER TABLE server_metrics ADD COLUMN IF NOT EXISTS storage_temperatures JSONB;" || echo "Column already exists"
+          
+          # Verify TimescaleDB tables
+          echo "🔍 Verifying TimescaleDB tables..."
+          TABLE_COUNT=$(sudo docker exec ServerEyeAPI-timescaledb psql -U postgres -d servereye -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('server_metrics', 'server_status', 'server_commands', 'server_events');" | tr -d ' ')
+          if [ "$TABLE_COUNT" -eq "4" ]; then
+            echo "✅ All TimescaleDB hypertables created successfully"
+          else
+            echo "⚠️ Expected 4 hypertables, found: $TABLE_COUNT"
+          fi
+          
+          # Verify multi-tier aggregates (non-critical)
+          AGG_COUNT=$(sudo docker exec ServerEyeAPI-timescaledb psql -U postgres -d servereye -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_name LIKE 'metrics_%_avg';" | tr -d ' ')
+          echo "📊 Found $AGG_COUNT multi-tier aggregates"
           
           # Run static data migrations (postgres-static database)
           echo "📝 Running static data migrations..."
-          for migration in ./deployments/migration-005-*.sql ./deployments/migration-006-*.sql ./deployments/migration-007-*.sql; do
-            if [ -f "$migration" ]; then
+          
+          # Initialize static data schema
+          if [ -f "./deployments/static-postgres/migration-005-static-data.sql" ]; then
+            echo "Initializing static data schema..."
+            sudo docker exec -i ServerEyeAPI-postgres-static psql -U servereye -d servereye < "./deployments/static-postgres/migration-005-static-data.sql" || echo "Static schema already initialized"
+          fi
+          
+          # Apply other static migrations
+          for migration in ./deployments/static-postgres/migration-*.sql; do
+            if [ -f "$migration" ] && [[ "$migration" != *"migration-005"* ]]; then
               echo "Applying static data migration: $(basename $migration)"
-              sudo docker exec -i ServereyeAPI-postgres-static psql -U postgres -d servereye < "$migration" || echo "Static migration already applied or failed: $(basename $migration)"
+              sudo docker exec -i ServerEyeAPI-postgres-static psql -U servereye -d servereye < "$migration" || echo "Static migration already applied or failed: $(basename $migration)"
             fi
           done
           
@@ -470,7 +570,7 @@ jobs:
           
           # Check logs
           echo "📋 Checking service logs..."
-          sudo docker-compose logs --tail=50
+          sudo docker compose logs --tail=50
           
           # Check API container logs specifically
           echo "🔍 Checking API container logs..."
@@ -539,6 +639,14 @@ jobs:
           echo "✅ Static info endpoints are configured"
         else
           echo "⚠️ Static info endpoints may not be configured"
+        fi
+        
+        # Test multi-tier metrics endpoints
+        echo "🔍 Testing multi-tier metrics endpoints..."
+        if curl -I -s "http://${{ secrets.PROD_HOST }}:8080/api/servers/test-server/metrics/tiered?start=$(date -d '1 hour ago' -Iseconds)&end=$(date -Iseconds)" | grep -q "200\|401\|404"; then
+          echo "✅ Multi-tier metrics endpoints are configured"
+        else
+          echo "⚠️ Multi-tier metrics endpoints may not be configured"
         fi
         
         echo "✅ Post-deployment tests completed!"

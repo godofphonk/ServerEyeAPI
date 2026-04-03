@@ -144,6 +144,19 @@ docker-compose-down:
 docker-compose-logs:
 	docker-compose logs -f
 
+# Database management
+db-migrate:
+	@echo "🗄️ Running database migrations..."
+	docker exec -i ServereyeAPI-timescaledb psql -U postgres -d servereye < deployments/timescaledb/timescaledb-multi-tier.sql
+
+db-status:
+	@echo "📊 Checking database status..."
+	docker exec ServereyeAPI-timescaledb psql -U postgres -d servereye -c "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name LIKE 'metrics_%_avg' ORDER BY table_name;"
+
+db-test:
+	@echo "🧪 Testing multi-tier metrics..."
+	curl -s "http://localhost:8080/api/servers/srv_17fdfe6d/metrics/tiered?start=$$(date -d '1 hour ago' -Iseconds)&end=$$(date -Iseconds)" | jq '{server_id, granularity, total_points}'
+
 # Release build with optimizations and version
 RELEASE_LDFLAGS = -w -s \
 	-X github.com/godofphonk/ServerEyeAPI/internal/version.Version=$(VERSION) \
@@ -195,6 +208,11 @@ help:
 	@echo "  docker-compose-up - Start services with Docker Compose"
 	@echo "  docker-compose-down - Stop services"
 	@echo "  docker-compose-logs - View service logs"
+	@echo ""
+	@echo "Database:"
+	@echo "  db-migrate    - Run TimescaleDB migrations"
+	@echo "  db-status     - Check database aggregates status"
+	@echo "  db-test       - Test multi-tier metrics endpoint"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  clean         - Clean build artifacts"

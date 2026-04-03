@@ -101,13 +101,14 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 
 	// Initialize repositories
 	alertRepo := timescaledbRepo.NewAlertRepository(timescaleDBClient.GetPool(), logger)
+	identifierRepo := postgresRepo.NewServerSourceIdentifierRepository(pgClient.DB(), logger)
 
 	// Initialize services with repositories
-	authService := services.NewAuthService(keyRepo, serverRepo, logger)
-	serverService := services.NewServerService(serverRepo, keyRepo, logger)
+	authService := services.NewAuthService(keyRepo, serverRepo, identifierRepo, logger)
+	serverService := services.NewServerService(serverRepo, keyRepo, identifierRepo, logger)
 	alertService := services.NewAlertService(alertRepo, logger)
 	metricsService := services.NewMetricsService(keyRepo, storageImpl, alertService, logger)
-	tieredMetricsService := services.NewTieredMetricsService(timescaleDBClient, logger)
+	tieredMetricsService := services.NewTieredMetricsService(timescaleDBClient, pgClient.DB(), logger)
 	commandsService := services.NewCommandsService(keyRepo, logger)
 	metricsCommandsService := services.NewMetricsCommandsService(timescaleDBClient, logger)
 
@@ -122,6 +123,7 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 	healthHandler := handlers.NewHealthHandler(storageImpl, logger)
 	metricsHandler := handlers.NewMetricsHandler(metricsService, logger)
 	tieredMetricsHandler := handlers.NewTieredMetricsHandler(tieredMetricsService, logger)
+	unifiedServerHandler := handlers.NewUnifiedServerHandler(metricsService, tieredMetricsService, staticDataStorage, logger)
 	serversHandler := handlers.NewServersHandler(storageImpl, logger)
 	serverSourcesHandler := handlers.NewServerSourcesHandler(serverService, logger)
 	commandsHandler := handlers.NewCommandsHandler(commandsService, logger)
@@ -140,6 +142,7 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 		healthHandler,
 		metricsHandler,
 		tieredMetricsHandler,
+		unifiedServerHandler,
 		serversHandler,
 		serverSourcesHandler,
 		commandsHandler,

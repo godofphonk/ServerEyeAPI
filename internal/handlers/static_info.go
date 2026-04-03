@@ -25,6 +25,16 @@ func NewStaticInfoHandler(staticStorage storage.StaticDataStorage, logger *logru
 	}
 }
 
+// checkStaticStorage verifies that static storage is available
+func (h *StaticInfoHandler) checkStaticStorage(w http.ResponseWriter) bool {
+	if h.staticStorage == nil {
+		h.logger.Error("Static data storage not available")
+		http.Error(w, "Static data storage not available", http.StatusServiceUnavailable)
+		return false
+	}
+	return true
+}
+
 // UpsertStaticInfo handles POST/PUT requests to update static server information
 func (h *StaticInfoHandler) UpsertStaticInfo(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
@@ -32,6 +42,10 @@ func (h *StaticInfoHandler) UpsertStaticInfo(w http.ResponseWriter, r *http.Requ
 
 	if serverID == "" {
 		http.Error(w, "server_id is required", http.StatusBadRequest)
+		return
+	}
+
+	if !h.checkStaticStorage(w) {
 		return
 	}
 
@@ -65,6 +79,10 @@ func (h *StaticInfoHandler) GetStaticInfo(w http.ResponseWriter, r *http.Request
 
 	if serverID == "" {
 		http.Error(w, "server_id is required", http.StatusBadRequest)
+		return
+	}
+
+	if !h.checkStaticStorage(w) {
 		return
 	}
 
@@ -206,13 +224,45 @@ func (h *StaticInfoHandler) UpsertStaticInfoByKey(w http.ResponseWriter, r *http
 	// Convert server_key to server_id (TODO: implement proper conversion)
 	serverID := "srv_" + serverKey[4:] // Simple conversion for now
 
+	// Log incoming request from agent
+	h.logger.WithFields(logrus.Fields{
+		"server_key": serverKey,
+		"server_id":  serverID,
+		"user_agent": r.Header.Get("User-Agent"),
+		"method":     r.Method,
+	}).Info("🔄 Received static info update request from agent")
+
 	// Read request body
 	var info storage.CompleteStaticInfo
 	if err := json.NewDecoder(r.Body).Decode(&info); err != nil {
-		h.logger.WithError(err).Error("Failed to decode static info request")
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"server_key": serverKey,
+			"server_id":  serverID,
+		}).Error("Failed to decode static info request")
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
+
+	// Log what data is being sent
+	dataSections := []string{}
+	if info.ServerInfo != nil {
+		dataSections = append(dataSections, "server_info")
+	}
+	if info.HardwareInfo != nil {
+		dataSections = append(dataSections, "hardware_info")
+	}
+	if len(info.NetworkInterfaces) > 0 {
+		dataSections = append(dataSections, fmt.Sprintf("network_interfaces(%d)", len(info.NetworkInterfaces)))
+	}
+	if len(info.DiskInfo) > 0 {
+		dataSections = append(dataSections, fmt.Sprintf("disk_info(%d)", len(info.DiskInfo)))
+	}
+
+	h.logger.WithFields(logrus.Fields{
+		"server_key":    serverKey,
+		"server_id":     serverID,
+		"data_sections": dataSections,
+	}).Info("📊 Processing static info data sections")
 
 	if err := h.staticStorage.UpsertCompleteStaticInfo(r.Context(), serverID, &info); err != nil {
 		h.logger.WithError(err).WithField("server_id", serverID).Error("Failed to upsert static info")
@@ -237,6 +287,10 @@ func (h *StaticInfoHandler) GetStaticInfoByKey(w http.ResponseWriter, r *http.Re
 
 	if serverKey == "" {
 		http.Error(w, "server_key is required", http.StatusBadRequest)
+		return
+	}
+
+	if !h.checkStaticStorage(w) {
 		return
 	}
 

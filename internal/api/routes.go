@@ -35,6 +35,7 @@ func SetupRoutes(
 	healthHandler *handlers.HealthHandler,
 	metricsHandler *handlers.MetricsHandler,
 	tieredMetricsHandler *handlers.TieredMetricsHandler,
+	unifiedServerHandler *handlers.UnifiedServerHandler,
 	serversHandler *handlers.ServersHandler,
 	serverSourcesHandler *handlers.ServerSourcesHandler,
 	commandsHandler *handlers.CommandsHandler,
@@ -63,6 +64,10 @@ func SetupRoutes(
 	// Metrics endpoint by key (public for TG bot)
 	router.HandleFunc("/api/servers/by-key/{server_key}/metrics", metricsHandler.GetServerMetricsByKey).Methods("GET")
 
+	// Server status endpoints (public)
+	router.HandleFunc("/api/servers/{server_id}/status", metricsHandler.GetServerStatus).Methods("GET")
+	router.HandleFunc("/api/servers/by-key/{server_key}/status", metricsHandler.GetServerStatusByKey).Methods("GET")
+
 	// Server sources endpoints (public for TG bot and web)
 	router.HandleFunc("/api/servers/{server_id}/sources", serverSourcesHandler.AddServerSource).Methods("POST")
 	router.HandleFunc("/api/servers/{server_id}/sources", serverSourcesHandler.GetServerSources).Methods("GET")
@@ -72,6 +77,20 @@ func SetupRoutes(
 	router.HandleFunc("/api/servers/by-key/{server_key}/sources", serverSourcesHandler.AddServerSourceByKey).Methods("POST")
 	router.HandleFunc("/api/servers/by-key/{server_key}/sources", serverSourcesHandler.GetServerSourcesByKey).Methods("GET")
 	router.HandleFunc("/api/servers/by-key/{server_key}/sources/{source}", serverSourcesHandler.RemoveServerSourceByKey).Methods("DELETE")
+	router.HandleFunc("/api/servers/by-key/{server_key}/sources/{source_type}/identifiers", serverSourcesHandler.RemoveServerSourceIdentifiersByKey).Methods("DELETE")
+
+	// Server source identifiers endpoints (public for TG bot and web)
+	router.HandleFunc("/api/servers/{server_id}/sources/identifiers", serverSourcesHandler.AddServerSourceIdentifiers).Methods("POST")
+	router.HandleFunc("/api/servers/{server_id}/sources/identifiers", serverSourcesHandler.GetServerSourceIdentifiers).Methods("GET")
+	router.HandleFunc("/api/servers/{server_id}/sources/{source_type}/identifiers", serverSourcesHandler.RemoveServerSourceIdentifiers).Methods("DELETE")
+	router.HandleFunc("/api/servers/{server_id}/sources/{source_type}/identifiers/{identifier}/telegram-id", serverSourcesHandler.UpdateTelegramID).Methods("PUT")
+
+	// Server source identifiers by key endpoints (public for TG bot)
+	router.HandleFunc("/api/servers/by-key/{server_key}/sources/identifiers", serverSourcesHandler.AddServerSourceIdentifiersByKey).Methods("POST")
+	router.HandleFunc("/api/servers/by-key/{server_key}/sources/identifiers", serverSourcesHandler.GetServerSourceIdentifiersByKey).Methods("GET")
+
+	// Get servers by Telegram ID (public for TG bot)
+	router.HandleFunc("/api/servers/by-telegram/{telegramId}", serverSourcesHandler.GetServersByTelegramID).Methods("GET")
 
 	// API Key management routes (admin only) - TODO: Add middleware protection
 	router.HandleFunc("/api/admin/keys", apiKeyHandler.CreateAPIKey).Methods("POST")
@@ -81,6 +100,10 @@ func SetupRoutes(
 
 	// Unified metrics endpoint (public)
 	router.HandleFunc("/api/servers/{server_id}/metrics/tiered", tieredMetricsHandler.GetMetrics).Methods("GET")
+	router.HandleFunc("/api/servers/by-key/{server_key}/metrics/tiered", tieredMetricsHandler.GetMetricsByKey).Methods("GET")
+
+	// Unified server data endpoint (public) - combines metrics, status, and static info
+	router.HandleFunc("/api/servers/by-key/{server_key}/unified", unifiedServerHandler.GetUnifiedServerData).Methods("GET")
 
 	// Static server information endpoints (public)
 	router.HandleFunc("/api/servers/{server_id}/static-info", staticInfoHandler.UpsertStaticInfo).Methods("POST", "PUT")

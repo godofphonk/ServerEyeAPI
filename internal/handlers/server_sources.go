@@ -24,6 +24,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/godofphonk/ServerEyeAPI/internal/models"
 	"github.com/godofphonk/ServerEyeAPI/internal/services"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
@@ -208,6 +209,223 @@ func (h *ServerSourcesHandler) AddServerSourceByKey(w http.ResponseWriter, r *ht
 	})
 }
 
+// AddServerSourceIdentifiers handles POST /api/servers/{server_id}/sources/identifiers
+func (h *ServerSourcesHandler) AddServerSourceIdentifiers(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serverID := vars["server_id"]
+
+	if serverID == "" {
+		h.writeError(w, "server_id is required", http.StatusBadRequest)
+		return
+	}
+
+	var req models.SourceIdentifierRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	err := h.serverService.AddServerSourceIdentifiers(r.Context(), serverID, &req)
+	if err != nil {
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"server_id":       serverID,
+			"source_type":     req.SourceType,
+			"identifiers":     len(req.Identifiers),
+			"identifier_type": req.IdentifierType,
+		}).Error("Failed to add server source identifiers")
+		h.writeError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"message":         "Identifiers added successfully",
+		"server_id":       serverID,
+		"source_type":     req.SourceType,
+		"identifiers":     req.Identifiers,
+		"identifier_type": req.IdentifierType,
+	})
+}
+
+// AddServerSourceIdentifiersByKey handles POST /api/servers/by-key/{server_key}/sources/identifiers
+func (h *ServerSourcesHandler) AddServerSourceIdentifiersByKey(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serverKey := vars["server_key"]
+
+	if serverKey == "" {
+		h.writeError(w, "server_key is required", http.StatusBadRequest)
+		return
+	}
+
+	var req models.SourceIdentifierRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Get server ID from key
+	serverInfo, err := h.serverService.GetServerByKey(r.Context(), serverKey)
+	if err != nil {
+		h.writeError(w, "Server not found", http.StatusNotFound)
+		return
+	}
+
+	err = h.serverService.AddServerSourceIdentifiers(r.Context(), serverInfo.ServerID, &req)
+	if err != nil {
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"server_key":      serverKey,
+			"source_type":     req.SourceType,
+			"identifiers":     len(req.Identifiers),
+			"identifier_type": req.IdentifierType,
+			"telegram_id":     req.TelegramID,
+		}).Error("Failed to add server source identifiers by key")
+		h.writeError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	response := map[string]interface{}{
+		"message":         "Identifiers added successfully",
+		"server_id":       serverInfo.ServerID,
+		"server_key":      serverKey,
+		"source_type":     req.SourceType,
+		"identifiers":     req.Identifiers,
+		"identifier_type": req.IdentifierType,
+	}
+
+	// Add telegram_id to response if present
+	if req.TelegramID != nil {
+		response["telegram_id"] = *req.TelegramID
+	}
+
+	h.writeJSON(w, http.StatusOK, response)
+}
+
+// GetServerSourceIdentifiers handles GET /api/servers/{server_id}/sources/identifiers
+func (h *ServerSourcesHandler) GetServerSourceIdentifiers(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serverID := vars["server_id"]
+
+	if serverID == "" {
+		h.writeError(w, "server_id is required", http.StatusBadRequest)
+		return
+	}
+
+	response, err := h.serverService.GetServerSourceIdentifiers(r.Context(), serverID)
+	if err != nil {
+		h.logger.WithError(err).WithField("server_id", serverID).Error("Failed to get server source identifiers")
+		h.writeError(w, "Failed to get identifiers", http.StatusInternalServerError)
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, response)
+}
+
+// GetServerSourceIdentifiersByKey handles GET /api/servers/by-key/{server_key}/sources/identifiers
+func (h *ServerSourcesHandler) GetServerSourceIdentifiersByKey(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serverKey := vars["server_key"]
+
+	if serverKey == "" {
+		h.writeError(w, "server_key is required", http.StatusBadRequest)
+		return
+	}
+
+	// Get server ID from key
+	serverInfo, err := h.serverService.GetServerByKey(r.Context(), serverKey)
+	if err != nil {
+		h.writeError(w, "Server not found", http.StatusNotFound)
+		return
+	}
+
+	response, err := h.serverService.GetServerSourceIdentifiers(r.Context(), serverInfo.ServerID)
+	if err != nil {
+		h.logger.WithError(err).WithField("server_key", serverKey).Error("Failed to get server source identifiers by key")
+		h.writeError(w, "Failed to get identifiers", http.StatusInternalServerError)
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, response)
+}
+
+// RemoveServerSourceIdentifiers handles DELETE /api/servers/{server_id}/sources/{source_type}/identifiers
+func (h *ServerSourcesHandler) RemoveServerSourceIdentifiers(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serverID := vars["server_id"]
+	sourceType := vars["source_type"]
+
+	if serverID == "" {
+		h.writeError(w, "server_id is required", http.StatusBadRequest)
+		return
+	}
+
+	if sourceType == "" {
+		h.writeError(w, "source_type is required", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Identifiers []string `json:"identifiers"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if len(req.Identifiers) == 0 {
+		h.writeError(w, "At least one identifier is required", http.StatusBadRequest)
+		return
+	}
+
+	// Log the request for debugging
+	h.logger.WithFields(logrus.Fields{
+		"server_id":   serverID,
+		"source_type": sourceType,
+		"identifiers": req.Identifiers,
+	}).Info("RemoveServerSourceIdentifiers request received")
+
+	err := h.serverService.RemoveServerSourceIdentifiers(r.Context(), serverID, sourceType, req.Identifiers)
+	if err != nil {
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"server_id":   serverID,
+			"source_type": sourceType,
+			"identifiers": len(req.Identifiers),
+		}).Error("Failed to remove server source identifiers")
+		h.writeError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"message":     "Identifiers removed successfully",
+		"server_id":   serverID,
+		"source_type": sourceType,
+		"identifiers": req.Identifiers,
+	})
+}
+
+// GetServersByTelegramID handles GET /api/servers/by-telegram/{telegramId}
+func (h *ServerSourcesHandler) GetServersByTelegramID(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	telegramID := vars["telegramId"]
+
+	if telegramID == "" {
+		h.writeError(w, "telegramId is required", http.StatusBadRequest)
+		return
+	}
+
+	servers, err := h.serverService.GetServersByTelegramID(r.Context(), telegramID)
+	if err != nil {
+		h.logger.WithError(err).WithField("telegramId", telegramID).Error("Failed to get servers by Telegram ID")
+		h.writeError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"telegramId":    telegramID,
+		"servers_count": len(servers),
+		"servers":       servers,
+	})
+}
+
 // GetServerSourcesByKey handles GET /api/servers/by-key/{server_key}/sources
 func (h *ServerSourcesHandler) GetServerSourcesByKey(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
@@ -282,11 +500,126 @@ func (h *ServerSourcesHandler) RemoveServerSourceByKey(w http.ResponseWriter, r 
 	})
 }
 
+// RemoveServerSourceIdentifiersByKey handles DELETE /api/servers/by-key/{server_key}/sources/{source_type}/identifiers
+func (h *ServerSourcesHandler) RemoveServerSourceIdentifiersByKey(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serverKey := vars["server_key"]
+	sourceType := vars["source_type"]
+
+	if serverKey == "" {
+		h.writeError(w, "server_key is required", http.StatusBadRequest)
+		return
+	}
+
+	if sourceType == "" {
+		h.writeError(w, "source_type is required", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		Identifiers []string `json:"identifiers"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if len(req.Identifiers) == 0 {
+		h.writeError(w, "At least one identifier is required", http.StatusBadRequest)
+		return
+	}
+
+	// Log the request for debugging
+	h.logger.WithFields(logrus.Fields{
+		"server_key":  serverKey,
+		"source_type": sourceType,
+		"identifiers": req.Identifiers,
+	}).Info("RemoveServerSourceIdentifiersByKey request received")
+
+	// Get server ID from key
+	serverInfo, err := h.serverService.GetServerByKey(r.Context(), serverKey)
+	if err != nil {
+		h.writeError(w, "Server not found", http.StatusNotFound)
+		return
+	}
+
+	err = h.serverService.RemoveServerSourceIdentifiers(r.Context(), serverInfo.ServerID, sourceType, req.Identifiers)
+	if err != nil {
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"server_id":   serverInfo.ServerID,
+			"server_key":  serverKey,
+			"source_type": sourceType,
+			"identifiers": len(req.Identifiers),
+		}).Error("Failed to remove server source identifiers by key")
+		h.writeError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	h.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"message":     "Identifiers removed successfully",
+		"server_id":   serverInfo.ServerID,
+		"server_key":  serverKey,
+		"source_type": sourceType,
+		"identifiers": req.Identifiers,
+	})
+}
+
 // writeJSON writes JSON response
 func (h *ServerSourcesHandler) writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(data)
+}
+
+// UpdateTelegramID handles PUT /api/servers/{server_id}/sources/{source_type}/identifiers/{identifier}/telegram-id
+func (h *ServerSourcesHandler) UpdateTelegramID(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	serverID := vars["server_id"]
+	sourceType := vars["source_type"]
+	identifier := vars["identifier"]
+
+	if serverID == "" || sourceType == "" || identifier == "" {
+		h.writeError(w, "server_id, source_type, and identifier are required", http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		TelegramID int64 `json:"telegram_id" validate:"required"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		h.writeError(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	// Update telegram_id
+	err := h.serverService.UpdateTelegramID(r.Context(), serverID, sourceType, identifier, req.TelegramID)
+	if err != nil {
+		h.logger.WithError(err).WithFields(logrus.Fields{
+			"server_id":   serverID,
+			"source_type": sourceType,
+			"identifier":  identifier,
+			"telegram_id": req.TelegramID,
+		}).Error("Failed to update telegram_id")
+		h.writeError(w, "Failed to update telegram_id", http.StatusInternalServerError)
+		return
+	}
+
+	h.logger.WithFields(logrus.Fields{
+		"server_id":   serverID,
+		"source_type": sourceType,
+		"identifier":  identifier,
+		"telegram_id": req.TelegramID,
+	}).Info("Telegram ID updated successfully")
+
+	h.writeJSON(w, http.StatusOK, map[string]interface{}{
+		"message":     "Telegram ID updated successfully",
+		"server_id":   serverID,
+		"source_type": sourceType,
+		"identifier":  identifier,
+		"telegram_id": req.TelegramID,
+	})
 }
 
 // writeError writes error response
