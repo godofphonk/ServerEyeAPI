@@ -89,13 +89,13 @@ type DataPoint struct {
 }
 
 type NetworkInfo struct {
-	Interfaces  []NetworkInterface `json:"interfaces"`
-	TotalRxMbps float64            `json:"total_rx_mbps"`
-	TotalTxMbps float64            `json:"total_tx_mbps"`
+	Interfaces  []NetworkInterfaceInfo `json:"interfaces"`
+	TotalRxMbps float64               `json:"total_rx_mbps"`
+	TotalTxMbps float64               `json:"total_tx_mbps"`
 }
 
 type DiskInfo struct {
-	Disks []DiskDrive `json:"disks"`
+	Disks []DiskDriveInfo `json:"disks"`
 }
 
 type TempInfo struct {
@@ -223,4 +223,26 @@ type Service struct {
 	Name   string `json:"name"`
 	Status string `json:"status"`
 	State  string `json:"state"`
+}
+
+// Additional types needed for compilation
+type NetworkInterfaceInfo struct {
+	Name        string  `json:"name"`
+	MAC         string  `json:"mac"`
+	IP          string  `json:"ip"`
+	Status      string  `json:"status"`
+	SpeedMbps   int     `json:"speed_mbps"`
+	Type        string  `json:"type"`
+	IsPhysical  bool    `json:"is_physical"`
+}
+
+type DiskDriveInfo struct {
+	Name         string  `json:"name"`
+	Model        string  `json:"model"`
+	SerialNumber string  `json:"serial_number"`
+	SizeGB       float64 `json:"size_gb"`
+	Type         string  `json:"type"`
+	Interface    string  `json:"interface"`
+	MountPoint   string  `json:"mount_point"`
+	IsSystemDisk bool    `json:"is_system_disk"`
 }

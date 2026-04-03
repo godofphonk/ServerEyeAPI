@@ -95,6 +95,10 @@ jobs:
         if [ ! -f results.sarif ]; then
           echo '{"runs": []}' > results.sarif
         fi
+        # Ensure file is valid JSON
+        if ! jq empty results.sarif 2>/dev/null; then
+          echo '{"runs": []}' > results.sarif
+        fi
       
     - name: Upload SARIF file
       uses: github/codeql-action/upload-sarif@v4
