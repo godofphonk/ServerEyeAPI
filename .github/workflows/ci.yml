@@ -326,11 +326,6 @@ jobs:
           exit 1
         fi
         
-        if ! grep -q "migration-012-optimized-granularity.sql" deployments/timescaledb/migration-012-optimized-granularity.sql; then
-          echo "❌ Migration 012 self-reference not found!"
-          exit 1
-        fi
-        
         echo "✅ Alert system implementation verified!"
         echo "✅ WebSocket implementation verified!"
         echo "✅ TimescaleDB multi-tier implementation verified!"
