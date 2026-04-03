@@ -545,13 +545,15 @@ jobs:
           # Run TimescaleDB init first
           echo "📝 Initializing TimescaleDB..."
           if [ -f "./deployments/timescaledb/timescaledb-init.sql" ]; then
-            docker exec -i ServerEyeAPI-timescaledb psql -U postgres -d servereye < "./deployments/timescaledb/timescaledb-init.sql" || echo "TimescaleDB already initialized"
+            echo "Running TimescaleDB initialization..."
+            docker exec -i ServerEyeAPI-timescaledb psql -U postgres -d servereye < "./deployments/timescaledb/timescaledb-init.sql"
           fi
           
           # Run TimescaleDB multi-tier
-          echo "� Setting up TimescaleDB multi-tier..."
+          echo "📊 Setting up TimescaleDB multi-tier..."
           if [ -f "./deployments/timescaledb/timescaledb-multi-tier.sql" ]; then
-            docker exec -i ServerEyeAPI-timescaledb psql -U postgres -d servereye < "./deployments/timescaledb/timescaledb-multi-tier.sql" || echo "Multi-tier already configured"
+            echo "Running TimescaleDB multi-tier setup..."
+            docker exec -i ServerEyeAPI-timescaledb psql -U postgres -d servereye < "./deployments/timescaledb/timescaledb-multi-tier.sql"
           fi
           
           # Add missing column if needed
