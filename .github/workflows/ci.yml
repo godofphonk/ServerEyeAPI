@@ -345,7 +345,8 @@ jobs:
       with:
         host: ${{ secrets.PROD_HOST }}
         username: ${{ secrets.PROD_USER }}
-        password: ${{ secrets.PROD_PASSWORD }}
+        key: ${{ secrets.PROD_SSH_KEY_BASE64 }}
+        key_path: /tmp/id_rsa
         script: |
           set -e
           
