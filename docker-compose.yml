@@ -127,25 +127,25 @@ services:
     command: >
       postgres
       -c shared_preload_libraries=timescaledb
-      -c timescaledb.max_background_workers=16
-      -c timescaledb.query_chunk_size=200000
-      -c max_connections=200
-      -c shared_buffers=1GB
-      -c effective_cache_size=4GB
-      -c maintenance_work_mem=512MB
+      -c timescaledb.max_background_workers=8
+      -c timescaledb.query_chunk_size=100000
+      -c max_connections=100
+      -c shared_buffers=512MB
+      -c effective_cache_size=1GB
+      -c maintenance_work_mem=128MB
       -c checkpoint_completion_target=0.9
-      -c wal_buffers=64MB
-      -c default_statistics_target=100
+      -c wal_buffers=16MB
+      -c default_statistics_target=50
       -c random_page_cost=1.1
-      -c effective_io_concurrency=200
+      -c effective_io_concurrency=50
     deploy:
       resources:
         limits:
-          memory: 4G
-          cpus: '2.0'
-        reservations:
           memory: 2G
           cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
 
   # PostgreSQL for static/persistent server data
   api-postgres-static:
