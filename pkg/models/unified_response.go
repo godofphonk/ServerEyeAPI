@@ -90,8 +90,8 @@ type DataPoint struct {
 
 type NetworkInfo struct {
 	Interfaces  []NetworkInterfaceInfo `json:"interfaces"`
-	TotalRxMbps float64               `json:"total_rx_mbps"`
-	TotalTxMbps float64               `json:"total_tx_mbps"`
+	TotalRxMbps float64                `json:"total_rx_mbps"`
+	TotalTxMbps float64                `json:"total_tx_mbps"`
 }
 
 type DiskInfo struct {
@@ -227,13 +227,13 @@ type Service struct {
 
 // Additional types needed for compilation
 type NetworkInterfaceInfo struct {
-	Name        string  `json:"name"`
-	MAC         string  `json:"mac"`
-	IP          string  `json:"ip"`
-	Status      string  `json:"status"`
-	SpeedMbps   int     `json:"speed_mbps"`
-	Type        string  `json:"type"`
-	IsPhysical  bool    `json:"is_physical"`
+	Name       string `json:"name"`
+	MAC        string `json:"mac"`
+	IP         string `json:"ip"`
+	Status     string `json:"status"`
+	SpeedMbps  int    `json:"speed_mbps"`
+	Type       string `json:"type"`
+	IsPhysical bool   `json:"is_physical"`
 }
 
 type DiskDriveInfo struct {
