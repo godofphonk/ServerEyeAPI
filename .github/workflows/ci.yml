@@ -354,14 +354,48 @@ jobs:
           
           echo "🚀 Starting deployment to production..."
           
+          # Check and install Docker if not present
+          if ! command -v docker &> /dev/null; then
+            echo "🐳 Docker not found, installing..."
+            curl -fsSL https://get.docker.com -o get-docker.sh
+            sh get-docker.sh
+            rm get-docker.sh
+            systemctl start docker
+            systemctl enable docker
+            echo "✅ Docker installed successfully"
+          else
+            echo "✅ Docker is already installed"
+          fi
+          
+          # Check and install Docker Compose if not present
+          if ! docker compose version &> /dev/null; then
+            echo "🐳 Docker Compose not found, installing..."
+            DOCKER_COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep 'tag_name' | cut -d\" -f4)
+            curl -L "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+            chmod +x /usr/local/bin/docker-compose
+            echo "✅ Docker Compose installed successfully"
+          else
+            echo "✅ Docker Compose is already installed"
+          fi
+          
+          # Check and install Git if not present
+          if ! command -v git &> /dev/null; then
+            echo "📦 Git not found, installing..."
+            apt-get update
+            apt-get install -y git
+            echo "✅ Git installed successfully"
+          else
+            echo "✅ Git is already installed"
+          fi
+          
           # Create backup of current deployment
           if [ -d "/opt/servereye" ]; then
             echo "📦 Creating backup..."
-            sudo cp -r /opt/servereye /opt/servereye.backup.$(date +%Y%m%d_%H%M%S)
+            cp -r /opt/servereye /opt/servereye.backup.$(date +%Y%m%d_%H%M%S) || true
           fi
           
           # Ensure directories exist
-          sudo mkdir -p /opt/servereye
+          mkdir -p /opt/servereye
           cd /opt/servereye
           
           # Clone or pull repository
@@ -375,11 +409,11 @@ jobs:
           
           # Pull latest images
           echo "📥 Pulling latest Docker images..."
-          sudo docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production
           
           # Create docker-compose.override.yml for production
           echo "📝 Creating production override..."
-          sudo tee docker-compose.override.yml > /dev/null <<EOF
+          tee docker-compose.override.yml > /dev/null <<EOF
           services:
             servereye-api:
               image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:production
@@ -416,7 +450,7 @@ jobs:
           
           # Set environment variables
           echo "📝 Creating .env file..."
-          sudo tee .env > /dev/null <<EOF
+          tee .env > /dev/null <<EOF
           HOST=0.0.0.0
           PORT=8080
           DATABASE_URL=postgres://postgres:${{ secrets.POSTGRES_PASSWORD }}@api-postgres:5432/servereye?sslmode=disable
@@ -446,22 +480,22 @@ jobs:
           # Stop existing services gracefully
           echo "⏹️ Stopping existing services..."
           if [ -f "docker-compose.yml" ]; then
-            sudo docker compose down || true
+            docker compose down || true
           fi
           
           # Create external network (for new VPS)
           echo "🌐 Creating external network..."
-          sudo docker network create servereye-network || echo "Network already exists"
+          docker network create servereye-network || echo "Network already exists"
           
           # Create external volumes
           echo "📦 Creating external volumes..."
-          sudo docker volume create servereye_postgres_data || echo "Volume servereye_postgres_data already exists"
-          sudo docker volume create servereye_timescaledb_data || echo "Volume servereye_timescaledb_data already exists"
-          sudo docker volume create servereye_postgres_static_data || echo "Volume servereye_postgres_static_data already exists"
+          docker volume create servereye_postgres_data || echo "Volume servereye_postgres_data already exists"
+          docker volume create servereye_timescaledb_data || echo "Volume servereye_timescaledb_data already exists"
+          docker volume create servereye_postgres_static_data || echo "Volume servereye_postgres_static_data already exists"
           
           # Start new services
           echo "▶️ Starting new services..."
-          sudo docker compose up -d
+          docker compose up -d
           
           # Wait for services to be ready
           echo "⏳ Waiting for services to be ready..."
@@ -469,7 +503,7 @@ jobs:
           
           # Check if containers are running
           echo "🔍 Checking container status..."
-          sudo docker compose ps
+          docker compose ps
           
           # Wait for databases to be fully ready
           echo "⏳ Waiting for databases to initialize..."
@@ -480,15 +514,15 @@ jobs:
           
           # PostgreSQL main - no need to create servereye user, using postgres
           echo "Configuring main PostgreSQL..."
-          sudo docker exec ServerEyeAPI-postgres psql -U postgres -d servereye -c "SELECT 1;" || echo "Database not ready yet"
+          docker exec ServerEyeAPI-postgres psql -U postgres -d servereye -c "SELECT 1;" || echo "Database not ready yet"
           
           # TimescaleDB - no need to create servereye user, using postgres
           echo "Configuring TimescaleDB..."
-          sudo docker exec ServerEyeAPI-timescaledb psql -U postgres -d servereye -c "SELECT 1;" || echo "Database not ready yet"
+          docker exec ServerEyeAPI-timescaledb psql -U postgres -d servereye -c "SELECT 1;" || echo "Database not ready yet"
           
           # PostgreSQL static - using servereye user (already created by docker-compose)
           echo "Configuring static PostgreSQL..."
-          sudo docker exec ServerEyeAPI-postgres-static psql -U servereye -d servereye -c "SELECT 1;" || echo "Database not ready yet"
+          docker exec ServerEyeAPI-postgres-static psql -U servereye -d servereye -c "SELECT 1;" || echo "Database not ready yet"
           
           # Run database migrations
           echo "🗄️ Running database migrations..."
@@ -496,7 +530,7 @@ jobs:
           # Initialize main PostgreSQL schema first
           echo "📝 Initializing main PostgreSQL schema..."
           if [ -f "./deployments/init-schema.sql" ]; then
-            sudo docker exec -i ServerEyeAPI-postgres psql -U postgres -d servereye < "./deployments/init-schema.sql" || echo "Schema already initialized"
+            docker exec -i ServerEyeAPI-postgres psql -U postgres -d servereye < "./deployments/init-schema.sql" || echo "Schema already initialized"
           fi
           
           # Run PostgreSQL migrations (main database)
@@ -504,29 +538,29 @@ jobs:
           for migration in ./deployments/postgres/migration-*.sql; do
             if [ -f "$migration" ]; then
               echo "Applying migration: $(basename $migration)"
-              sudo docker exec -i ServerEyeAPI-postgres psql -U postgres -d servereye < "$migration" || echo "Migration already applied or failed: $(basename $migration)"
+              docker exec -i ServerEyeAPI-postgres psql -U postgres -d servereye < "$migration" || echo "Migration already applied or failed: $(basename $migration)"
             fi
           done
           
           # Run TimescaleDB init first
           echo "📝 Initializing TimescaleDB..."
           if [ -f "./deployments/timescaledb/timescaledb-init.sql" ]; then
-            sudo docker exec -i ServerEyeAPI-timescaledb psql -U postgres -d servereye < "./deployments/timescaledb/timescaledb-init.sql" || echo "TimescaleDB already initialized"
+            docker exec -i ServerEyeAPI-timescaledb psql -U postgres -d servereye < "./deployments/timescaledb/timescaledb-init.sql" || echo "TimescaleDB already initialized"
           fi
           
           # Run TimescaleDB multi-tier
           echo "� Setting up TimescaleDB multi-tier..."
           if [ -f "./deployments/timescaledb/timescaledb-multi-tier.sql" ]; then
-            sudo docker exec -i ServerEyeAPI-timescaledb psql -U postgres -d servereye < "./deployments/timescaledb/timescaledb-multi-tier.sql" || echo "Multi-tier already configured"
+            docker exec -i ServerEyeAPI-timescaledb psql -U postgres -d servereye < "./deployments/timescaledb/timescaledb-multi-tier.sql" || echo "Multi-tier already configured"
           fi
           
           # Add missing column if needed
           echo "📝 Adding storage_temperatures column if missing..."
-          sudo docker exec ServerEyeAPI-timescaledb psql -U postgres -d servereye -c "ALTER TABLE server_metrics ADD COLUMN IF NOT EXISTS storage_temperatures JSONB;" || echo "Column already exists"
+          docker exec ServerEyeAPI-timescaledb psql -U postgres -d servereye -c "ALTER TABLE server_metrics ADD COLUMN IF NOT EXISTS storage_temperatures JSONB;" || echo "Column already exists"
           
           # Verify TimescaleDB tables
           echo "🔍 Verifying TimescaleDB tables..."
-          TABLE_COUNT=$(sudo docker exec ServerEyeAPI-timescaledb psql -U postgres -d servereye -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('server_metrics', 'server_status', 'server_commands', 'server_events');" | tr -d ' ')
+          TABLE_COUNT=$(docker exec ServerEyeAPI-timescaledb psql -U postgres -d servereye -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('server_metrics', 'server_status', 'server_commands', 'server_events');" | tr -d ' ')
           if [ "$TABLE_COUNT" -eq "4" ]; then
             echo "✅ All TimescaleDB hypertables created successfully"
           else
@@ -534,7 +568,7 @@ jobs:
           fi
           
           # Verify multi-tier aggregates (non-critical)
-          AGG_COUNT=$(sudo docker exec ServerEyeAPI-timescaledb psql -U postgres -d servereye -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_name LIKE 'metrics_%_avg';" | tr -d ' ')
+          AGG_COUNT=$(docker exec ServerEyeAPI-timescaledb psql -U postgres -d servereye -t -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_name LIKE 'metrics_%_avg';" | tr -d ' ')
           echo "📊 Found $AGG_COUNT multi-tier aggregates"
           
           # Run static data migrations (postgres-static database)
@@ -543,14 +577,14 @@ jobs:
           # Initialize static data schema
           if [ -f "./deployments/static-postgres/migration-005-static-data.sql" ]; then
             echo "Initializing static data schema..."
-            sudo docker exec -i ServerEyeAPI-postgres-static psql -U servereye -d servereye < "./deployments/static-postgres/migration-005-static-data.sql" || echo "Static schema already initialized"
+            docker exec -i ServerEyeAPI-postgres-static psql -U servereye -d servereye < "./deployments/static-postgres/migration-005-static-data.sql" || echo "Static schema already initialized"
           fi
           
           # Apply other static migrations
           for migration in ./deployments/static-postgres/migration-*.sql; do
             if [ -f "$migration" ] && [[ "$migration" != *"migration-005"* ]]; then
               echo "Applying static data migration: $(basename $migration)"
-              sudo docker exec -i ServerEyeAPI-postgres-static psql -U servereye -d servereye < "$migration" || echo "Static migration already applied or failed: $(basename $migration)"
+              docker exec -i ServerEyeAPI-postgres-static psql -U servereye -d servereye < "$migration" || echo "Static migration already applied or failed: $(basename $migration)"
             fi
           done
           
@@ -568,7 +602,7 @@ jobs:
           
           # Check logs
           echo "📋 Checking service logs..."
-          sudo docker compose logs --tail=50
+          docker compose logs --tail=50
           
           # Check API container logs specifically
           echo "🔍 Checking API container logs..."
@@ -576,7 +610,7 @@ jobs:
           
           # Clean up old images
           echo "🧹 Cleaning up old Docker images..."
-          sudo docker image prune -f
+          docker image prune -f
           
           echo "🎉 Deployment completed successfully!"
           echo "🌐 Service is available at: http://${{ secrets.PROD_HOST }}:8080"
