@@ -28,6 +28,7 @@ import (
 	"fmt"
 
 	"github.com/godofphonk/ServerEyeAPI/internal/api"
+	"github.com/godofphonk/ServerEyeAPI/internal/cache"
 	"github.com/godofphonk/ServerEyeAPI/internal/config"
 	"github.com/godofphonk/ServerEyeAPI/internal/handlers"
 	"github.com/godofphonk/ServerEyeAPI/internal/services"
@@ -45,6 +46,9 @@ import (
 var ProviderSet = wire.NewSet(
 	// Core dependencies
 	NewLogger,
+
+	// Cache
+	NewRedisCache,
 
 	// Storage layer
 	NewPostgresClient,
@@ -98,6 +102,16 @@ func NewLogger() *logrus.Logger {
 		TimestampFormat: "2006-01-02T15:04:05.000Z07:00",
 	})
 	return logger
+}
+
+// NewRedisCache creates a new Redis cache instance
+func NewRedisCache(cfg *config.Config, logger *logrus.Logger) (cache.CacheService, error) {
+	if cfg.RedisURL == "" {
+		logger.Info("Redis URL not configured, caching will be disabled")
+		return nil, nil
+	}
+
+	return cache.NewRedisCache(cfg.RedisURL, logger)
 }
 
 // NewPostgresClient creates a new PostgreSQL client

@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/godofphonk/ServerEyeAPI/internal/api/middleware"
+	"github.com/godofphonk/ServerEyeAPI/internal/cache"
 	"github.com/godofphonk/ServerEyeAPI/internal/config"
 	"github.com/godofphonk/ServerEyeAPI/internal/handlers"
 	"github.com/godofphonk/ServerEyeAPI/internal/services"
@@ -96,6 +97,18 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 	// Create storage adapter with TimescaleDB
 	storageImpl = storage.NewTimescaleDBStorageAdapter(keyRepo, serverRepo, timescaleDBClient, logger, cfg)
 
+	// Initialize Redis cache
+	var cacheService cache.CacheService
+	if cfg.RedisURL != "" {
+		redisCache, err := cache.NewRedisCache(cfg.RedisURL, logger)
+		if err != nil {
+			logger.WithError(err).Warn("Failed to connect to Redis, caching will be disabled")
+		} else {
+			cacheService = redisCache
+			logger.Info("Redis cache initialized")
+		}
+	}
+
 	// Initialize API Key storage
 	apiKeyStorage := storage.NewAPIKeyStorage(pgClient.DB(), logger)
 
@@ -107,7 +120,7 @@ func New(cfg *config.Config, logger *logrus.Logger) (*Server, error) {
 	authService := services.NewAuthService(keyRepo, serverRepo, identifierRepo, logger)
 	serverService := services.NewServerService(serverRepo, keyRepo, identifierRepo, logger)
 	alertService := services.NewAlertService(alertRepo, logger)
-	metricsService := services.NewMetricsService(keyRepo, storageImpl, alertService, logger)
+	metricsService := services.NewMetricsService(keyRepo, storageImpl, alertService, cacheService, logger)
 	tieredMetricsService := services.NewTieredMetricsService(timescaleDBClient, pgClient.DB(), logger)
 	commandsService := services.NewCommandsService(keyRepo, logger)
 	metricsCommandsService := services.NewMetricsCommandsService(timescaleDBClient, logger)

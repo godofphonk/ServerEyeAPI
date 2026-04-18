@@ -22,7 +22,7 @@
 FROM golang:1.26-alpine AS builder
 
 # Install git and ca-certificates
-RUN apk add --no-cache git ca-certificates tzdata
+RUN apk add --no-cache git ca-certificates tzdata curl
 
 # Set working directory
 WORKDIR /app

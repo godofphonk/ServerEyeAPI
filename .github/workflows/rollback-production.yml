@@ -1,0 +1,184 @@
+# Copyright (c) 2026 godofphonk
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in
+# all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
+name: Rollback Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: 'Commit SHA to rollback to (optional, defaults to previous deployment)'
+        required: false
+        type: string
+      force:
+        description: 'Force rollback without confirmation'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: godofphonk/servereyeapi
+
+jobs:
+  rollback:
+    name: Rollback to previous version
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: https://api.servereye.dev
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Install Doppler CLI
+        uses: dopplerhq/cli-action@v4
+
+      - name: Add VPS to known hosts
+        run: |
+          ssh-keyscan -H ${{ secrets.PROD_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Check previous deployment info
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          port: 22
+          script: |
+            cd /opt/servereye
+            if [ -f /opt/servereye/deployment-info.env ]; then
+              echo "Previous deployment info:"
+              cat /opt/servereye/deployment-info.env
+            else
+              echo "⚠️ No previous deployment info found"
+              exit 1
+            fi
+
+      - name: Confirm rollback
+        if: ${{ !inputs.force }}
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          port: 22
+          script: |
+            echo "⚠️ This will rollback production to previous version"
+            echo "Please confirm by re-running with force=true"
+            exit 1
+
+      - name: Stop current containers
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          port: 22
+          script: |
+            cd /opt/servereye
+            docker-compose -f environments/prod/backend/docker-compose.yml down
+            docker-compose -f environments/prod/infrastructure/docker-compose.yml down
+
+      - name: Load and rollback to previous deployment
+        uses: appleboy/ssh-action@v1.2.5
+        env:
+          IMAGE_BACKEND: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          port: 22
+          envs: IMAGE_BACKEND
+          script: |
+            cd /opt/servereye
+            
+            # Load previous deployment info
+            source /opt/servereye/deployment-info.env
+            
+            echo "Rolling back to:"
+            echo "Previous backend: $PREV_BACKEND_IMAGE_ID"
+            echo "Previous commit: $PREV_DEPLOY_SHA"
+            
+            # Rollback to previous image
+            if [ -n "$PREV_BACKEND_IMAGE_ID" ]; then
+              docker tag $PREV_BACKEND_IMAGE_ID $IMAGE_BACKEND:production || true
+              echo "✅ Backend image tagged"
+            else
+              echo "⚠️ No previous backend image found"
+            fi
+
+      - name: Start containers with previous images
+        uses: appleboy/ssh-action@v1.2.5
+        env:
+          DOPPLER_TOKEN_INFRASTRUCTURE: ${{ secrets.DOPPLER_TOKEN_INFRASTRUCTURE }}
+          DOPPLER_TOKEN_BACKEND: ${{ secrets.DOPPLER_TOKEN_BACKEND }}
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          port: 22
+          envs: DOPPLER_TOKEN_INFRASTRUCTURE,DOPPLER_TOKEN_BACKEND
+          script: |
+            cd /opt/servereye
+
+            # Pass Doppler tokens to docker-compose
+            DOPPLER_TOKEN=${DOPPLER_TOKEN_INFRASTRUCTURE} doppler run --project servereye --config prd_infrastructure -- docker-compose -f environments/prod/infrastructure/docker-compose.yml up -d
+
+            # Verify infrastructure containers running
+            echo "Verifying infrastructure containers..."
+            docker ps | grep postgres
+            docker ps | grep redis
+
+            # Start backend containers
+            DOPPLER_TOKEN=${DOPPLER_TOKEN_BACKEND} doppler run --project servereye --config prd_backend -- docker-compose -f environments/prod/backend/docker-compose.yml up -d
+            
+            # Verify containers running
+            echo "Verifying containers..."
+            docker ps | grep backend
+
+      - name: Health check
+        uses: appleboy/ssh-action@v1.2.5
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          port: 22
+          script: |
+            echo "Waiting for services to start..."
+            sleep 30
+            
+            # Check backend health on port 8080
+            if curl -f http://localhost:8080/health; then
+              echo "✅ Backend health check passed"
+            else
+              echo "⚠️ Backend health check failed"
+              exit 1
+            fi
+
+      - name: Rollback completed
+        run: |
+          echo "✅ Rollback completed successfully"
+          echo "Previous deployment has been restored"

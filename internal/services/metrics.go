@@ -27,6 +27,7 @@ import (
 
 	"github.com/sirupsen/logrus"
 
+	"github.com/godofphonk/ServerEyeAPI/internal/cache"
 	"github.com/godofphonk/ServerEyeAPI/internal/models"
 	"github.com/godofphonk/ServerEyeAPI/internal/storage"
 	"github.com/godofphonk/ServerEyeAPI/internal/storage/interfaces"
@@ -37,22 +38,50 @@ type MetricsService struct {
 	keyRepo      interfaces.GeneratedKeyRepository
 	storage      storage.Storage
 	alertService *AlertService
+	cache        cache.CacheService
 	logger       *logrus.Logger
 }
 
 // NewMetricsService creates a new metrics service
-func NewMetricsService(keyRepo interfaces.GeneratedKeyRepository, storage storage.Storage, alertService *AlertService, logger *logrus.Logger) *MetricsService {
+func NewMetricsService(keyRepo interfaces.GeneratedKeyRepository, storage storage.Storage, alertService *AlertService, cache cache.CacheService, logger *logrus.Logger) *MetricsService {
 	return &MetricsService{
 		keyRepo:      keyRepo,
 		storage:      storage,
 		alertService: alertService,
+		cache:        cache,
 		logger:       logger,
 	}
 }
 
-// GetServerByKey retrieves server information by server key
+// GetServerByKey retrieves server information by server key with caching
 func (s *MetricsService) GetServerByKey(ctx context.Context, serverKey string) (*models.GeneratedKey, error) {
-	return s.keyRepo.GetByKey(ctx, serverKey)
+	// Try to get from cache first
+	if s.cache != nil {
+		cacheKey := cache.ValidateServerKey(serverKey)
+		var cached models.GeneratedKey
+		if err := s.cache.Get(ctx, cacheKey, &cached); err == nil {
+			s.logger.WithField("server_key", serverKey).Debug("Cache hit for server key validation")
+			return &cached, nil
+		} else if err != cache.ErrCacheMiss {
+			s.logger.WithError(err).WithField("server_key", serverKey).Warn("Cache error, falling back to database")
+		}
+	}
+
+	// Fetch from database
+	key, err := s.keyRepo.GetByKey(ctx, serverKey)
+	if err != nil {
+		return nil, err
+	}
+
+	// Cache the result for 1 hour
+	if s.cache != nil {
+		cacheKey := cache.ValidateServerKey(serverKey)
+		if err := s.cache.Set(ctx, cacheKey, key, 1*time.Hour); err != nil {
+			s.logger.WithError(err).WithField("server_key", serverKey).Warn("Failed to cache server key validation")
+		}
+	}
+
+	return key, nil
 }
 
 // StoreMetricsRequest represents a metrics storage request
@@ -306,8 +335,20 @@ func (s *MetricsService) GetServerMetricsWithStatus(ctx context.Context, serverI
 	return response, nil
 }
 
-// GetServerStatus retrieves ONLY server status (online, last_seen, agent_version)
+// GetServerStatus retrieves ONLY server status (online, last_seen, agent_version) with caching
 func (s *MetricsService) GetServerStatus(ctx context.Context, serverID string) (map[string]interface{}, error) {
+	// Try to get from cache first
+	if s.cache != nil {
+		cacheKey := cache.ServerInfo(serverID)
+		var cached map[string]interface{}
+		if err := s.cache.Get(ctx, cacheKey, &cached); err == nil {
+			s.logger.WithField("server_id", serverID).Debug("Cache hit for server status")
+			return cached, nil
+		} else if err != cache.ErrCacheMiss {
+			s.logger.WithError(err).WithField("server_id", serverID).Warn("Cache error, falling back to database")
+		}
+	}
+
 	// Verify server exists
 	key, err := s.keyRepo.GetByServerID(ctx, serverID)
 	if err != nil {
@@ -336,6 +377,14 @@ func (s *MetricsService) GetServerStatus(ctx context.Context, serverID string) (
 		"online":        online,
 		"last_seen":     lastSeen,
 		"agent_version": key.AgentVersion,
+	}
+
+	// Cache the result for 10 minutes
+	if s.cache != nil {
+		cacheKey := cache.ServerInfo(serverID)
+		if err := s.cache.Set(ctx, cacheKey, response, 10*time.Minute); err != nil {
+			s.logger.WithError(err).WithField("server_id", serverID).Warn("Failed to cache server status")
+		}
 	}
 
 	return response, nil

@@ -1,6 +1,6 @@
 # ServerEye API Makefile
 
-.PHONY: build build-api test test-coverage test-coverage-threshold test-integration test-all install-coverage-tools clean docker-build docker-run docker-stop lint security vuln-check fmt
+.PHONY: build build-api test test-coverage test-coverage-threshold test-integration test-all install-coverage-tools clean docker-build docker-run docker-stop lint security vuln-check fmt dev-up dev-down dev-logs
 
 # Go parameters
 GOCMD=go
@@ -144,6 +144,23 @@ docker-compose-down:
 docker-compose-logs:
 	docker-compose logs -f
 
+# Doppler Dev Environment
+dev-up:
+	@echo "Starting dev infrastructure with Doppler..."
+	doppler run --project servereyeapi --config dev_backend -- docker compose -f environments/dev/infrastructure/docker-compose.yml up -d
+	@echo "Starting dev backend with Doppler..."
+	doppler run --project servereyeapi --config dev_backend -- docker compose -f environments/dev/backend/docker-compose.yml up -d
+
+dev-down:
+	@echo "Stopping dev infrastructure..."
+	docker compose -f environments/dev/infrastructure/docker-compose.yml down
+	@echo "Stopping dev backend..."
+	docker compose -f environments/dev/backend/docker-compose.yml down
+
+dev-logs:
+	docker compose -f environments/dev/infrastructure/docker-compose.yml logs -f
+	docker compose -f environments/dev/backend/docker-compose.yml logs -f
+
 # Database management
 db-migrate:
 	@echo "🗄️ Running database migrations..."
@@ -208,6 +225,11 @@ help:
 	@echo "  docker-compose-up - Start services with Docker Compose"
 	@echo "  docker-compose-down - Stop services"
 	@echo "  docker-compose-logs - View service logs"
+	@echo ""
+	@echo "Doppler Dev Environment:"
+	@echo "  dev-up        - Start dev infrastructure and backend with Doppler"
+	@echo "  dev-down      - Stop dev infrastructure and backend"
+	@echo "  dev-logs      - View dev service logs"
 	@echo ""
 	@echo "Database:"
 	@echo "  db-migrate    - Run TimescaleDB migrations"
