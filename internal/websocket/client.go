@@ -22,6 +22,7 @@ package websocket
 
 import (
 	"encoding/json"
+	"errors"
 	"sync"
 	"time"
 
@@ -68,6 +69,14 @@ func NewClient(conn *websocket.Conn, logger *logrus.Logger, cfg *config.Config) 
 // ReadMessage reads a message from the WebSocket connection
 func (c *Client) ReadMessage() (models.WSMessage, error) {
 	var msg models.WSMessage
+
+	// Check if client is closed before reading
+	c.mutex.RLock()
+	if c.closed {
+		c.mutex.RUnlock()
+		return msg, errors.New("client is closed")
+	}
+	c.mutex.RUnlock()
 
 	// Read message without setting deadline here
 	// Deadline is set by pong handler and main server loop

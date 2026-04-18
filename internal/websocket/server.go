@@ -192,6 +192,15 @@ func (s *Server) handleClient(client *Client) {
 		defer close(errorChan)
 
 		for {
+			// Check if client is still connected before reading
+			client.mutex.RLock()
+			if client.closed {
+				client.mutex.RUnlock()
+				s.logger.WithField("server_id", client.ServerID).Info("Client closed, stopping message reader")
+				return
+			}
+			client.mutex.RUnlock()
+
 			// Set read deadline before each read attempt (less aggressive)
 			deadline := time.Now().Add(s.config.WebSocket.PongWait)
 			if err := client.conn.SetReadDeadline(deadline); err != nil {
