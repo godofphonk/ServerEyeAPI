@@ -340,154 +340,154 @@ jobs:
     environment: production
 
     steps:
-    - name: Deploy to production
-      uses: appleboy/ssh-action@v1.2.5
-      env:
-        DOPPLER_TOKEN_INFRASTRUCTURE: ${{ secrets.DOPPLER_TOKEN_INFRASTRUCTURE }}
-        DOPPLER_TOKEN_BACKEND: ${{ secrets.DOPPLER_TOKEN_BACKEND }}
-        IMAGE_BACKEND: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-        DEPLOY_SHA: ${{ github.sha }}
-      with:
-        host: ${{ secrets.PROD_HOST }}
-        username: ${{ secrets.PROD_USER }}
-        key: ${{ secrets.PROD_SSH_KEY }}
-        port: 22
-        timeout: 300s
-        command_timeout: 40m
-        envs: DOPPLER_TOKEN_INFRASTRUCTURE,DOPPLER_TOKEN_BACKEND,IMAGE_BACKEND,DEPLOY_SHA
-        script: |
-          set -Eeuo pipefail
-          
-          echo "🚀 Starting deployment to production..."
-          
-          # Check prerequisites
-          command -v git >/dev/null 2>&1 || { echo "git is required"; exit 1; }
-          command -v docker >/dev/null 2>&1 || { echo "docker is required"; exit 1; }
-          docker compose version >/dev/null 2>&1 || { echo "docker compose v2 is required"; exit 1; }
-          command -v doppler >/dev/null 2>&1 || { echo "doppler CLI is required"; exit 1; }
-          
-          APP_DIR="/opt/servereye"
-          
-          # Ensure directories exist
-          mkdir -p "$APP_DIR"
-          cd "$APP_DIR"
-          
-          # Clone or pull repository
-          echo "📥 Updating repository..."
-          if [ -d ".git" ]; then
-            git fetch origin production
-            git reset --hard origin/production
-          else
-            git clone -b production https://github.com/${{ github.repository }} .
-          fi
-          
-          # Verify compose files
-          test -f environments/prod/infrastructure/docker-compose.yml
-          test -f environments/prod/backend/docker-compose.yml
-          
-          # Save rollback information
-          BACKEND_CID="$(docker compose -f environments/prod/backend/docker-compose.yml ps -q servereye-api 2>/dev/null || true)"
-          PREV_BACKEND_IMAGE_ID=""
-          
-          if [ -n "$BACKEND_CID" ]; then
-            PREV_BACKEND_IMAGE_ID="$(docker inspect -f '{{.Image}}' "$BACKEND_CID")"
-          fi
-          
-          cat > "$APP_DIR/deployment-info.env" <<EOF
-          PREV_BACKEND_IMAGE_ID=$PREV_BACKEND_IMAGE_ID
-          PREV_DEPLOY_SHA=$DEPLOY_SHA
-          EOF
-          
-          # Log in to GHCR
-          echo "$GITHUB_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          
-          # Pull exact image for this commit
-          docker pull "$IMAGE_BACKEND:production"
-          
-          # Create external network
-          docker network create servereye-network || echo "✅ Network servereye-network already exists"
-          
-          # Start infrastructure with Doppler
-          echo "🏗️ Starting infrastructure..."
-          DOPPLER_TOKEN="$DOPPLER_TOKEN_INFRASTRUCTURE" \
-          doppler run --project servereye --config prd_infrastructure -- \
-          docker compose -f environments/prod/infrastructure/docker-compose.yml up -d --force-recreate --remove-orphans
-          
-          # Wait for databases to be ready
-          echo "⏳ Waiting for databases to initialize..."
-          sleep 20
-          
-          # Run database migrations
-          echo "🗄️ Running database migrations..."
-          
-          # Initialize main PostgreSQL schema
-          if [ -f "./deployments/init-schema.sql" ]; then
-            docker exec -i ServerEyeAPI-postgres-prod psql -U postgres -d servereye < "./deployments/init-schema.sql" || echo "Schema already initialized"
-          fi
-          
-          # Run PostgreSQL migrations
-          for migration in ./deployments/postgres/migration-*.sql; do
-            if [ -f "$migration" ]; then
-              echo "Applying migration: $(basename $migration)"
-              docker exec -i ServerEyeAPI-postgres-prod psql -U postgres -d servereye < "$migration" || echo "Migration already applied: $(basename $migration)"
+      - name: Deploy to production
+        uses: appleboy/ssh-action@v1.2.5
+        env:
+          DOPPLER_TOKEN_INFRASTRUCTURE: ${{ secrets.DOPPLER_TOKEN_INFRASTRUCTURE }}
+          DOPPLER_TOKEN_BACKEND: ${{ secrets.DOPPLER_TOKEN_BACKEND }}
+          IMAGE_BACKEND: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          DEPLOY_SHA: ${{ github.sha }}
+        with:
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
+          port: 22
+          timeout: 300s
+          command_timeout: 40m
+          envs: DOPPLER_TOKEN_INFRASTRUCTURE,DOPPLER_TOKEN_BACKEND,IMAGE_BACKEND,DEPLOY_SHA
+          script: |
+            set -Eeuo pipefail
+            
+            echo "🚀 Starting deployment to production..."
+            
+            # Check prerequisites
+            command -v git >/dev/null 2>&1 || { echo "git is required"; exit 1; }
+            command -v docker >/dev/null 2>&1 || { echo "docker is required"; exit 1; }
+            docker compose version >/dev/null 2>&1 || { echo "docker compose v2 is required"; exit 1; }
+            command -v doppler >/dev/null 2>&1 || { echo "doppler CLI is required"; exit 1; }
+            
+            APP_DIR="/opt/servereye"
+            
+            # Ensure directories exist
+            mkdir -p "$APP_DIR"
+            cd "$APP_DIR"
+            
+            # Clone or pull repository
+            echo "📥 Updating repository..."
+            if [ -d ".git" ]; then
+              git fetch origin production
+              git reset --hard origin/production
+            else
+              git clone -b production https://github.com/${{ github.repository }} .
             fi
-          done
-          
-          # Run TimescaleDB init
-          if [ -f "./deployments/timescaledb/timescaledb-init.sql" ]; then
-            docker exec -i ServerEyeAPI-timescaledb-prod psql -U postgres -d servereye < "./deployments/timescaledb/timescaledb-init.sql"
-          fi
-          
-          # Run TimescaleDB multi-tier
-          if [ -f "./deployments/timescaledb/timescaledb-multi-tier.sql" ]; then
-            docker exec -i ServerEyeAPI-timescaledb-prod psql -U postgres -d servereye < "./deployments/timescaledb/timescaledb-multi-tier.sql"
-          fi
-          
-          # Add missing column
-          docker exec ServerEyeAPI-timescaledb-prod psql -U postgres -d servereye -c "ALTER TABLE server_metrics ADD COLUMN IF NOT EXISTS storage_temperatures JSONB;" || true
-          
-          # Run static data migrations
-          if [ -f "./deployments/static-postgres/migration-005-static-data.sql" ]; then
-            docker exec -i ServerEyeAPI-postgres-static-prod psql -U servereye -d servereye < "./deployments/static-postgres/migration-005-static-data.sql" || echo "Static schema already initialized"
-          fi
-          
-          for migration in ./deployments/static-postgres/migration-*.sql; do
-            if [ -f "$migration" ] && [[ "$migration" != *"migration-005"* ]]; then
-              echo "Applying static migration: $(basename $migration)"
-              docker exec -i ServerEyeAPI-postgres-static-prod psql -U servereye -d servereye < "$migration" || echo "Static migration already applied: $(basename $migration)"
+
+            # Verify compose files
+            test -f environments/prod/infrastructure/docker-compose.yml
+            test -f environments/prod/backend/docker-compose.yml
+
+            # Save rollback information
+            BACKEND_CID="$(docker compose -f environments/prod/backend/docker-compose.yml ps -q servereye-api 2>/dev/null || true)"
+            PREV_BACKEND_IMAGE_ID=""
+
+            if [ -n "$BACKEND_CID" ]; then
+              PREV_BACKEND_IMAGE_ID="$(docker inspect -f '{{.Image}}' "$BACKEND_CID")"
             fi
-          done
-          
-          # Start backend with Doppler
-          echo "🔧 Starting backend..."
-          DOPPLER_TOKEN="$DOPPLER_TOKEN_BACKEND" \
-          doppler run --project servereye --config prd_backend -- \
-          docker compose -f environments/prod/backend/docker-compose.yml up -d --force-recreate --remove-orphans
-          
-          # Reload nginx (already configured with Certbot)
-          echo "🌐 Reloading nginx..."
-          systemctl reload nginx
-          
-          # Health check
-          echo "🏥 Performing health check..."
-          for i in 1 2 3 4 5 6; do
-            if curl -f http://127.0.0.1:8080/health >/dev/null; then
-              echo "✅ Health check passed!"
-              break
+
+            cat > "$APP_DIR/deployment-info.env" <<EOF
+            PREV_BACKEND_IMAGE_ID=$PREV_BACKEND_IMAGE_ID
+            PREV_DEPLOY_SHA=$DEPLOY_SHA
+            EOF
+
+            # Log in to GHCR
+            echo "$GITHUB_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+            # Pull exact image for this commit
+            docker pull "$IMAGE_BACKEND:production"
+
+            # Create external network
+            docker network create servereye-network || echo "✅ Network servereye-network already exists"
+
+            # Start infrastructure with Doppler
+            echo "🏗️ Starting infrastructure..."
+            DOPPLER_TOKEN="$DOPPLER_TOKEN_INFRASTRUCTURE" \
+            doppler run --project servereye --config prd_infrastructure -- \
+            docker compose -f environments/prod/infrastructure/docker-compose.yml up -d --force-recreate --remove-orphans
+
+            # Wait for databases to be ready
+            echo "⏳ Waiting for databases to initialize..."
+            sleep 20
+
+            # Run database migrations
+            echo "🗄️ Running database migrations..."
+
+            # Initialize main PostgreSQL schema
+            if [ -f "./deployments/init-schema.sql" ]; then
+              docker exec -i ServerEyeAPI-postgres-prod psql -U postgres -d servereye < "./deployments/init-schema.sql" || echo "Schema already initialized"
             fi
-            sleep $((i * 5))
-          done
-          
-          # Verify containers
-          echo "🔍 Verifying containers..."
-          docker compose -f environments/prod/infrastructure/docker-compose.yml ps
-          docker compose -f environments/prod/backend/docker-compose.yml ps
-          
-          # Clean up
-          docker image prune -f
-          
-          echo "✅ Deployment successful!"
-          echo "🌐 API is available at: https://api.servereye.dev"
+
+            # Run PostgreSQL migrations
+            for migration in ./deployments/postgres/migration-*.sql; do
+              if [ -f "$migration" ]; then
+                echo "Applying migration: $(basename $migration)"
+                docker exec -i ServerEyeAPI-postgres-prod psql -U postgres -d servereye < "$migration" || echo "Migration already applied: $(basename $migration)"
+              fi
+            done
+
+            # Run TimescaleDB init
+            if [ -f "./deployments/timescaledb/timescaledb-init.sql" ]; then
+              docker exec -i ServerEyeAPI-timescaledb-prod psql -U postgres -d servereye < "./deployments/timescaledb/timescaledb-init.sql"
+            fi
+
+            # Run TimescaleDB multi-tier
+            if [ -f "./deployments/timescaledb/timescaledb-multi-tier.sql" ]; then
+              docker exec -i ServerEyeAPI-timescaledb-prod psql -U postgres -d servereye < "./deployments/timescaledb/timescaledb-multi-tier.sql"
+            fi
+
+            # Add missing column
+            docker exec ServerEyeAPI-timescaledb-prod psql -U postgres -d servereye -c "ALTER TABLE server_metrics ADD COLUMN IF NOT EXISTS storage_temperatures JSONB;" || true
+
+            # Run static data migrations
+            if [ -f "./deployments/static-postgres/migration-005-static-data.sql" ]; then
+              docker exec -i ServerEyeAPI-postgres-static-prod psql -U servereye -d servereye < "./deployments/static-postgres/migration-005-static-data.sql" || echo "Static schema already initialized"
+            fi
+
+            for migration in ./deployments/static-postgres/migration-*.sql; do
+              if [ -f "$migration" ] && [[ "$migration" != *"migration-005"* ]]; then
+                echo "Applying static migration: $(basename $migration)"
+                docker exec -i ServerEyeAPI-postgres-static-prod psql -U servereye -d servereye < "$migration" || echo "Static migration already applied: $(basename $migration)"
+              fi
+            done
+
+            # Start backend with Doppler
+            echo "🔧 Starting backend..."
+            DOPPLER_TOKEN="$DOPPLER_TOKEN_BACKEND" \
+            doppler run --project servereye --config prd_backend -- \
+            docker compose -f environments/prod/backend/docker-compose.yml up -d --force-recreate --remove-orphans
+
+            # Reload nginx (already configured with Certbot)
+            echo "🌐 Reloading nginx..."
+            systemctl reload nginx
+
+            # Health check
+            echo "🏥 Performing health check..."
+            for i in 1 2 3 4 5 6; do
+              if curl -f http://127.0.0.1:8080/health >/dev/null; then
+                echo "✅ Health check passed!"
+                break
+              fi
+              sleep $((i * 5))
+            done
+
+            # Verify containers
+            echo "🔍 Verifying containers..."
+            docker compose -f environments/prod/infrastructure/docker-compose.yml ps
+            docker compose -f environments/prod/backend/docker-compose.yml ps
+
+            # Clean up
+            docker image prune -f
+
+            echo "✅ Deployment successful!"
+            echo "🌐 API is available at: https://api.servereye.dev"
 
       - name: Rollback on failure
         if: failure()
@@ -505,31 +505,31 @@ jobs:
           envs: DOPPLER_TOKEN_INFRASTRUCTURE,DOPPLER_TOKEN_BACKEND,IMAGE_BACKEND
           script: |
             set -Eeuo pipefail
-            
+
             APP_DIR="/opt/servereye"
-            
+
             if [ ! -f "$APP_DIR/deployment-info.env" ]; then
               echo "No rollback metadata found"
               exit 1
             fi
-            
+
             cd "$APP_DIR"
             source "$APP_DIR/deployment-info.env"
-            
+
             echo "🔄 Rolling back..."
-            
+
             if [ -n "${PREV_BACKEND_IMAGE_ID:-}" ]; then
               docker tag "$PREV_BACKEND_IMAGE_ID" "$IMAGE_BACKEND:production"
             fi
-            
+
             DOPPLER_TOKEN="$DOPPLER_TOKEN_INFRASTRUCTURE" \
             doppler run --project servereye --config prd_infrastructure -- \
             docker compose -f environments/prod/infrastructure/docker-compose.yml up -d --force-recreate --remove-orphans
-            
+
             DOPPLER_TOKEN="$DOPPLER_TOKEN_BACKEND" \
             doppler run --project servereye --config prd_backend -- \
             docker compose -f environments/prod/backend/docker-compose.yml up -d --force-recreate --remove-orphans
-            
+
             echo "✅ Rollback finished"
 
   # Post-deployment tests
