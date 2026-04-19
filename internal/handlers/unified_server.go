@@ -41,6 +41,7 @@ type UnifiedResponse struct {
 	ServerID  string `json:"server_id"`
 	ServerKey string `json:"server_key,omitempty"`
 	Timestamp string `json:"timestamp"`
+	LastSeen  string `json:"last_seen,omitempty"`
 
 	// Components
 	Metrics    interface{} `json:"metrics,omitempty"`
@@ -85,6 +86,10 @@ func (h *UnifiedServerHandler) GetUnifiedServerData(w http.ResponseWriter, r *ht
 		h.writeError(w, "Server not found", http.StatusNotFound)
 		return
 	}
+
+	// Use the same server_id conversion as static-info endpoint
+	// Convert server_key to server_id (srv_ + last chars of key)
+	staticServerID := "srv_" + serverKey[4:]
 
 	// Create unified response
 	response := UnifiedResponse{
@@ -156,6 +161,13 @@ func (h *UnifiedServerHandler) GetUnifiedServerData(w http.ResponseWriter, r *ht
 					ResponseTime: componentDuration,
 				}
 				response.Status = status
+
+				// Extract last_seen from status and add to response
+				if lastSeen, ok := status["last_seen"]; ok {
+					if lastSeenTime, ok := lastSeen.(time.Time); ok {
+						response.LastSeen = lastSeenTime.Format(time.RFC3339)
+					}
+				}
 			}
 			mu.Unlock()
 		}()
@@ -168,7 +180,7 @@ func (h *UnifiedServerHandler) GetUnifiedServerData(w http.ResponseWriter, r *ht
 			defer wg.Done()
 			componentStart := time.Now()
 
-			staticInfo, err := h.staticStorage.GetCompleteStaticInfo(r.Context(), serverInfo.ServerID)
+			staticInfo, err := h.staticStorage.GetCompleteStaticInfo(r.Context(), staticServerID)
 
 			componentDuration := time.Since(componentStart).Milliseconds()
 
